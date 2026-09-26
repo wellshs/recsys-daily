@@ -9,11 +9,13 @@
 2. 같은 날 이미 처리된 행(`read_date`가 오늘 KST 날짜)이 있으면 중복 생성하지 말고 종료합니다.
 
 ## 2. 원문 확보 (순서대로 시도, 성공하면 중단)
+0. `papers.csv`의 `pdf_url` 열이 채워져 있으면 그 URL을 먼저 받습니다(대부분 arXiv PDF).
 1. arXiv: `http://export.arxiv.org/api/query?search_query=ti:%22<제목>%22&max_results=5` 로 검색해 제목이 일치하는 항목의 PDF를 받습니다.
 2. Semantic Scholar: `https://api.semanticscholar.org/graph/v1/paper/DOI:<doi>?fields=title,abstract,openAccessPdf,tldr,citationCount` 에서 `openAccessPdf.url`.
 3. DOI 랜딩 페이지(`https://doi.org/<doi>`)에서 초록만이라도 확보.
-PDF는 `pdftotext`(poppler) 또는 `python3 -m pip install pypdf` 후 pypdf로 텍스트를 추출합니다.
-원문을 못 구하면 초록과 당신의 지식으로 작성하되, 페이지 상단에 "원문 미확보: 초록 기반 작성"을 명시합니다.
+4. 위 도메인이 네트워크 정책으로 막혀 있으면(403/EGRESS_BLOCKED): WebSearch로 저자 홈페이지·GitHub 저장소·대학 서버 등에 공개된 PDF를 찾아 봅니다. github.com은 열려 있습니다.
+PDF 텍스트 추출은 `python3 -m venv v && v/bin/pip install pypdf` 후 pypdf를 쓰거나 `pdftotext`가 있으면 그것을 씁니다(시스템 pypdf는 cryptography 문제로 실패할 수 있음).
+원문을 못 구하면 초록과 당신의 지식으로 작성하되, 페이지 상단에 `<div class="callout warn">원문 미확보: 초록 기반 작성</div>`을 넣습니다.
 
 ## 3. HTML 작성 — `docs/papers/<order 3자리>-<영문 슬러그>.html`
 `docs/template.html`을 복사해 `<!-- CONTENT -->` 자리에 아래 섹션을 채웁니다. 모바일에서 읽기 좋게 문단은 짧게, 표는 최소화합니다.
@@ -30,7 +32,7 @@ PDF는 `pdftotext`(poppler) 또는 `python3 -m pip install pypdf` 후 pypdf로 �
 6. **함께 보면 좋은 논문**: `papers.csv` 안에서 같은 topic 또는 인용 관계가 있는 논문 3~5편을 `order` 번호와 함께.
 
 ## 4. 상태 갱신과 배포
-1. `papers.csv`에서 해당 행의 `status`를 `sent`, `read_date`를 오늘 KST 날짜(YYYY-MM-DD), `notes`를 HTML 상대경로로 갱신합니다(다른 행·열은 건드리지 않음, 인용부호 규칙 유지 — python csv 모듈 사용).
+1. `papers.csv`에서 해당 행의 `status`를 `sent`, `read_date`를 오늘 KST 날짜(YYYY-MM-DD), `notes`를 HTML 상대경로로 갱신합니다(다른 행·열은 건드리지 않음 — python csv 모듈로 읽고 `lineterminator='\n'`으로 써서 줄바꿈이 LF로 유지되게 함; diff에 그 한 행만 나와야 함).
 2. `python3 scripts/build_index.py` 를 실행해 `docs/index.html`을 재생성합니다.
 3. 커밋 메시지 `daily #<order>: <제목>` 으로 커밋하고 `main`에 푸시합니다. 푸시가 거부되면 `git pull --rebase origin main` 후 재시도합니다.
 
