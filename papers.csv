@@ -1,5 +1,5 @@
 order,phase,topic,year,track,award,bigtech,title,authors,doi,url,status,read_date,notes
-1,1-award-2016-2020,,2016,Award,Best Paper,,Local Item-Item Models for Top-N Recommendation,"Evangelia Christakopoulou, George Karypis",10.1145/2959100.2959185,https://doi.org/10.1145/2959100.2959185,,,
+1,1-award-2016-2020,,2016,Award,Best Paper,,Local Item-Item Models for Top-N Recommendation,"Evangelia Christakopoulou, George Karypis",10.1145/2959100.2959185,https://doi.org/10.1145/2959100.2959185,sent,2026-09-26,docs/papers/001-local-item-item-models.html
 2,1-award-2016-2020,,2016,Award,Best Short Paper,,"Adaptive, Personalized Diversity for Visual Discovery","Choon Hui Teo, Houssam Nassif, Daniel Hill, Sriram Srinivasan, Mitchell Goodman, Vijai Mohan, S. V. N. Vishwanathan",10.1145/2959100.2959171,https://doi.org/10.1145/2959100.2959171,,,
 3,1-award-2016-2020,,2017,Award,Best Paper,,Modeling the Assimilation-Contrast Effects in Online Product Rating Systems: Debiasing and Recommendations,"Xiaoying Zhang, Junzhou Zhao, John C.S. Lui",10.1145/3109859.3109885,https://doi.org/10.1145/3109859.3109885,,,
 4,1-award-2016-2020,,2017,Award,Best Paper Runner-up,,Translation-based Recommendation,"Ruining He, Wang-Cheng Kang, Julian McAuley",10.1145/3109859.3109882,https://doi.org/10.1145/3109859.3109882,,,
