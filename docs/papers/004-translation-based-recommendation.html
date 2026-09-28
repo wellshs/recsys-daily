@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#4 Translation-based Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-09-29 · #4</span></div>
+
+<h1>Translation-based Recommendation</h1>
+<p class="meta">Ruining He, Wang-Cheng Kang, Julian McAuley · UC San Diego · RecSys 2017 Best Paper Runner-up</p>
+<div class="chips"><span>2017</span><span>Best Paper Runner-up</span><span>학계(UCSD)</span><span>순차 추천</span><span>Next-item</span><span>Metric Embedding</span><span>TransE</span><span>S-BPR</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3109859.3109882">10.1145/3109859.3109882</a> · arXiv: <a href="https://arxiv.org/abs/1707.02410">1707.02410</a> (<a href="https://arxiv.org/pdf/1707.02410v1">PDF</a>) · 본문 약 5쪽 · 읽기 예상 시간: 약 15분</p>
+<div class="callout">이 페이지는 원문을 옮긴 번역이 아니라 논문 구조를 따라가며 내용을 재서술한 해설입니다. 그림은 말로 설명했고, 수치는 arXiv 판 원문 표에서 옮겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 아이템을 한 공간의 점으로, 사용자를 그 공간의 "이동 벡터"로 두면, "사용자 u가 아이템 i 다음에 j를 고른다"는 3자 관계를 \(\vec\gamma_i + \vec T_u \approx \vec\gamma_j\) 한 식으로 표현할 수 있다. 이 TransRec이 11개 데이터셋의 순차 추천과 8개 데이터셋의 item-to-item 추천에서 기존 방법을 거의 모두 앞섰다.</p>
+<p><b>풀려는 문제.</b> 다음 아이템 예측은 (사용자, 직전 아이템, 다음 아이템)의 3차 상호작용을 다뤄야 한다. FPMC 같은 기존 모델은 이를 "사용자–다음 아이템" 항과 "직전–다음 아이템" 항의 합으로 쪼개 따로 학습한다. 두 성분이 서로 얽혀 있는데 분리해 버리고, 파라미터도 많아 희소한 데이터에서 과적합하기 쉽다.</p>
+<p><b>핵심 아이디어.</b> 지식 그래프 임베딩 TransE(head + relation ≈ tail)에서 relation 자리에 사용자를 넣는다. 점수는 \(\beta_j - d(\vec\gamma_i + \vec T_u, \vec\gamma_j)\)로, 거리 기반이라 삼각부등식이 성립해 "A에서 B, A에서 C로 자주 넘어가면 B와 C도 가깝다" 같은 일반화가 자연스럽게 생긴다. 사용자 벡터는 전역 벡터 \(\vec t\)와 개인 오프셋 \(\vec t_u\)의 합이어서 이력이 짧은 사용자는 평균 행동으로 수렴한다. 추론은 \(\vec\gamma_i + \vec T_u\) 주변의 최근접 이웃 검색 하나로 끝난다.</p>
+<p><b>주요 결과.</b> \(K=10\)에서 TransRec(L2)은 AUC 기준 모든 데이터셋에서 최고였고, Hit@50은 최강 베이스라인 대비 Google Local에서 +32.5%, Clothing +24.7%, Epinions +20.6%였다. 가장 조밀한 Flixter의 Hit@50에서만 PRME에 13% 뒤졌고, 차원을 늘리면 격차가 줄었다. 내용 특징 기반 co-purchase 예측에서는 LMT·Monomer 대비 Hit@10이 41.7%~312% 높았다.</p>
+<p><b>한계와 남는 질문.</b> 직전 아이템 하나만 보는 1차 마르코프 모델이라 긴 문맥은 사용자 벡터가 요약하는 정도에 그친다. 사용자마다 이동 벡터가 하나뿐이라 한 사람이 가진 여러 의도를 표현하기 어렵다. 평가는 모든 아이템 대상 AUC·Hit@50이지만 비교 모델이 모두 \(K=10\)의 작은 설정이었고, 이후 등장한 RNN·self-attention 모델과의 비교는 당연히 없다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 3차 상호작용을 한 성분으로</h3>
+<p>다음에 살 상품, 볼 영화, 갈 장소를 맞히려면 사용자 \(u\), 방금 소비한 아이템 \(i\), 다음 아이템 \(j\) 사이의 관계를 함께 봐야 한다. 전통 모델은 두 개체 간 관계에 강하다. 행렬분해(MF)는 사용자–아이템 궁합을 내적으로, 1차 마르코프 체인(MC)은 인접 아이템 간 전이를 (보통 전이행렬을 분해해) 잡는다. Rendle 등의 FPMC는 이 둘을 더해 3차 관계를 근사한다.</p>
+<p>FPMC 이후 개선 방향은 두 갈래였다. 하나는 내적을 유클리드 거리로 바꾼 개인화 메트릭 임베딩(PRME 등)이다. 삼각부등식 덕에 일반화가 좋아지지만 여전히 "선호 성분"과 "순차 성분"을 분리해 학습한다. 다른 하나는 HRM처럼 사용자·직전 아이템 표현을 평균/최대 풀링으로 섞은 뒤 다음 아이템과 비교하는 방식이다. 두 성분의 결합은 다루지만 해석이 어렵고 메트릭의 이점도 없다.</p>
+<p>저자들의 제안은 아이템을 "전이 공간(transition space)"의 점으로, 사용자를 같은 공간의 이동(translation) 벡터로 두는 것이다. 논문 그림 1은 같은 영화(미션 임파서블 1편)에서 출발해도 한 사용자는 시리즈 속편으로, 다른 사용자는 톰 크루즈의 드라마로, 또 다른 사용자는 비슷한 액션 영화로 이동하는 모습을 보여 준다. 출발점은 같고 사용자별 이동 방향만 다르다. 저자들이 내세운 장점은 (1) 단일 성분으로 3차 관계 표현, (2) 메트릭 가정에 따른 일반화, (3) 식이 단순해 수백만 건 규모로 확장 가능하다는 점이다. 부가로 item-to-item 추천 실험과 새 데이터셋 Google Local을 공개한다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>일반 추천.</b> 순서를 무시하고 선호만 모델링하는 협업 필터링, 특히 MF 계열이다. 암묵 피드백에서는 관측되지 않은 것을 모두 음성으로 보는 point-wise 방식과, "관측된 것을 관측 안 된 것보다 선호한다"는 약한 가정으로 순위를 학습하는 pairwise 방식(BPR 등)이 있다.</p>
+<p><b>시간 동역학.</b> 타임스탬프로 오래된 평점의 가중을 줄이거나(Koren의 timeSVD++ 등) 사용자·아이템의 변화를 모델링한다. 이 논문은 절대 시각이 아니라 행동의 <i>순서</i>만 본다는 점이 다르다.</p>
+<p><b>순차 추천.</b> 확장 가능한 순차 모델 대부분은 마르코프 체인 기반이다. FPMC(사용자별 전이 큐브를 분해), LME(곡 사이 전이를 거리로 표현한 플레이리스트 생성), PRME(LME를 개인화해 다음 POI 예측), HRM(풀링으로 결합) 등이 여기에 속한다.</p>
+<p><b>지식 베이스.</b> word2vec의 벡터 산술에서 영감을 받은 TransE, TransH, TransR 같은 translation 계열이 텐서 분해 기반 방법보다 정확하고 확장성도 좋았다. 저자들은 이 아이디어를 개인화 순차 데이터에 처음 적용했다고 주장한다.</p>
+
+<h3>3. 모델</h3>
+<p><b>문제 정의.</b> 사용자 집합 \(\mathcal U\), 아이템 집합 \(\mathcal I\)가 있고, 사용자마다 상호작용 순서열 \(\mathcal S^u = (\mathcal S^u_1, \dots, \mathcal S^u_{|\mathcal S^u|})\)가 있다. 목표는 각 사용자가 다음에 소비할 아이템을 예측해 추천 목록을 만드는 것이다.</p>
+<p><b>전이 공간과 이동 벡터.</b> 아이템 \(i\)는 \(K\)차원 공간 \(\Phi=\mathbb R^K\)의 벡터 \(\vec\gamma_i\)다(논문에서는 잠재 벡터지만 신경망 출력 같은 특징 변환이어도 된다). 사용자 \(u\)는 벡터 \(\vec t_u\)로, 그 사람의 장기 선호 또는 "이동 의도"를 뜻한다. \(u\)가 \(i\)에서 \(j\)로 넘어갔다면 \(\vec\gamma_i + \vec t_u\)의 최근접 이웃이 \(\vec\gamma_j\)가 되길 원한다.</p>
+<p><b>왜 내적이 아니라 거리인가.</b> 사용자가 A에서 B로도, A에서 C로도 자주 넘어간다면 B와 C 모두 \(\vec\gamma_A + \vec t_u\) 근처에 놓이고, 삼각부등식에 의해 B와 C도 서로 가깝다. 데이터가 희소할 때 이런 전이성(transitivity)이 일반화를 돕는다. 내적 \(\langle \vec\gamma_i + \vec t_u, \vec\gamma_j\rangle\)을 쓰면 B와 C가 둘 다 높은 점수를 받으면서도 서로 멀리 있을 수 있다.</p>
+<p><b>전역 이동 벡터.</b> 사용자마다 독립 벡터를 배우기엔 데이터가 부족하므로 모든 사용자가 공유하는 \(\vec t\)를 더한다.</p>
+\[ \vec T_u = \vec t + \vec t_u \]
+<p>표현력이 늘지는 않지만, 정규화 때문에 이력이 짧은 사용자의 \(\vec t_u\)는 0으로 끌려가고 그 사용자는 사실상 전역 평균 이동 \(\vec t\)로 예측된다. 일종의 계층적 사전 분포 역할이다.</p>
+<p><b>예측식.</b></p>
+\[ \Pr(j \mid u, i) \;\propto\; \beta_j - d\big(\vec\gamma_i + \vec T_u,\; \vec\gamma_j\big), \qquad \vec\gamma_i \in \Psi \subseteq \Phi \]
+<ul>
+<li>\(\beta_j\): 아이템 \(j\)의 편향으로 전반적 인기를 담는다.</li>
+<li>\(d(x,y)\): 거리 함수. 실험에서는 L1과 제곱 L2 두 가지를 쓴다.</li>
+<li>\(\Psi\): 아이템 벡터가 머무를 부분공간(예: 단위 공). 지식 그래프 임베딩에서 차원의 저주 완화에 쓰인 기법으로, 벡터 노름이 커져 거리가 무의미해지는 것을 막는다.</li>
+</ul>
+<p><b>순위 학습(S-BPR).</b> 정답 다음 아이템 \(j\)가 다른 아이템 \(j'\)보다 높게 매겨지도록 학습한다. 직전 아이템 \(i\)가 주어졌을 때의 쌍별 순위 확률을 시그모이드로 두고 로그우도를 최대화한다.</p>
+\[ \hat\Theta = \arg\max_\Theta \sum_{u\in\mathcal U}\sum_{j\in\mathcal S^u}\sum_{j'\notin\mathcal S^u} \ln\sigma\big(\hat p_{u,i,j} - \hat p_{u,i,j'}\big) - \Omega(\Theta) \]
+<p>\(\hat p_{u,i,j}\)는 위 예측식의 점수, \(i\)는 순서열에서 \(j\) 바로 앞 아이템(그래서 첫 아이템은 \(j\)가 될 수 없다), \(\Theta=\{\beta_i, \vec\gamma_i, \vec t_u, \vec t\}\), \(\Omega\)는 L2 정규화 항이다.</p>
+<p><b>학습 절차.</b> \(\vec\gamma_i\)와 \(\vec t\)는 무작위 단위 벡터로, \(\beta_i\)와 \(\vec t_u\)는 0으로 초기화한다. 매 스텝마다 사용자를 균등 추출하고, 그 사용자의 순서열(첫 아이템 제외)에서 양성 \(j\)를, 사용자가 본 적 없는 아이템에서 음성 \(j'\)을 균등 추출해 확률적 경사 상승으로 갱신한다. 갱신 후 \(\vec\gamma_i, \vec\gamma_j, \vec\gamma_{j'}\)를 \(\Psi\)로 다시 투영한다. 단위 L2 공이라면 \(\vec\gamma \leftarrow \vec\gamma / \max(1, \lVert\vec\gamma\rVert)\)이다. 검증 성능이 멈추면 종료한다.</p>
+<p><b>최근접 이웃 검색으로 서빙.</b> 편향 \(\beta_j\) 때문에 순수 거리 검색이 안 되는 문제를 차원 하나를 추가해 푼다. 먼저 \(\beta'_j = \beta_j - \max_k \beta_k \le 0\)으로 이동시킨다(모든 쿼리에서 순위 불변). 제곱 L2라면 \(\vec\gamma'_j = (\vec\gamma_j; \sqrt{-\beta'_j})\), L1이라면 \(\vec\gamma'_j = (\vec\gamma_j; \beta'_j)\)로 확장하고, 쿼리는 \((\vec\gamma_i + \vec T_u; 0)\)로 둔다. 그러면 추가 차원이 정확히 \(-\beta'_j\)만큼 거리를 늘려 편향을 거리에 흡수한다. 결과적으로 일반 ANN 인덱스에 그대로 올릴 수 있다.</p>
+
+<h3>4. 기존 모델과의 관계</h3>
+<p><b>지식 그래프.</b> TransE는 "Turing — was_born_in — England"를 \(\vec h + \vec r \approx \vec t\)로 표현한다. TransRec에서 아이템은 개체, 사용자는 관계다. 즉 사용자는 "이 사람이 한 아이템에서 다른 아이템으로 넘어가는 개인적 이유"라는 관계 유형이다.</p>
+<p><b>FPMC.</b> MF 항과 분해된 MC 항의 합이다.</p>
+\[ \Pr(j\mid u,i) \propto \langle \vec M_u, \vec N_j\rangle + \langle \vec P_i, \vec Q_j\rangle \]
+<p>아이템마다 역할별 벡터 3개(\(\vec N, \vec P, \vec Q\))가 필요하다.</p>
+<p><b>PRME.</b> 두 내적을 두 개의 제곱 거리로 바꾸고 \(\alpha\)로 섞는다.</p>
+\[ \Pr(j\mid u,i) \propto -\Big(\alpha\lVert\vec M_u - \vec N_j\rVert_2^2 + (1-\alpha)\lVert\vec P_i - \vec P_j\rVert_2^2\Big) \]
+<p>메트릭의 이점은 얻지만 두 공간을 따로 배우고 균형을 하이퍼파라미터로 맞춰야 한다.</p>
+<p><b>HRM.</b> \(\langle \mathrm{aggregation}(\vec M_u, \vec N_i), \vec N_j\rangle\)로 단일 성분이지만, 풀링은 해석이 어렵고 메트릭이 아니다. 논문 표 3은 이를 네 가지 속성(개인화, 순차 인지, 메트릭 기반, 3차 관계 통합)으로 정리하는데, 네 가지를 모두 갖춘 것은 TransRec뿐이다.</p>
+
+<h3>5. 실험 — 순차 추천</h3>
+<p><b>데이터.</b> 도메인·규모·희소성이 다른 11개 공개 데이터셋, 합계 사용자 약 111만, 아이템 약 109만, 행동 1,550만 건이다. Amazon 7개 카테고리(Automotive, Cellphone, Clothing, Electronics, Office, Toys, Games), 리뷰 사이트 Epinions, 체크인 Foursquare, 영화 평점 Flixter, 그리고 새로 공개한 Google Local이다. Google Local 원자료는 약 457만 사용자, 312만 사업장, 1,145만 리뷰로 4만 8천여 개 카테고리에 걸쳐 있다. 행동이 5건 미만인 사용자·아이템은 제거하고, 별점은 모두 암묵적 양성으로 취급한다. 전처리 후 아이템당 평균 행동 수는 Epinions 3.23(가장 희소)부터 Flixter 310.61(가장 조밀)까지다. Google은 사용자 35만, 아이템 50만으로 가장 크다.</p>
+<p><b>베이스라인.</b> PopRec(인기순), BPR-MF(순서 무시), FMC(전역 전이만, 비개인화), FPMC, PRME, HRM(avg/max 풀링)이다. 모든 모델을 같은 SGD 쌍별 순위 학습, 학습률 0.05로 맞췄고, 정규화 계수는 {0, 0.001, 0.01, 0.1, 1}에서 검증셋으로 골랐다. HRM의 dropout은 비교 공정성을 위해 쓰지 않았고, PRME의 \(\alpha\)는 {0.2, 0.5, 0.8} 중 골랐다(0.2가 최선, 원 논문과 일치). TransRec의 \(\Psi\)는 단위 L2 공이며, 공의 표면(구면)으로 제한하면 약간 나빠졌다.</p>
+<p><b>평가.</b> 사용자별 마지막 행동을 테스트, 그 직전을 검증, 나머지를 학습으로 쓴다(leave-one-out). 지표는 AUC(정답이 사용자가 안 본 아이템 전체보다 얼마나 위에 있는지의 비율)와 Hit@50(정답이 상위 50위 안에 드는 사용자 비율)이다. 샘플링 없이 전체 아이템에 대해 순위를 매긴다. 모든 모델은 \(K=10\)이다.</p>
+<table><tr><th>데이터</th><th>지표</th><th>최강 베이스라인</th><th>TransRec L2</th><th>개선</th></tr>
+<tr><td>Epinions</td><td>Hit@50</td><td>3.84% (FMC)</td><td>4.63%</td><td>+20.6%</td></tr>
+<tr><td>Google</td><td>AUC</td><td>0.8640 (HRMavg)</td><td>0.8691</td><td>+0.6%</td></tr>
+<tr><td>Google</td><td>Hit@50</td><td>5.07% (PRME)</td><td>6.84%</td><td>+32.5%</td></tr>
+<tr><td>Clothing</td><td>Hit@50</td><td>1.70% (HRMavg)</td><td>2.12%</td><td>+24.7%</td></tr>
+<tr><td>Cellphone</td><td>AUC</td><td>0.7892 (HRMavg)</td><td>0.8104</td><td>+2.7%</td></tr>
+<tr><td>Foursquare</td><td>Hit@50</td><td>65.32% (PRME)</td><td>67.09%</td><td>+2.7%</td></tr>
+<tr><td>Flixter</td><td>Hit@50</td><td>40.81% (PRME)</td><td>35.02%</td><td>−13.0%</td></tr></table>
+<p>개선 비율은 L1·L2 중 좋은 쪽 기준이다(Office·Toys·Games의 Hit@50은 L1이 더 좋았다).</p>
+<p><b>저자의 해석.</b> BPR-MF와 FMC는 선호와 순차성을 따로만 봐도 PopRec보다 확실히 낫다. FPMC는 Toys, Foursquare, Flixter처럼 비교적 조밀한 데이터에서만 두 모델을 이기고 희소한 데이터에서는 지는데, 파라미터가 많은 탓으로 본다. HRM은 베이스라인 중 대체로 가장 강했고, PRME는 FPMC보다 대부분 낫지만 HRM에는 밀렸다. 다만 FPMC와 PRME는 Foursquare·Flixter처럼 조밀한 데이터에서 강했다.</p>
+<p>TransRec의 개선 폭은 두 요인과 맞물린다. <b>다양성(variability)</b>: 아이템 어휘가 가장 큰 Google과 Clothing에서 Hit@50 개선이 가장 컸다. 전 세계 식당·술집·상점이 섞인 Google 같은 데이터에서 강점을 보였다. <b>희소성</b>: Epinions, Automotive, Google처럼 희소한 데이터에서 특히 앞섰다. 유일한 패배인 Flixter는 가장 조밀하며, 저자들은 \(K=10\)에서 TransRec의 파라미터 수가 PRME보다 적은 것이 불리하게 작용했다고 추측한다. 거리 함수는 대체로 제곱 L2가 L1보다 나았지만, L1도 대부분 베이스라인을 이겼다.</p>
+<p><b>수렴.</b> 희소한 Automotive에서는 BPR-MF, FMC 같은 단순 모델과 과적합 경향의 FPMC가 빨리 수렴(조기 종료)했다. 조밀한 Electronics, Foursquare, Flixter에서는 모든 모델의 수렴 속도가 비슷했다.</p>
+<p><b>차원 민감도.</b> 가장 조밀한 세 데이터셋에서 \(K\)를 10에서 100까지 늘렸다. Electronics와 Foursquare에서는 계속 TransRec이 우세했고, Flixter의 Hit@50에서는 차원을 늘릴수록 PRME와의 격차가 줄었다. 구체 수치는 그림으로만 제시된다(논문 참조).</p>
+<p><b>정성 사례.</b> Electronics에서 무작위 사용자의 이력과 top-1 추천을 보면, 사진 장비를 사 온 사용자에게 삼각대를, 헤드폰을 여러 번 산 사용자에게는 iPod 액세서리 뒤에 새 헤드폰을 추천했다. 장기 성향을 잡은 사례다. 메인보드 다음에 PC 케이스, 홈시어터 리시버 다음에 HDTV처럼 단기 전이도 잡았다.</p>
+
+<h3>6. 실험 — item-to-item 추천</h3>
+<p>사용자 항을 빼면 TransRec은 "이 상품을 산 사람에게 무엇을 함께 권할까" 문제에 그대로 쓰인다. 지식 그래프 완성과 가장 닮은 설정이다.</p>
+<p><b>설정.</b> Amazon co-purchase 그래프 8개(Office, Home, Games, Electronics, Automotive, Movies &amp; TV, Cellphone, Toys; 합계 아이템 223만, 방향 간선 394만)를 쓴다. 대체재가 아니라 보완재를 겨냥하도록 서로 다른 하위 카테고리를 잇는 간선만 남겼다. 간선은 방향이 있다(노트북 다음 충전기는 자연스럽지만 반대는 아니다). 이번에는 잠재 벡터 대신 리뷰 텍스트의 BoW 특징(불용어 제거 후 빈도 상위 5,000개의 명사·형용사·형용사-명사 바이그램)을 쓰고, 선형 임베딩 층 \(E(\cdot)\)로 공간에 올린다.</p>
+\[ \Pr(j\mid i) \propto -\,d\big(E(\vec f_i) + \vec t,\; E(\vec f_j)\big) \]
+<p>\(\vec f_i\)는 아이템 특징, \(\vec t\)는 모든 쌍이 공유하는 이동 벡터다. 간선을 80/10/10으로 나누고 AUC와 Hit@10을 잰다. 제곱 L2, \(\Psi=\Phi\)(제약 없음), 100차원으로 LMT와 같게 맞췄고, Monomer는 20차원 공간 5개를 쓴다.</p>
+<p><b>베이스라인.</b> WNN(원 특징 공간에서 가중 유클리드 거리), LMT(저랭크 마할라노비스 변환 \(W\) 하나로 모든 아이템을 사영한 뒤 거리 비교), Monomer(여러 저랭크 임베딩의 혼합, 비메트릭이라 방향성 처리 가능)다.</p>
+<p><b>결과.</b> TransRec이 8개 모두에서 이겼다. AUC 개선은 1.9%(Movies &amp; TV)~8.1%(Cellphone), Hit@10 개선은 41.7%~312%였다. 예를 들어 Office에서 Hit@10은 LMT 3.08% 대비 12.69%, Electronics에서는 2.59% 대비 5.32%였다. 저자들은 순수 거리 모델보다 이동 구조가 아이템 관계를 잘 잡는다는 증거로 보며, 이는 지식 그래프 문헌의 결론과도 맞는다고 해석한다. 희소한 Office에서 개선이 가장 컸고, 조밀한 Toys·Games에서는 상대적으로 작았다.</p>
+<p>직관적으로 보면, 순수 거리 모델(LMT)은 "함께 사는 것 = 가까운 것"이라 대칭적이고 대체재와 보완재를 구분하기 어렵다. 이동 벡터 \(\vec t\)를 더하면 "i에서 한 걸음 옮긴 곳에 j가 있다"는 비대칭 관계가 된다.</p>
+
+<h3>7. 결론</h3>
+<p>TransRec은 사용자·직전 아이템·다음 아이템의 3차 관계를 단일 이동 연산으로 표현하는 확장 가능한 모델이다. 순차 추천과 item-to-item 추천 두 과제에서 모두 강했으므로 저자들은 translation 구조가 범용 추천 구조로 유망하다고 결론짓는다. 부가 기여로 전 세계 지역 사업장의 상세 정보와 수백만 사용자의 평점·리뷰를 담은 Google Local 데이터셋을 공개했다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>1차 마르코프 체인(MC).</b> 다음 상태가 직전 상태에만 의존한다고 보는 확률 모델. 추천에서는 "직전 아이템 → 다음 아이템" 전이확률이고, 아이템 수가 많으면 전이행렬을 저랭크로 분해해 일반화한다.</p>
+<p><b>FPMC.</b> Rendle 등(WWW 2010)의 Factorized Personalized Markov Chains. 사용자별 전이 텐서를 쌍별 분해해 MF 항과 MC 항의 합으로 만든 순차 추천의 고전 모델.</p>
+<p><b>BPR / S-BPR.</b> Bayesian Personalized Ranking은 관측 아이템이 비관측 아이템보다 높은 점수를 받도록 \(\ln\sigma(\hat x_{uj}-\hat x_{uj'})\)를 최대화하는 쌍별 순위 학습. S-BPR은 이를 직전 아이템 조건부로 확장한 순차 버전이다.</p>
+<p><b>TransE와 translation 계열 임베딩.</b> Bordes 등(NIPS 2013)이 제안한 지식 그래프 임베딩으로 관계를 벡터 덧셈으로 표현한다. TransH(초평면 사영), TransR(관계별 공간) 등이 뒤따랐다.</p>
+<p><b>메트릭 임베딩과 삼각부등식.</b> 거리 \(d\)가 \(d(x,z)\le d(x,y)+d(y,z)\)를 만족하면, x와 y, y와 z가 가깝다는 정보만으로 x와 z도 가깝다는 것이 보장된다. 내적 점수에는 이런 성질이 없어 관측되지 않은 쌍으로의 전파가 약하다.</p>
+<p><b>PRME.</b> Personalized Ranking Metric Embedding(IJCAI 2015). 사용자–아이템 공간과 아이템–아이템 공간 두 개의 유클리드 거리를 가중합해 다음 POI를 예측한다.</p>
+<p><b>HRM.</b> Hierarchical Representation Model(SIGIR 2015). 사용자 벡터와 최근 아이템 벡터를 풀링으로 합친 표현과 다음 아이템의 내적으로 예측한다.</p>
+<p><b>MIPS/NN 변환 트릭.</b> 점수에 아이템별 상수(편향)가 있으면 순수 거리 검색이 안 되므로, 편향을 추가 좌표로 인코딩해 벡터 차원을 하나 늘리는 방법. 내적 검색을 L2 검색으로 바꿀 때도 같은 방식을 쓴다.</p>
+<p><b>Leave-one-out 평가와 전체 순위 AUC.</b> 사용자별 마지막 행동을 테스트로 빼고, 정답을 사용자가 안 본 모든 아이템과 비교해 순위를 매긴다. 음성 샘플링 평가보다 엄격하다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> TransRec의 예측 점수식을 쓰고 각 항의 역할을 말하라.
+<details><summary>정답 보기</summary>\(\hat p_{u,i,j} = \beta_j - d(\vec\gamma_i + \vec t + \vec t_u, \vec\gamma_j)\). \(\beta_j\)는 아이템 인기 편향, \(\vec\gamma\)는 전이 공간에서의 아이템 위치, \(\vec t\)는 전역 이동, \(\vec t_u\)는 사용자별 오프셋, \(d\)는 L1 또는 제곱 L2 거리다.</details></li>
+<li><b>[사실]</b> 11개 순차 추천 데이터셋 중 TransRec이 최강 베이스라인에 진 지표와 데이터셋은? 상대는 누구였나? (객관식: ① Epinions AUC ② Google Hit@50 ③ Flixter Hit@50 ④ Foursquare AUC)
+<details><summary>정답 보기</summary>③. Flixter Hit@50에서 PRME(40.81%)에 TransRec L2(35.02%)가 뒤져 −13.0%였다. Flixter는 가장 조밀한 데이터셋이다.</details></li>
+<li><b>[사실]</b> item-to-item 실험에서 사용한 아이템 특징과 임베딩 함수, 차원은?
+<details><summary>정답 보기</summary>리뷰 텍스트의 Bag-of-Words(빈도 상위 5,000개 명사·형용사·형용사-명사 바이그램), 선형 임베딩 층 \(E(\cdot)\), 100차원(LMT와 동일). 제곱 L2 거리, \(\Psi=\Phi\)다.</details></li>
+<li><b>[원리]</b> 사용자 A가 X→Y, X→Z 전이를 자주 보였다. 내적 모델과 TransRec에서 Y와 Z의 관계는 각각 어떻게 되는가?
+<details><summary>정답 보기</summary>TransRec에서는 Y와 Z가 모두 \(\vec\gamma_X + \vec T_A\) 근처에 놓이므로 삼각부등식에 의해 서로도 가깝다. 이 성질이 다른 사용자·문맥으로 일반화된다. 내적 모델에서는 두 아이템이 같은 쿼리와 높은 내적을 가져도 서로 멀리 있을 수 있어 이런 전파가 보장되지 않는다.</details></li>
+<li><b>[원리]</b> \(\vec T_u = \vec t + \vec t_u\)로 분해하는 것은 표현력을 늘리지 않는다. 그럼 왜 하는가?
+<details><summary>정답 보기</summary>L2 정규화가 \(\vec t_u\)를 0 쪽으로 당기므로, 데이터가 적은 사용자(cold-start)는 전역 평균 이동 \(\vec t\)로 예측된다. 개인 벡터를 공유 벡터 주변으로 수축시키는 계층적 사전 분포 효과다.</details></li>
+<li><b>[원리]</b> 편향 \(\beta_j\)가 있는데도 제곱 L2 최근접 이웃 검색으로 정확한 top-k를 얻는 방법을 설명하라.
+<details><summary>정답 보기</summary>\(\beta'_j = \beta_j - \max_k\beta_k \le 0\)으로 옮긴다(순위 불변). 아이템을 \((\vec\gamma_j; \sqrt{-\beta'_j})\), 쿼리를 \((\vec\gamma_i + \vec T_u; 0)\)로 확장하면 제곱 거리 = \(\lVert\vec\gamma_i+\vec T_u-\vec\gamma_j\rVert^2 - \beta'_j\)가 되어 점수의 음수와 정확히 같다. L1이면 추가 좌표에 \(\beta'_j\)를 넣는다.</details></li>
+<li><b>[해석]</b> Google Local과 Clothing에서 Hit@50 개선이 특히 컸던 이유를 저자들은 어떻게 설명하나?
+<details><summary>정답 보기</summary>두 데이터셋은 아이템 어휘가 가장 크고 다양성(variability)이 높다. 전 세계 다양한 업종이 섞인 Google 같은 데이터에서 단일 이동 구조와 메트릭 일반화가 강점을 보였다고 본다. 두 데이터 모두 희소한 편이라 파라미터가 적은 TransRec에 유리했다는 점도 함께 작용한다.</details></li>
+<li><b>[해석]</b> FPMC가 희소한 데이터셋에서 BPR-MF나 FMC보다도 못한 경우가 있는 이유와, 이것이 TransRec 설계에 주는 시사점은?
+<details><summary>정답 보기</summary>FPMC는 아이템마다 역할별 벡터를 여러 개 두어 파라미터가 많고, 희소한 데이터에서 과적합한다(수렴 실험에서도 빨리 조기 종료됐다). TransRec은 아이템당 벡터 하나와 사용자 벡터 하나로 파라미터가 적고 거리 구조가 강한 귀납 편향을 주어 희소 데이터에서 유리하다. 반대로 조밀한 Flixter에서는 이 적은 파라미터가 약점이 됐다.</details></li>
+<li><b>[비판]</b> 사용자당 이동 벡터가 하나라는 가정의 한계를 구체적인 예로 들고, 개선 방향을 제안하라.
+<details><summary>정답 보기</summary>한 사용자가 업무용 전자기기와 취미용 캠핑 장비를 번갈아 산다면, 두 의도의 이동 방향이 달라 벡터 하나로는 평균적 방향밖에 표현하지 못한다. 또 직전 아이템 하나만 보므로 여러 스텝 전 문맥이 무시된다. 개선: 직전 아이템이나 최근 시퀀스에 따라 이동 벡터를 조건부로 만들기(attention, 다중 이동 벡터 혼합), 고차 마르코프나 시퀀스 인코더로 쿼리 점을 만들기 등.</details></li>
+<li><b>[적용]</b> 커머스 "이 상품과 함께 구매" 모듈에 TransRec의 item-to-item 버전을 도입하려 한다. 순수 임베딩 유사도(코사인 top-k) 대비 기대 효과와 주의할 점은?
+<details><summary>정답 보기</summary>기대 효과: 공유 이동 벡터가 비대칭 관계를 담아 "노트북→충전기"처럼 대체재가 아닌 보완재 쪽으로 결과를 이동시킨다. 콘텐츠 특징 기반이라 신상품에도 적용 가능하고, 편향 흡수 트릭으로 기존 ANN 인덱스를 그대로 쓸 수 있다. 주의점: 이동 벡터가 전역 하나라 카테고리마다 다른 보완 관계를 하나로 뭉뚱그리므로 카테고리별 이동 벡터가 필요할 수 있다. 학습 데이터에서 대체재 간선을 제거하지 않으면 유사품 추천으로 되돌아간다. 오프라인 Hit@10 개선이 실제 부착 구매로 이어지는지는 A/B로 확인해야 한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#360</b> Hierarchical Latent Relation Modeling for Collaborative Metric Learning (2021) — 사용자–아이템 관계를 메트릭 공간의 관계 벡터로 두는, TransRec과 같은 계보의 메트릭 학습 추천.</li>
+<li><b>#99</b> Do Sequential Recommendation Benchmarks Really Require Higher-Order Sequence Modelling? (2026) — TransRec 같은 1차 전이 모델로 충분한지, 벤치마크가 긴 순서 정보를 요구하는지 되묻는 연구.</li>
+<li><b>#23</b> gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling (2023) — 마르코프 계열 뒤를 이은 self-attention 순차 추천과 음성 샘플링 학습의 문제.</li>
+<li><b>#18</b> Denoising Self-Attentive Sequential Recommendation (2022) — 긴 시퀀스를 보는 트랜스포머 기반 순차 추천에서 노이즈 아이템을 걸러내는 방법.</li>
+<li><b>#263</b> On the Consistency of Average Embeddings for Item Recommendation (2023) — 임베딩 공간에서 벡터 산술(평균)이 추천 의미를 보존하는지를 다룬 분석.</li>
+</ul>
+
+</main>
+</body>
+</html>
