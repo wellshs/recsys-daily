@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#5 Causal Embeddings for Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-09-30 · #5</span></div>
+<h1>Causal Embeddings for Recommendation</h1>
+<p class="meta">Stephen Bonner, Flavian Vasile · Criteo AI Labs (Paris), Durham University · RecSys 2018 Best Long Paper</p>
+<div class="chips"><span>2018</span><span>Best Long Paper</span><span>기업(Criteo)</span><span>인과 추천</span><span>ITE</span><span>Domain Adaptation</span><span>Matrix Factorization</span><span>IPS</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3240323.3240360">10.1145/3240323.3240360</a> · arXiv: <a href="https://arxiv.org/abs/1706.07639">1706.07639</a> (<a href="https://arxiv.org/pdf/1706.07639v6">PDF</a>) · 코드: <a href="https://github.com/criteo-research/CausE">criteo-research/CausE</a> · 본문 약 8쪽 · 읽기 예상 시간: 약 15분</p>
+<div class="callout">이 페이지는 원문을 옮긴 번역이 아니라 논문 구조를 따라가며 내용을 재서술한 해설입니다. 그림은 말로 설명했고, 수치는 arXiv v6 원문 표 2에서 옮겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 추천의 진짜 목표는 "추천이 없었을 때보다 행동을 얼마나 늘렸나(개별 처치 효과, ITE)"이고, 이를 최대화하는 정책은 결국 "무작위로 노출했을 때 반응이 가장 좋은 아이템"을 고르는 것과 같다. 그래서 편향된 대량 로그와 소량의 무작위 노출 로그를 함께 분해하는 멀티태스크 MF, CausE를 제안한다.</p>
+<p><b>풀려는 문제.</b> 기존 추천 모델은 과거 행동과의 일치도(행렬 채우기, 다음 아이템 예측)로 평가된다. 하지만 로그 자체가 기존 추천 정책이 보여 준 것 위주로 쌓여 있어, 거기에 맞춘 모델은 "원래 살 사람에게 원래 살 것"을 맞히는 데 그친다. IPS 가중으로 편향을 보정하는 방법은 노출 확률이 작은 아이템에서 분산이 폭발한다.</p>
+<p><b>핵심 아이디어.</b> 대량의 control 로그 \(S_c\)와 소량의 무작위(treatment) 로그 \(S_t\)를 두 개의 "도메인"으로 보고, 각 도메인에 별도 아이템 임베딩 \(\Theta_c, \Theta_t\)를 두되 두 임베딩의 차이 \(\Theta_t-\Theta_c\)에 벌점을 준다. 큰 데이터로 개인화 신호를 배우고, 작은 무작위 데이터가 그 임베딩을 "무작위 노출 세계" 쪽으로 끌어당기는 구조다. 기존 MF에 정규화 항 하나를 더한 것에 가깝다.</p>
+<p><b>주요 결과.</b> MovieLens10M·Netflix를 인기 편향이 제거된 테스트셋(SKEW)으로 바꿔 평가했다. 가장 좋은 변형 CausE-prod-C는 평균 전환율 예측기 대비 MSE lift +15.48%/+17.82%, AUC 0.814/0.821로, IPS 가중 SP2V(WSP2V-blend: +6.14%/+14.72%, AUC 0.792/0.782)와 BanditNet(AUC 0.794/0.785)을 모두 앞섰다. 학습/테스트 분포가 같은 REG 셋에서는 모든 방법이 비슷했다.</p>
+<p><b>한계와 남는 질문.</b> 평가는 "무작위 노출 하에서의 반응 예측" 정확도이지, 실제 증분(uplift) 효과를 A/B로 잰 것이 아니다. 무작위 로그가 반드시 필요하고, 그 크기·품질에 성능이 좌우된다. 사용자 쪽 표현은 고정한 상품 측 변형(\(L^{prod}\))만 실험했고, 거리 정규화 강도 등 하이퍼파라미터 값과 민감도는 본문에 거의 나오지 않는다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 추천은 관찰이 아니라 개입이다</h3>
+<p>저자들은 먼저 당시 딥러닝 추천의 두 주류를 정리한다. (1) 아이템–아이템 또는 사용자–아이템 쌍의 거리를 배우고 MSE·AUC 같은 링크 예측 지표로 평가하는 방식(Prod2Vec, GloVe류), (2) 사용자 시퀀스를 보고 다음 아이템을 맞히며 Precision@K·NDCG로 평가하는 방식(GRU4Rec류)이다.</p>
+<p>둘 다 "사용자가 원래 할 행동"을 흉내 내는 문제로 정의되어 있다는 것이 문제 제기의 핵심이다. 그런데 추천은 구매·시청·가입 같은 행동을 <i>바꾸려고</i> 내보내는 개입이다. 그렇다면 성과는 추천이 없던 기준 상태와 비교한 증가분으로 재야 하고, 인과 추론 용어로는 사용자별 개별 처치 효과(Individual Treatment Effect, ITE)를 최대화하는 처치 정책을 찾는 문제가 된다. 여기서 control 정책은 "추천 없음"일 수도, 지금 운영 중인 기존 추천기일 수도 있다. 논문에서는 control 정책과 로깅 정책을 같은 뜻으로 쓴다.</p>
+<p>광고 쪽 맥락도 짚는다. 과금 단위가 노출(CPM) → 클릭(CPC) → 전환(CPA)으로 옮겨 왔고, 다음 단계는 "광고 때문에 늘어난 판매"를 기준으로 하는 증분 CPA라는 것이다. Criteo라는 소속을 생각하면 자연스러운 동기다.</p>
+
+<h3>1.1 ITE를 최적화하는 추천 정책</h3>
+<p><b>표기.</b> 사용자 \(u_i\), 상품 \(p_j\), 확률적 정책 \(\pi_x(p_j\mid u_i)\)는 사용자 \(u_i\)에게 \(p_j\)를 보여 줄 확률이다. "아무것도 안 보여 주기"도 하나의 선택지로 포함한다. \(r_{ij}\)는 \(p_j\)를 추천했을 때의 참 보상(클릭/구매 여부 같은 이진값)이고, 로그에서 관측되는 보상은 노출 확률이 곱해진 \(y_{ij} = r_{ij}\,\pi_x(p_j\mid u_i)\)로 정의한다. \(\pi_c\)는 control(로깅) 정책, \(\pi_t\)는 treatment 정책, \(\pi^{rand}\)는 모든 상품을 같은 확률로 보여 주는 완전 무작위 정책이다.</p>
+<p><b>정책 보상과 ITE.</b></p>
+\[ R^{\pi_x} = \sum_{ij} r_{ij}\,\pi_x(p_j\mid u_i)\,p(u_i), \qquad ITE^{\pi_x}_{ij} = R^{\pi_x}_{ij} - R^{\pi_c}_{ij} \]
+<p>\(p(u_i)\)는 사용자가 유입될 확률이다. ITE는 같은 사용자–상품 쌍에서 새 정책의 보상이 control보다 얼마나 큰지이며, 목표는 전체 ITE 합을 최대화하는 \(\pi^*\)다.</p>
+<p><b>보조정리 1.</b> control 정책이 무엇이든, ITE 합을 최대화하는 정책은 각 사용자에게 참 보상이 가장 큰 상품 \(p_i^* = \arg\max_j r_{ij}\)를 결정적으로 보여 주는 정책이다. 논리는 단순하다. \(R^{\pi_c}\)는 \(\pi_x\)와 무관한 상수이므로 ITE 최대화는 \(R^{\pi_x}\) 최대화와 같고, 어떤 정책이든 사용자별 기대 보상은 \(\sum_j r_{ij}\pi_x(p_j\mid u_i) \le r_i^*\)로 위에서 막히므로, 확률 1을 최고 상품에 몰아주는 정책이 상한을 달성한다.</p>
+<p><b>문제는 \(r_{ij}\)를 모른다는 것.</b> 우리가 보는 것은 control 정책에 오염된 \(y_{ij}\)뿐이다. 표준 해법은 IPS로 \(\hat r_{ij} \approx y_{ij}/\pi_c(p_j\mid u_i)\)를 쓰는 것인데, \(\pi_c\)에서 거의 노출되지 않은 상품은 분모가 작아 예측 보상이 과대해지고 분산이 커진다.</p>
+<p><b>핵심 관찰 (식 11).</b> 무작위 정책에서는 모든 \(\pi^{rand}(p_j\mid u_i)\)가 같으므로</p>
+\[ \hat p_i = \arg\max_j \hat r_{ij} = \arg\max_j \frac{\hat y^{rand}_{ij}}{\pi^{rand}(p_j\mid u_i)} = \arg\max_j \hat y^{rand}_{ij} \]
+<p>가 된다. 즉 "무작위 노출에서 관측될 반응"을 잘 예측하기만 하면 나눗셈 없이 최적 상품을 고를 수 있다. 이상적으로는 로깅 정책 자체를 무작위로 두면 되지만 서비스 품질 때문에 불가능하다. 그래서 대량의 편향 로그 \(S_c\)와, ε-greedy 탐색이나 기각 샘플링으로 얻은 소량의 무작위 로그 \(S_t\)를 동시에 쓰는 도메인 적응 문제로 바꾼다. IPS와의 결정적 차이는 목표 도메인(무작위 노출)의 샘플이 실제로 필요하다는 점이다.</p>
+<p><b>기여.</b> (1) Rosenfeld 등의 "대량 관측 데이터 + 소량 무작위 실험" 결합 연구와 Shalit·Johansson 등의 인과 표현 학습을 연결해, 둘을 포괄하는 MF 알고리즘 CausE를 제안. (2) 상품 추천에 적용해 표준 분해법·IPS 기반 인과 방법과 비교하고, \(S_t\)를 활용하는 여러 방법을 분석. 코드와 공개 데이터 결과만 제시해 재현성을 확보했다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>성향 점수 방법.</b> 관측 데이터를 가중치로 재조정해 가상의 무작위 실험처럼 만드는 IPS(Rosenbaum·Rubin)가 출발점이다. Bottou 등은 분산 문제를 줄이려 가중치를 자르는 Clipped-IPS를, Dudík 등은 직접 모델과 IPS를 결합해 둘 중 하나만 맞아도 일관적인 Doubly Robust 추정을 제안했다. Swaminathan·Joachims는 반사실 위험 최소화(CRM)와 로그 밴딧 피드백 배치 학습(BLBF)을 정식화하고 분산 정규화 Clipped-IPS를 최적화하는 POEM을 내놨다. 가장 최근의 BanditNet은 신경망 출력을 확률적 정책 \(\pi_w\)로 보고 \((\delta_i - \lambda)\,\pi_w/\pi_c\)의 평균을 최소화한다. 여기서 \(\delta_i\)는 손실, \(\lambda\)는 실험적으로 고르는 라그랑주 승수다(self-normalized IPS의 변형).</p>
+<p><b>도메인 적응·전이 학습으로서의 인과 추론.</b> Johansson·Shalit·Sontag은 사실(factual) 도메인에서 배워 반사실(counterfactual) 도메인에서 예측하는 문제로 보고, ITE 오차가 "표현의 지도학습 일반화 오차 + 표현 공간에서 처치군·대조군 분포의 거리"로 상한이 잡힌다고 보였다. Rosenfeld 등은 A/B 테스트 트래픽뿐 아니라 그 이전 control 데이터까지 활용해 새 처치의 효과 크기를 더 잘 예측하는 결합 최적화를 제안했다. CausE는 이 후자를 행렬분해로 확장한 것이다.</p>
+<p><b>인과 추천.</b> Liang 등의 ExpoMF는 "노출되었는가"와 "노출 후 클릭했는가"를 함께 모델링해 노출됐지만 클릭 안 된 아이템의 가중을 자연스럽게 낮춘다. 후속 연구는 노출 모델(전역 인기 또는 개인화)을 먼저 추정하고 그 역수로 클릭 데이터를 가중해 선호 모델을 학습한다. Schnabel 등의 "Recommendations as Treatments"도 매우 비슷한 성향 가중 MF다.</p>
+
+<h3>3. 제안 방법 — CausE</h3>
+<p><b>3.1 상품 표현만 달라지는 경우.</b> 같은 사용자 집단이 control과 treatment에서 다른 상품 노출을 받는다고 가정하면, 두 정책의 차이는 상품 표현의 차이로 설명할 수 있다. 사용자 표현 \(u_i\)는 고정하고, 두 보상을 선형 예측으로 근사한다.</p>
+\[ y^c_{ij} \approx \langle \theta^c_j, u_i\rangle, \qquad y^t_{ij} \approx \langle \theta^t_j, u_i\rangle \]
+<p>그러면 ITE 추정치는 \(\widehat{ITE}_{ij} = \langle \theta^t_j - \theta^c_j, u_i\rangle = \langle \theta^\Delta_j, u_i\rangle\)로, 상품별 "차이 벡터" \(\theta^\Delta_j\)와 사용자 벡터의 내적이 된다.</p>
+<p>treatment 쪽 손실은 작은 \(S_t\)에 대한 지도 학습이다: \(L_t = L(U\Theta_t, Y_t) + \Omega(\Theta_t)\). control 쪽은 \(\theta^c_j = \theta^t_j - \theta^\Delta_j\)로 쓰고 \(\theta^\Delta_j\)도 정규화하는데, 이를 control 임베딩 기준으로 다시 쓰면 \(L_c = L(U\Theta_c, Y_c) + \Omega(\Theta_c) + \Omega(\Theta_t - \Theta_c)\)가 된다. 둘을 합친 것이 상품 측 CausE 목적 함수다.</p>
+\[ L^{prod}_{CausE} = \underbrace{L(U\Theta_t, Y_t) + \Omega(\Theta_t)}_{\text{treatment 과제}} + \underbrace{L(U\Theta_c, Y_c) + \Omega(\Theta_c)}_{\text{control 과제}} + \underbrace{\Omega(\Theta_t - \Theta_c)}_{\text{과제 간 정규화}} \]
+<ul>
+<li>\(U\): 사용자 표현 행렬(두 과제가 공유), \(\Theta_t, \Theta_c\): treatment/control 상품 임베딩 행렬.</li>
+<li>\(Y_t, Y_c\): 각 샘플의 관측 보상 행렬, \(L\): 임의의 손실(실험에서는 교차 엔트로피).</li>
+<li>\(\Omega(\Theta_t-\Theta_c)\): 두 도메인의 상품 표현이 너무 멀어지지 않게 묶는 항. 이 항이 없으면 두 과제는 사용자 벡터만 공유하는 독립 MF가 되고, 무한히 크면 한 벡터를 쓰는 blended 학습이 된다.</li>
+</ul>
+<p>직관: \(S_t\)는 너무 작아 혼자서는 좋은 임베딩을 못 배운다. \(S_c\)는 크지만 편향되어 있다. 두 임베딩을 "가까이 있되 같지 않게" 두면 control 임베딩은 풍부한 개인화 정보를 흡수하면서 무작위 도메인 쪽으로 교정되고, treatment 임베딩은 control의 정보를 빌려 희소성을 극복한다. 같은 논리로 상품을 고정하고 사용자 표현만 도메인별로 두는 \(L^{user}_{CausE}\)도 정의할 수 있다.</p>
+<p><b>3.1.1 사용자와 상품이 모두 달라지는 경우.</b> 노출 변화가 "누구에게"와 "무엇을" 모두에서 생긴다면 사용자 행렬도 \(\Gamma_t, \Gamma_c\)로 나누고 차이 벌점을 둘 다 건다.</p>
+\[ L_{CausE} = L(\Gamma_t\Theta_t, Y_t) + \Omega(\Gamma_t,\Theta_t) + L(\Gamma_c\Theta_c, Y_c) + \Omega(\Gamma_c,\Theta_c) + \Omega(\Gamma_t-\Gamma_c) + \Omega(\Theta_t-\Theta_c) \]
+<p>사용자 차이 항의 정규화 계수를 무한대로 보내면 \(\Gamma_t=\Gamma_c\)가 강제되어 앞의 \(L^{prod}\)로 돌아간다.</p>
+<p><b>3.1.2 최적화.</b> 모멘텀 SGD와 선형 감소 학습률을 쓴다. 실험의 treatment 정책은 상품에만 의존하므로 \(L^{prod}_{CausE}\)만 최적화했다. 알고리즘 1은 미니배치의 각 샘플이 \(S_c\)에서 왔으면 control 벡터를, \(S_t\)에서 왔으면 treatment 벡터를 갱신하는 단순한 루프다(원문 알고리즘 표기에서 treatment 갱신 줄에도 \(\theta^c\)가 적혀 있는데, 문맥상 \(\theta^t\) 갱신을 뜻하는 오기로 보인다). 입력 하이퍼파라미터는 두 과제의 정규화 계수 \(\lambda_t, \lambda_c\), 표현 간 거리 계수 \(\lambda_{dist}\), 학습률 \(\eta\)다.</p>
+
+<h3>4. 실험</h3>
+<p><b>과제와 지표.</b> 모든 방법은 학습 시 \(\pi_c\)의 대량 샘플과 \(\pi_t\)의 소량 샘플(탐색 트래픽이나 A/B 테스트를 흉내 냄)을 받고, treatment 정책 하 반응 \(y^t_{ij}\)를 예측한다. 사실상 전환율 예측 문제이므로 MSE와 NLL을 쓰되, 테스트셋의 평균 전환율을 그대로 예측하는 AvgCR 대비 개선율로 보고한다.</p>
+\[ lift^{metric}_x = \frac{metric_x - metric_{AvgCR}}{metric_{AvgCR}} \]
+<p>(원문 식 그대로라면 오차가 줄 때 음수가 나오지만, 표에는 개선이 양수로 적혀 있으므로 "AvgCR 대비 개선 비율"로 읽으면 된다.) 이진 피드백이므로 AUC도 함께 보고한다.</p>
+<p><b>베이스라인.</b></p>
+<ul>
+<li><b>BPR</b>: 쌍별 순위 MF. 확률을 내지 않으므로 AUC만 보고.</li>
+<li><b>SP2V</b>(Supervised-Prod2Vec): \(\hat y_{ij} = \sigma(\alpha\langle p_j, u_i\rangle + b_i + b_j + b)\). 음성을 무작위 샘플링하지 않고 데이터에 있는 음성을 쓰는 FM형 분해 모델. CausE의 기본 뼈대이기도 하다.</li>
+<li><b>WSP2V</b>: SP2V에 성향 가중을 준 IPS 기반 인과 MF. Schnabel 등의 PMF와 비슷하되 교차 엔트로피 손실을 쓴다. 과적합 방지를 위해 가중치 상한 10.</li>
+<li><b>BanditNet(BN)</b>: SP2V를 목표 정책으로 쓰고, 로깅 정책은 학습 데이터 상품 주변 빈도(인기)로 모델링. 가중치를 \(\pi^{rand}/\pi_c\)로 바꿔 최대 100으로 자른다. \(\lambda=0\)이면 WSP2V와 비슷해진다.</li>
+</ul>
+<p><b>\(S_t\) 활용 방식.</b> <code>no</code>(\(S_c\)만), <code>blend</code>(\(S_c\cup S_t\)를 섞어 학습), <code>test</code>(\(S_t\)만), 그리고 CausE 전용인 <code>avg</code>(\(S_t\) 전체를 하나의 평균 treatment 상품 벡터로 풀링)와 <code>prod</code>(상품마다 treatment 벡터). prod는 예측 시 control 벡터를 쓰면 CausE-prod-C, treatment 벡터를 쓰면 CausE-prod-T다.</p>
+<p><b>데이터셋.</b> MovieLens10M(사용자 71,567, 상품 10,677), Netflix(사용자 480,189, 상품 17,770), 그리고 \(S_t\) 크기 실험용 MovieLens100K. Liang 등의 프로토콜을 따라 별 5점만 1(클릭), 나머지 평점은 0(본 것)으로 이진화한다.</p>
+<ul>
+<li><b>REG</b>: 사용자별로 평범하게 70/10/20 분할. 학습·테스트 분포가 같다.</li>
+<li><b>SKEW</b>: 먼저 테스트셋을 가능한 한 균등 노출로 뽑는다. 가장 인기 없는 상품 대비 몇 배 인기인지 계산하고 그 역수를 채택 확률로 쓴다(100배 인기면 1% 확률로 테스트에 들어감). 원래 프로토콜은 IPS용 성향 비율만 있으면 되지만 CausE는 \(\pi_t\) 샘플 자체가 필요하므로 균등 샘플을 30%로 늘려 10%를 학습에 주입한다. 최종 구성은 학습 70%(\(\pi_c\) 60% + \(\pi_t\) 10%), 검증 10%(\(\pi_c\)), 테스트 20%(\(\pi_t\)). 학습에 전혀 없는 상품이 생기지 않도록 한 상품 이벤트가 테스트로 옮겨질 확률은 최대 0.9로 제한했다.</li>
+</ul>
+<p><b>구현.</b> 모든 모델은 TensorFlow, 모멘텀 SGD, 선형 감소 학습률. 손실은 교차 엔트로피. 정규화는 L1/L2를 모두 시도했고, 임베딩 행렬에는 L2, 두 표현 간 거리에는 L1을 쓴 조합이 가장 좋았다. 거리 항에 L1을 쓰면 대부분의 상품은 두 벡터가 정확히 같아지고 일부 차원·상품만 달라지는 희소한 차이가 유도된다는 해석이 가능하다(저자 주장은 아니고 해설자의 해석).</p>
+<p><b>결과 (SKEW, 표 2 핵심 행).</b></p>
+<table>
+<tr><th>방법</th><th>ML10M MSE lift</th><th>ML10M AUC</th><th>Netflix MSE lift</th><th>Netflix AUC</th></tr>
+<tr><td>BPR-blend</td><td>–</td><td>0.711</td><td>–</td><td>0.671</td></tr>
+<tr><td>SP2V-blend</td><td>+4.37%</td><td>0.768</td><td>+12.82%</td><td>0.764</td></tr>
+<tr><td>SP2V-test</td><td>+2.45%</td><td>0.741</td><td>+5.67%</td><td>0.739</td></tr>
+<tr><td>WSP2V-blend</td><td>+6.14%</td><td>0.792</td><td>+14.72%</td><td>0.782</td></tr>
+<tr><td>BN-blend</td><td>–</td><td>0.794</td><td>–</td><td>0.785</td></tr>
+<tr><td>CausE-avg</td><td>+12.67%</td><td>0.804</td><td>+15.62%</td><td>0.799</td></tr>
+<tr><td>CausE-prod-T</td><td>+7.46%</td><td>0.779</td><td>+13.97%</td><td>0.789</td></tr>
+<tr><td>CausE-prod-C</td><td><b>+15.48%</b></td><td><b>0.814</b></td><td><b>+17.82%</b></td><td><b>0.821</b></td></tr>
+</table>
+<p>NLL lift도 같은 순서를 보인다(CausE-prod-C: ML10M +19.12%, Netflix +17.19%; WSP2V-blend: +8.05%, +14.23%).</p>
+<p><b>저자들의 해석.</b></p>
+<ul>
+<li>REG 셋에서는 모든 방법이 비슷했다(ML10M에서 모두 MSE lift 약 +8%). 분포가 같으면 인과적 보정이 이득을 주지 않는다.</li>
+<li>SKEW에서 표준 MF(SP2V, BPR)는 크게 약하고, \(S_t\)를 섞어 넣은 blend가 조금 나아지는 정도다. \(S_t\)만 쓴 SP2V-test는 테스트 분포와 같은 데이터로 배웠지만 양이 적어 희소성 때문에 오히려 더 나쁘다.</li>
+<li>IPS 가중(WSP2V)은 표준 방법보다 낫고, BanditNet은 기존 인과 방법 중 가장 CausE에 가깝다.</li>
+<li>CausE 세 변형 모두 IPS 방법을 이겼고, avg와 prod-C는 BanditNet도 이겼다. 흥미로운 점은 treatment 벡터(prod-T)가 아니라 정규화된 <i>control</i> 벡터(prod-C)로 예측하는 것이 가장 좋았다는 것이다. 저자들은 큰 \(S_c\)에 맞추면서 개인화 반응을 제대로 배우고, 거리 정규화가 목표 과제에서 벗어나는 정도를 제어하기 때문이라고 설명한다. prod-T는 \(S_t\)가 작은 상품에서 불안정할 수 있다.</li>
+</ul>
+<p><b>\(S_t\) 크기의 영향 (그림 1, MovieLens100K).</b> 학습에 주입하는 테스트 분포 샘플을 전체의 1%에서 15%까지 늘리며 MSE lift, NLL lift, AUC를 비교했다. 세 지표 모두에서 CausE-prod-C가 SP2V-blend, WSP2V-blend보다 위에 있고, 샘플이 늘수록 격차를 유지하거나 벌린다. 저자들은 CausE가 추가된 무작위 데이터를 더 잘 활용한다고 해석한다(구체적 곡선 값은 논문 그림 참조).</p>
+
+<h3>5. 결론</h3>
+<p>인과적 추천 최적화가 "균등 노출 하 반응 행렬을 분해하는 것"과 같음을 보였고, 이를 대량 편향 데이터 + 소량 무편향 데이터의 도메인 적응으로 푸는 CausE를 제안했다. 구현상 기존 MF에 "두 도메인 상품 벡터 차이" 정규화 항을 더하는 작은 변경이라, 대부분의 로그가 편향된 추천기에서 쌓이고 MF 기반 시스템이 많은 현업에 바로 적용하기 좋다는 것이 저자들의 주장이다. 향후 과제로는 유기적(organic) 행동 시퀀스와 추천에 영향받은 시퀀스를 함께 쓰는 순차 모델로의 확장을 든다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>개별 처치 효과(ITE).</b> 한 개체가 처치를 받았을 때와 받지 않았을 때 결과의 차이. 실제로는 둘 중 하나만 관측되므로(인과 추론의 근본 문제) 모델로 추정해야 한다. 추천에서는 "이 사용자에게 이 상품을 보여 줬을 때 늘어나는 구매 확률"이다.</p>
+<p><b>Control / Treatment / Logging 정책.</b> control은 비교 기준(추천 없음 또는 기존 추천기), treatment는 새로 평가하려는 정책, logging은 학습 데이터를 만든 정책이다. 이 논문에서는 control과 logging을 같은 뜻으로 쓰고, treatment는 무작위 노출 정책을 가리킨다.</p>
+<p><b>IPS(Inverse Propensity Scoring).</b> 관측 샘플을 "그 샘플이 로깅 정책에서 선택될 확률"의 역수로 가중해 다른 정책 하의 기대값을 불편 추정하는 방법. 성향이 작으면 가중치가 폭발해 분산이 커지므로 클리핑·self-normalization·doubly robust 같은 보완책이 쓰인다.</p>
+<p><b>도메인 적응.</b> 원천 도메인(여기서는 편향 로그)에서 배운 모델이 목표 도메인(무작위 노출)에서도 잘 동작하도록 하는 전이 학습의 한 갈래. 목표 도메인에 레이블이 조금 있으면 준지도 적응, 없으면 비지도 적응이라 부른다. CausE는 목표 도메인 레이블을 소량 쓴다.</p>
+<p><b>멀티태스크 정규화(파라미터 공유 대신 파라미터 근접).</b> 과제마다 파라미터를 따로 두되 서로의 차이에 벌점을 주는 기법. 완전 공유(blend)와 완전 분리(test-only)의 중간으로, 벌점 계수가 둘 사이를 연속적으로 잇는다.</p>
+<p><b>ε-greedy 탐색 로그.</b> 확률 ε로 무작위 아이템을, 나머지는 현재 정책의 아이템을 보여 주는 방식. 무작위 쪽 트래픽이 곧 \(S_t\) 같은 무편향 샘플이 된다. 비용이 들기 때문에 보통 전체의 작은 비율만 할당한다.</p>
+<p><b>BLBF와 CRM.</b> 로그된 밴딧 피드백(선택된 행동과 그 보상만 관측)으로 새 정책을 오프라인 학습하는 설정과, 그 학습 원리. POEM과 BanditNet이 대표 알고리즘이다.</p>
+<p><b>ExpoMF.</b> 사용자가 아이템에 "노출되었는지"를 잠재 변수로 두고, 노출된 경우에만 선호로 클릭 여부를 설명하는 확률적 MF. 인과 추천 초기 연구의 기준점이다.</p>
+<p><b>SKEW 평가 프로토콜.</b> 인기 역수로 기각 샘플링해 테스트셋 상품 분포를 균등에 가깝게 만드는 방법. 실제 무작위 실험 데이터가 없을 때 "무작위 노출 하 반응"을 흉내 내기 위한 근사다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> CausE의 상품 측 목적 함수 \(L^{prod}_{CausE}\)를 이루는 세 부분은 무엇인가?
+<details><summary>정답 보기</summary>(1) 소량 무작위 샘플 \(S_t\)에 대한 treatment 과제 손실 \(L(U\Theta_t,Y_t)+\Omega(\Theta_t)\), (2) 대량 편향 샘플 \(S_c\)에 대한 control 과제 손실 \(L(U\Theta_c,Y_c)+\Omega(\Theta_c)\), (3) 두 상품 표현의 차이에 거는 정규화 \(\Omega(\Theta_t-\Theta_c)\). 사용자 표현 \(U\)는 공유된다.</details></li>
+<li><b>[사실]</b> SKEW 데이터셋의 최종 구성 비율은? (객관식: ① 학습 70%(전부 \(\pi_c\)) / 검증 10% / 테스트 20% ② 학습 70%(\(\pi_c\) 60% + \(\pi_t\) 10%) / 검증 10%(\(\pi_c\)) / 테스트 20%(\(\pi_t\)) ③ 학습 60% / 검증 10% / 테스트 30%(모두 \(\pi_t\)) ④ 학습 80% / 테스트 20%)
+<details><summary>정답 보기</summary>②. 균등 노출 샘플을 30%로 늘려 20%는 최종 테스트, 10%는 학습에 주입했다. CausE는 성향 비율이 아니라 \(\pi_t\) 샘플 자체가 필요하기 때문이다.</details></li>
+<li><b>[사실]</b> 실험에서 가장 좋았던 정규화 조합은?
+<details><summary>정답 보기</summary>임베딩 행렬에는 L2(\(\Omega_{t,c}\)), 두 도메인 상품 표현의 차이에는 L1(\(\Omega_{dist}\)).</details></li>
+<li><b>[원리]</b> 보조정리 1이 말하는 것과, 그것이 "무작위 노출 하 반응 예측" 문제로 이어지는 논리를 설명하라.
+<details><summary>정답 보기</summary>control 보상은 새 정책과 무관한 상수이므로 ITE 최대화는 새 정책의 총보상 최대화와 같고, 그 최적해는 사용자마다 참 보상 \(r_{ij}\)가 가장 큰 상품을 확률 1로 보여 주는 결정적 정책이다. 하지만 \(r_{ij}\)는 로깅 정책에 오염된 \(y_{ij}\)로만 관측된다. 무작위 정책에서는 노출 확률이 모든 상품에 같으므로 \(\arg\max_j r_{ij} = \arg\max_j y^{rand}_{ij}\)가 되어, 무작위 노출 하 반응만 잘 예측하면 IPS 나눗셈 없이 최적 상품을 고를 수 있다.</details></li>
+<li><b>[원리]</b> 거리 정규화 계수 \(\lambda_{dist}\)를 0과 무한대로 보내면 CausE는 각각 어떤 베이스라인과 비슷해지는가?
+<details><summary>정답 보기</summary>0이면 두 과제가 사용자 벡터만 공유하고 상품 벡터는 독립이므로, treatment 상품 벡터는 사실상 \(S_t\)만으로 학습된다(SP2V-test에 가까움, 다만 사용자 벡터는 \(S_c\) 덕을 봄). 무한대면 \(\Theta_t=\Theta_c\)가 강제되어 두 샘플을 합쳐 하나의 모델을 배우는 blend(SP2V-blend)와 같아진다. CausE는 그 사이의 연속체다.</details></li>
+<li><b>[원리]</b> IPS 기반 방법 대비 CausE의 장단점을 "필요한 데이터"와 "분산" 관점에서 비교하라.
+<details><summary>정답 보기</summary>IPS는 로깅 정책의 성향만 알면 되고 목표 도메인 샘플이 필요 없지만, 성향이 작은 상품에서 가중치가 커져 분산이 폭발한다(그래서 클리핑이 필요하고 편향이 다시 생김). CausE는 가중치 나눗셈이 없어 분산 문제가 없지만, 목표 도메인(무작위 노출)의 실제 샘플을 소량이라도 확보해야 한다. 즉 탐색 트래픽 비용을 치르는 대신 안정성을 얻는다.</details></li>
+<li><b>[해석]</b> CausE-prod-C가 prod-T보다 좋았던 이유에 대한 저자들의 설명은? prod-T가 약할 수 있는 이유를 추가로 생각해 보라.
+<details><summary>정답 보기</summary>저자들: control 벡터는 큰 \(S_c\)에 맞춰져 개인화 반응을 정확히 배우고, 거리 정규화가 목표 분포에서 벗어나는 정도를 제한하므로 두 장점을 모두 가진다. 추가 해석: \(S_t\)는 전체의 10%뿐이라 많은 상품이 treatment 쪽에서 관측이 거의 없고, 그 상품들의 \(\theta^t\)는 정규화에만 의존해 추정 분산이 크다.</details></li>
+<li><b>[해석]</b> REG 셋에서는 모든 방법이 MSE lift 약 +8%로 비슷했다. 이 결과는 무엇을 뜻하며, SKEW 결과와 함께 볼 때 어떤 결론이 가능한가?
+<details><summary>정답 보기</summary>학습·테스트 분포가 같을 때는 인과 보정이 추가 이득을 주지 않는다. 즉 CausE의 이득은 모델 용량 증가가 아니라 분포 이동 대응에서 나온다. 역으로 운영 환경의 노출 분포가 로그 분포와 크게 다르지 않다면 CausE 도입 효과도 작을 수 있다.</details></li>
+<li><b>[비판]</b> 이 논문의 평가가 "추천의 증분 효과"를 직접 측정했다고 볼 수 있는가? 한계를 지적하라.
+<details><summary>정답 보기</summary>직접 측정은 아니다. (1) MovieLens·Netflix는 평점 데이터라 추천 노출이나 "추천 없을 때"의 결과가 없고, 별 5점을 클릭으로 본 이진화와 인기 역수 기각 샘플링으로 무작위 노출을 흉내 냈을 뿐이다. (2) 지표는 무작위 노출 하 반응 예측의 MSE/NLL/AUC로, control 대비 증분(ITE)을 잰 것이 아니다. (3) 온라인 A/B 결과가 없다. 보조정리 1에 따르면 무작위 반응 예측이 최적 정책과 연결되지만, 이는 참 보상과 관측 보상의 곱 구조 가정에 기대고 있다.</details></li>
+<li><b>[적용]</b> 커머스 홈 추천에 CausE를 도입하려 한다. \(S_t\)를 어떻게 모으고, 어떤 점을 주의해야 할까?
+<details><summary>정답 보기</summary>수집: 전체 트래픽의 작은 비율(예: 한 슬롯이나 소수 사용자 버킷)에 ε-greedy 또는 후보 풀 내 균등 샘플링을 적용하고, 노출·클릭·구매를 별도 플래그로 로깅한다. 주의: (1) 탐색 비율은 매출 손실과 \(S_t\) 크기의 트레이드오프이며, 논문 그림 1처럼 \(S_t\) 크기에 따라 성능이 달라지므로 오프라인으로 먼저 곡선을 확인한다. (2) 신상품·롱테일이 \(S_t\)에 충분히 나오도록 후보 풀을 설계한다. (3) 위치 편향이 섞이지 않게 무작위 노출 위치도 통제한다. (4) 최종 판단은 기존 추천기를 control로 두는 A/B에서 증분 전환으로 한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#15</b> Pessimistic Reward Models for Off-Policy Learning in Recommendation (2021) — 같은 Criteo 계열 연구. 로그 피드백으로 보상 모델을 학습할 때 불확실성에 비관적으로 대처해 off-policy 정책을 개선.</li>
+<li><b>#35</b> Evaluating Off-Policy Evaluation: Sensitivity and Robustness (2021) — 본 논문 관련 연구의 IPS·DR 계열 오프폴리시 추정기를 체계적으로 평가.</li>
+<li><b>#317</b> ConAlign: Conditional Alignment Framework for Balancing Biased and Unbiased Recommendation (2026) — 편향 데이터와 무편향 데이터를 함께 쓰는, CausE 문제 설정의 최신 후속 방향.</li>
+<li><b>#364</b> Mitigating Confounding Bias in Recommendation via Information Bottleneck (2021) — 표현 학습으로 노출 편향(교란)을 줄이는 인과 추천 접근.</li>
+<li><b>#3</b> Modeling the Assimilation-Contrast Effects in Online Product Rating Systems (2017) — 추천 데이터가 시스템이 만든 편향을 품고 있다는 같은 문제의식을 평점 쪽에서 다룬 논문.</li>
+</ul>
+
+</main>
+</body>
+</html>
