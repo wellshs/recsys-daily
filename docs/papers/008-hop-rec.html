@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#8 HOP-rec: High-order Proximity for Implicit Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-03 · #8</span></div>
+<h1>HOP-rec: High-order Proximity for Implicit Recommendation</h1>
+<p class="meta">Jheng-Hong Yang, Chih-Ming Chen, Chuan-Ju Wang, Ming-Feng Tsai · Academia Sinica · National Chengchi University(대만) · RecSys 2018 Best Short Paper Runner-up</p>
+<div class="chips"><span>2018</span><span>Best Short Paper Runner-up</span><span>학계(대만)</span><span>암묵적 피드백</span><span>그래프 기반 추천</span><span>랜덤 워크</span><span>행렬 분해</span><span>BPR·WARP</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3240323.3240381">10.1145/3240323.3240381</a> · arXiv 없음 · 공개 PDF 없음(Semantic Scholar·Unpaywall 모두 CLOSED) · 공식 구현: <a href="https://github.com/cnclabs/smore">cnclabs/smore</a>의 <code>hoprec</code> · 숏 페이퍼(pp.140–144) · 읽기 예상 시간: 약 12분</p>
+<div class="callout warn">원문 미확보: 초록 기반 작성. arXiv·Semantic Scholar·ACM DL·저자 공개본을 모두 시도했지만 전문 PDF를 받을 수 없었습니다. 이 페이지는 ① 공식 초록, ② 저자 연구실의 공식 구현 코드(<code>smore/src/model/HBPR.cpp</code>), ③ 후속 논문(NGCF, SIGIR 2019)의 HOP-rec 설명·재현 실험, ④ 일반 배경지식을 바탕으로 재구성했습니다. 원문 실험표의 수치는 확인하지 못해 "논문 참조"로 두었습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 사용자–아이템 이분 그래프에서 랜덤 워크로 "몇 다리 건너 닿는 아이템"까지 수확해, 거리에 따라 신뢰도를 깎은 가중치로 행렬 분해(MF)의 랭킹 학습에 함께 넣으면, 분해 모델과 그래프 모델의 장점을 하나의 가벼운 모델로 얻을 수 있다.</p>
+<p><b>풀려는 문제.</b> 암묵적 피드백 추천의 두 주류는 (a) 관측된 직접 상호작용만 분해하는 MF 계열(BPR, WARP 등)과 (b) 상호작용 그래프에서 간접 선호를 뽑는 그래프 계열(랜덤 워크, 근접도 기반)이다. MF는 데이터가 희소하면 직접 연결이 적은 사용자를 잘 학습하지 못하고, 그래프 계열은 고차 전이행렬을 다루느라 무겁거나 잠재 요인의 일반화 능력이 약하다.</p>
+<p><b>핵심 아이디어.</b> 고차 전이행렬 \(P^k\)를 직접 계산·분해하지 않는다. 대신 사용자에서 출발하는 짧은 랜덤 워크를 샘플링해 \(k\)번째 아이템을 "\(k\)차 근접 아이템"으로 삼고, 이를 긍정 예시로 쓰는 쌍대(pairwise) 랭킹 손실에 \(1/k\) 같은 감쇠 신뢰 가중치를 곱한다. 이렇게 하면 원래 희소한 상호작용 행렬을 사용자별로 "부풀린" 효과를 내면서도 모든 차수의 정보를 한 번에 학습한다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 여러 대규모 실데이터셋에서 당시 최신 기법을 유의하게 앞섰다. 원문 표의 구체 수치는 확인하지 못했다(논문 참조). 참고로 이후 NGCF 논문의 재현 실험(같은 BPR 계열 비교, recall@20)에서 HOP-rec은 MF 대비 Gowalla 0.1291→0.1399, Yelp2018 0.0433→0.0517, Amazon-Book 0.0250→0.0309로 개선됐다.</p>
+<p><b>한계와 남는 질문.</b> 예측 함수는 여전히 내적 MF여서 고차 정보가 "학습 데이터 증강"으로만 들어간다(NGCF가 지적한 점). 워크 길이·감쇠 계수·마진 같은 하이퍼파라미터에 민감하고, 인기 아이템 쪽으로 워크가 쏠리는 편향을 어떻게 다루는지는 원문 확인이 필요하다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<div class="callout">원문 섹션 구조를 직접 확인하지 못해, 숏 페이퍼의 일반 구조(서론 → 방법 → 실험 → 결론)에 맞춰 해설합니다. 방법 절의 수식은 초록의 설명과 공식 코드의 동작을 바탕으로 재구성한 것이며, 원문 표기와 다를 수 있습니다.</div>
+
+<h3>1. 서론 — 분해 모델과 그래프 모델을 한 몸으로</h3>
+<p>클릭·구매·재생 같은 암묵적 피드백에는 "싫어함" 신호가 없다. 그래서 관측된 아이템이 관측되지 않은 아이템보다 높게 랭크되도록 학습하는 쌍대 랭킹 방식(BPR, WARP)이 표준이 됐다. 이 방식은 사용자 \(u\)와 아이템 \(i\)를 잠재 벡터 \(\theta_u, \theta_i\)로 두고 점수를 내적 \(\theta_u^\top\theta_i\)로 계산한다.</p>
+<p>약점은 "직접 본 것"만 긍정으로 쓴다는 점이다. 사용자 A가 아이템 1을 봤고, 아이템 1을 본 다른 사용자 B가 아이템 2도 봤다면 A→1→B→2라는 3-hop 경로가 생긴다. 사람의 직관으로는 아이템 2가 A에게 꽤 유력한 후보지만, 순수 MF에서는 이 관계가 임베딩을 통해 간접적으로만 전달된다.</p>
+<p>그래프 계열(ItemRank, P3 계열, DeepWalk·LINE 같은 네트워크 임베딩 등)은 이런 다단계 경로를 명시적으로 쓴다. 하지만 \(k\)차 전이확률 행렬을 만들어 분해하면 \(k\)가 커질수록 행렬이 조밀해져 비용이 폭증한다. 저자들은 "고차 근접도를 쓰되, 행렬을 만들지 말고 샘플링으로 근사하자"는 방향을 택했고, 이를 MF의 랭킹 학습에 직접 섞은 것이 HOP-rec이다.</p>
+
+<h3>2. 배경 — 고차 근접도(high-order proximity)란</h3>
+<p>사용자–아이템 상호작용을 이분 그래프로 보면, 사용자 노드와 아이템 노드 사이에만 간선이 있다. 사용자에서 출발해 간선을 따라 이동하면 홀수 번째 걸음에서는 아이템, 짝수 번째 걸음에서는 사용자에 도착한다. 따라서 사용자 기준의 "\(k\)차 아이템"은 \(2k-1\) 걸음 만에 도달하는 아이템이다: 1차는 직접 본 아이템, 2차는 "나와 같은 아이템을 본 사람이 본 아이템", 이런 식이다.</p>
+<p>전이행렬을 \(P\)라 하면 \(k\)차 도달 확률은 \(P^{2k-1}\)의 사용자→아이템 블록이다. 이 값을 근접도로 쓰는 것이 그래프 기반 추천의 기본 아이디어이고, 네트워크 임베딩 문헌(GraRep 등)은 서로 다른 \(k\)의 근접도 행렬을 각각 분해해 이어 붙이기도 했다. HOP-rec은 이 \(k\)별 행렬들을 하나의 손실 안에서 가중합으로 다룬다는 점에서 차별된다.</p>
+
+<h3>3. 방법 — 랜덤 워크로 긍정 예시를 늘리고, 거리로 신뢰도를 깎는다</h3>
+<p><b>(1) 샘플링 절차.</b> 공식 구현을 기준으로 한 반복은 다음과 같다.</p>
+<ol>
+<li>사용자 \(u\)를 하나 뽑는다.</li>
+<li>\(u\)의 이웃 중 하나로 이동해 1차 아이템 \(i_1\)을 얻는다.</li>
+<li>\(k=2,\dots,K\)에 대해 아이템→사용자→아이템으로 두 걸음 이동해 \(i_k\)를 얻는다.</li>
+<li>각 \(k\)마다 부정 아이템 \(j\)를 샘플링해 \((u, i_k, j)\) 삼중항으로 쌍대 랭킹 업데이트를 한다.</li>
+</ol>
+<p>즉 한 번의 워크가 1차부터 \(K\)차까지의 긍정 예시를 동시에 만든다. 코드의 기본 워크 길이는 5이고, 이웃 선택은 간선 가중치 비례 샘플링(alias method)으로 이뤄진다.</p>
+
+<p><b>(2) 목적함수(재구성).</b> 초록의 "신뢰 가중치로 모든 고차 정보를 동시에 시뮬레이트한다"는 설명과 코드 동작을 합치면, 목적함수는 대략 다음 형태다.</p>
+\[
+\mathcal{L} \;=\; \sum_{k=1}^{K} C(k)\; \sum_{u}\; \mathbb{E}_{\,i \sim P_u^{k},\; j \sim P_N}\Big[\, \ell\big(\theta_u^\top\theta_i - \theta_u^\top\theta_j;\ \epsilon_k\big) \Big] \;+\; \lambda\,\lVert\Theta\rVert^2
+\]
+<ul>
+<li>\(P_u^{k}\): 사용자 \(u\)에서 시작한 랜덤 워크가 \(k\)차에 도착하는 아이템 분포. 행렬로 만들지 않고 워크로 샘플링한다.</li>
+<li>\(P_N\): 부정 아이템 샘플링 분포(코드에서는 같은 타입, 즉 아이템 노드 중 균등 추출).</li>
+<li>\(C(k)\): 차수별 신뢰 가중치. 멀리 떨어진 아이템일수록 "정말 좋아할" 근거가 약하므로 줄인다. 공식 코드는 학습률을 \(\alpha/k\)로 나눠 \(C(k)=1/k\)와 같은 효과를 낸다.</li>
+<li>\(\epsilon_k\): 차수별 마진. 코드에서는 \(\epsilon/k\)(기본 \(\epsilon=1\))로, 먼 아이템에는 "조금만 더 높으면 된다"는 느슨한 요구를 한다.</li>
+<li>\(\ell\): 쌍대 랭킹 손실. 점수 차가 마진을 넘지 못했을 때만 BPR식 시그모이드 그래디언트로 업데이트한다.</li>
+<li>\(\lambda\lVert\Theta\rVert^2\): 임베딩의 L2 정규화.</li>
+</ul>
+
+<p><b>(3) 업데이트 규칙.</b> 점수 차를 \(x = \theta_u^\top(\theta_i - \theta_j)\)라 하자. 코드는 \(x > \epsilon_k\)이면 이미 충분히 잘 정렬된 쌍으로 보고 건너뛴다. 그렇지 않으면 \(g = \sigma(-x)\cdot \alpha / k\)를 계산해</p>
+\[
+\theta_u \leftarrow \theta_u + g\,(\theta_i - \theta_j),\qquad
+\theta_i \leftarrow \theta_i + g\,\theta_u,\qquad
+\theta_j \leftarrow \theta_j - g\,\theta_u
+\]
+<p>로 갱신하고 정규화 항만큼 벡터를 살짝 줄인다. \(\sigma(-x)\)는 BPR의 로그-시그모이드 손실 \(-\ln\sigma(x)\)를 미분했을 때 나오는 계수다. 마진을 넘었는지로 업데이트 여부를 가르는 부분은 WARP 계열의 발상과 닮았다. 또 한 긍정 예시당 부정 후보를 최대 몇 번까지 다시 뽑아(코드상 5회) 위반 쌍을 찾는다.</p>
+
+<p><b>(4) 왜 작동하는가.</b> 두 가지 직관이 있다. 첫째, <b>데이터 증강</b>: 상호작용이 적은 사용자도 워크를 통해 긍정 예시를 여러 개 얻으므로 임베딩이 덜 흔들린다. 둘째, <b>부드러운 신뢰</b>: 고차 아이템을 1차와 똑같이 취급하면 노이즈가 커지지만, \(C(k)\)와 \(\epsilon_k\)로 거리만큼 덜 믿으면 "직접 본 것 &gt; 2차 이웃 &gt; 3차 이웃 &gt; 무작위"라는 단계적 순서가 학습된다. 결과적으로 원래 0/1이던 사용자 행이 거리별 가중치를 가진 조밀한 행처럼 쓰인다. 초록이 말하는 "희소 행렬을 유지하면서 사용자별로 랜덤 워크로 행렬을 풍부하게 한다"가 이 뜻이다.</p>
+
+<p><b>(5) 효율.</b> 전이행렬의 거듭제곱을 계산하지 않으므로 메모리는 원래 희소 그래프 크기에 비례한다. 계산량은 총 샘플 수 × 워크 길이 × 부정 샘플 시도 수에 비례하고, 코드는 OpenMP로 락 없이 병렬 SGD(Hogwild 방식)를 돌린다. 학습률은 진행률에 따라 선형으로 줄인다(word2vec 계열 관례).</p>
+
+<h3>4. 실험</h3>
+<p><b>원문 실험.</b> 초록은 "여러 대규모 실데이터셋에서 최신 기법을 유의하게 앞섰다"고만 밝힌다. 사용한 데이터셋 목록, 베이스라인 구성, 지표(Top-N 정밀도·재현율 계열로 추정), 수치, 워크 길이·가중치 함수에 대한 민감도 분석은 원문을 확인하지 못했다 — 모두 <b>논문 참조</b>.</p>
+<p><b>외부 재현(NGCF, SIGIR 2019).</b> HOP-rec을 가장 널리 알린 것은 이 후속 비교다. 10-core로 정제한 Gowalla(사용자 29,858·아이템 40,981), Yelp2018(31,668·38,048), Amazon-Book(52,643·91,599)에서 임베딩 64차원, 상호작용의 80%를 학습에 써서 recall@20·ndcg@20을 쟀다. HOP-rec은 워크 길이 {1,2,3}, 학습률 {0.025~0.010}에서 튜닝됐다.</p>
+<table>
+<tr><th>모델</th><th>Gowalla R@20</th><th>Yelp2018 R@20</th><th>Amazon-Book R@20</th></tr>
+<tr><td>MF (BPR)</td><td>0.1291</td><td>0.0433</td><td>0.0250</td></tr>
+<tr><td>HOP-rec</td><td>0.1399</td><td>0.0517</td><td>0.0309</td></tr>
+<tr><td>PinSage</td><td>0.1380</td><td>0.0471</td><td>0.0282</td></tr>
+<tr><td>NGCF-3</td><td>0.1569</td><td>0.0579</td><td>0.0337</td></tr>
+</table>
+<p class="meta">출처: Wang et al., "Neural Graph Collaborative Filtering", arXiv 1905.08108, Table 2. HOP-rec 원문 수치가 아님.</p>
+<p>이 재현에서 HOP-rec은 MF 대비 recall@20을 Gowalla 약 8%, Yelp2018 약 19%, Amazon-Book 약 24% 높였고, 그래프 신경망 계열(GC-MC, PinSage)과 비슷하거나 더 좋았다. 특히 상호작용이 적은 사용자 그룹에서 NGCF와 함께 다른 베이스라인을 일관되게 앞섰다는 분석은 "고차 이웃으로 희소성을 보완한다"는 HOP-rec의 주장과 맞아떨어진다. 다만 NGCF 저자들은 HOP-rec의 성능이 워크 설정과 감쇠 계수 튜닝에 크게 좌우된다고 지적했다.</p>
+
+<h3>5. 결론과 의의</h3>
+<p>HOP-rec의 기여는 "그래프의 고차 정보를 모델 구조가 아니라 학습 신호로 넣는다"는 설계다. 모델은 평범한 MF라 서빙은 내적 검색(ANN) 그대로이고, 바뀌는 것은 학습 시 긍정 예시 생성기뿐이다. 이 점은 실무에서 큰 장점이다.</p>
+<p>역사적으로는 2018년 직후 쏟아진 그래프 협업 필터링(NGCF 2019, LightGCN 2020)의 직전 단계에 있다. NGCF는 같은 고차 연결성을 "임베딩 전파"로 모델 안에 넣어 HOP-rec을 넘었고, LightGCN은 그 전파마저 단순화했다. 흥미롭게도 LightGCN의 최종 임베딩은 이웃 행렬의 거듭제곱 가중합으로 해석되는데, 이는 HOP-rec이 \(C(k)\)로 차수별 근접도를 가중합한 것과 수학적으로 가까운 아이디어다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>암묵적 피드백(implicit feedback).</b> 클릭·재생·구매처럼 사용자가 의도치 않게 남기는 신호. 부정 신호가 없어서 "관측 vs 미관측"의 상대 순서를 학습하는 방식이 주로 쓰인다.</p>
+<p><b>BPR(Bayesian Personalized Ranking).</b> 사용자가 본 아이템 \(i\)가 안 본 아이템 \(j\)보다 높게 랭크될 확률 \(\sigma(\hat{x}_{ui}-\hat{x}_{uj})\)를 최대화하는 쌍대 손실. HOP-rec 업데이트의 그래디언트 형태가 여기서 온다.</p>
+<p><b>WARP.</b> 위반하는 부정 아이템을 찾을 때까지 샘플링하고, 마진을 넘지 못한 쌍만 업데이트하는 랭킹 손실. 찾기 어려울수록 이미 상위에 있다는 뜻이어서 가중치를 조정한다.</p>
+<p><b>이분 그래프(bipartite graph).</b> 노드가 두 그룹(사용자/아이템)으로 나뉘고 간선은 그룹 사이에만 있는 그래프. 사용자에서 아이템까지의 경로 길이는 항상 홀수다.</p>
+<p><b>랜덤 워크와 전이행렬.</b> 현재 노드의 이웃 중 하나로 확률적으로 이동하는 과정. 한 걸음 전이확률을 모은 행렬 \(P\)의 거듭제곱 \(P^t\)가 \(t\) 걸음 후 도달 확률이다.</p>
+<p><b>고차 근접도(high-order proximity).</b> 직접 연결(1차)이 아니라 여러 단계를 거쳐 연결된 노드 사이의 가까움. GraRep 같은 네트워크 임베딩은 차수별 근접도 행렬을 따로 분해했다.</p>
+<p><b>Alias method.</b> 이산 확률분포에서 O(1) 시간에 샘플을 뽑는 기법. 가중치가 있는 이웃 샘플링을 빠르게 하는 데 쓰인다.</p>
+<p><b>Hogwild SGD.</b> 여러 스레드가 락 없이 공유 파라미터를 동시에 갱신하는 병렬 SGD. 희소한 업데이트에서는 충돌이 드물어 실용적으로 잘 수렴한다.</p>
+<p><b>Recall@K / NDCG@K.</b> 상위 K개 추천 안에 테스트 아이템이 얼마나 들어오는지(재현율), 그리고 순위가 높을수록 더 쳐주는 할인 누적 이득을 정규화한 지표.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실·객관식] HOP-rec이 결합하려는 두 접근은? (a) 콘텐츠 기반+협업 필터링 (b) 분해 기반+그래프 기반 (c) 세션 기반+지식그래프 (d) 밴딧+오프라인 평가
+<details><summary>정답 보기</summary>(b). 초록이 직접 밝히듯 직접 상호작용을 분해하는 모델과 상호작용 그래프에서 간접 선호를 뽑는 모델을 하나로 묶는다.</details></li>
+<li>[사실·서술형] HOP-rec은 고차 전이행렬을 직접 분해하는가? 아니라면 무엇으로 대신하는가?
+<details><summary>정답 보기</summary>분해하지 않는다. 사용자에서 출발하는 랜덤 워크로 \(k\)차 아이템을 샘플링하고, 신뢰 가중치로 모든 차수를 동시에 학습한다. 원래의 희소 상호작용 행렬만 유지한다.</details></li>
+<li>[사실·객관식] 사용자 기준 2차 아이템에 도달하려면 이분 그래프에서 몇 걸음이 필요한가? (a) 2 (b) 3 (c) 4 (d) 5
+<details><summary>정답 보기</summary>(b) 3걸음: 사용자→아이템→사용자→아이템. 일반적으로 \(k\)차 아이템은 \(2k-1\)걸음이다.</details></li>
+<li>[원리·서술형] 신뢰 가중치 \(C(k)\)를 모든 \(k\)에 대해 1로 두면 어떤 문제가 생길까?
+<details><summary>정답 보기</summary>멀리 떨어진, 근거가 약한 아이템을 직접 본 아이템과 같은 강도의 긍정으로 학습하게 된다. 워크가 길어질수록 인기 아이템이나 무관한 아이템이 섞여 노이즈가 커지고, 직접 상호작용의 신호가 희석된다.</details></li>
+<li>[원리·서술형] 공식 구현에서 마진을 \(\epsilon/k\)로 줄이는 것의 의미는?
+<details><summary>정답 보기</summary>먼 아이템은 부정 아이템보다 "조금만" 높으면 충분하다고 요구하는 것이다. 마진을 넘긴 쌍은 업데이트를 건너뛰므로, 고차 아이템이 임베딩을 과하게 끌어당기지 않고 1차 아이템이 가장 강한 순서 제약을 받는다.</details></li>
+<li>[원리·객관식] HOP-rec 학습 후 서빙 시 점수 계산은? (a) 랜덤 워크를 다시 돌려 도달 확률 계산 (b) 사용자·아이템 임베딩의 내적 (c) GNN 메시지 전파 (d) 아이템-아이템 유사도 합
+<details><summary>정답 보기</summary>(b). 예측 모델은 MF 그대로이고, 그래프는 학습 신호 생성에만 쓰인다. 그래서 기존 ANN 기반 후보 생성 파이프라인에 바로 넣을 수 있다.</details></li>
+<li>[결과·서술형] NGCF 재현에서 HOP-rec의 MF 대비 상대 개선폭이 Gowalla보다 Amazon-Book에서 더 컸다. 데이터 특성으로 어떻게 해석할 수 있을까?
+<details><summary>정답 보기</summary>Amazon-Book의 밀도(0.00062)가 Gowalla(0.00084)보다 낮아 직접 상호작용만으로는 학습 신호가 부족하다. 고차 이웃으로 긍정 예시를 보강하는 효과가 희소한 데이터에서 더 크게 나타난다고 볼 수 있다. 다만 도메인 차이도 섞여 있어 단정할 수는 없다.</details></li>
+<li>[결과·서술형] NGCF가 HOP-rec을 넘은 이유를 NGCF 저자들은 어떻게 설명했나?
+<details><summary>정답 보기</summary>HOP-rec은 고차 연결성을 학습 데이터 증강(일종의 정규화)으로만 쓰고 예측 함수는 MF로 남겨 두지만, NGCF는 임베딩 전파를 통해 고차 연결성을 임베딩 함수 자체에 넣는다. 또한 HOP-rec 성능이 워크 설정과 감쇠 계수에 민감하다고 지적했다.</details></li>
+<li>[비판·서술형] HOP-rec의 랜덤 워크가 인기 편향을 키울 수 있는 이유와 완화 방안을 제시하라.
+<details><summary>정답 보기</summary>이웃을 균등·가중 샘플링하면 연결이 많은 사용자·아이템을 경유할 확률이 높아, 고차 아이템이 인기 아이템으로 쏠린다. 완화책: 차수 역수로 전이확률 보정, 인기도 기반 부정 샘플링(인기 아이템을 부정으로 더 자주 뽑기), 워크 길이 제한, 고차 아이템에 대한 인기도 할인 등.</details></li>
+<li>[적용·서술형] 이미 BPR 기반 두 타워 후보 생성 모델을 운영 중이다. HOP-rec 아이디어를 도입한다면 무엇을 바꾸고 어떻게 검증하겠는가?
+<details><summary>정답 보기</summary>모델 구조와 서빙은 그대로 두고 학습 샘플 생성기만 바꾼다: 로그에서 사용자–아이템 그래프를 만들고 2~3차 아이템을 워크로 뽑아 \(1/k\) 가중치(또는 손실 가중)를 붙여 긍정 예시에 추가한다. 검증은 오프라인 recall@K를 활동량 구간별(특히 저활동 사용자)로 보고, 인기도·커버리지 지표 변화를 함께 확인한 뒤 온라인 A/B로 이어간다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#1 Local Item-Item Models for Top-N Recommendation</b> — 같은 Top-N 암묵적 피드백 문제를 이웃 기반(아이템-아이템) 모델로 푼 접근. "직접 이웃" 활용과 HOP-rec의 "고차 이웃" 활용을 비교해 보기 좋다.</li>
+<li><b>#5 Causal Embeddings for Recommendation</b> — 같은 해 RecSys의 임베딩 기반 MF 확장. 학습 신호를 어떻게 바꾸느냐(무작위 노출 데이터 vs 고차 근접도)라는 관점에서 대비된다.</li>
+<li><b>#208 SGCL: Unifying Self-Supervised and Supervised Learning for Graph Recommendation</b> — HOP-rec 이후 계보인 그래프 협업 필터링(LightGCN 계열)의 최근 형태.</li>
+<li><b>#347 Fair Augmentation for Graph Collaborative Filtering</b> — 그래프를 "증강"해 학습을 바꾼다는 점에서 HOP-rec의 데이터 보강 발상과 맞닿아 있다.</li>
+<li><b>#365 Negative Interactions for Improved Collaborative-Filtering: Don't go Deeper, go Higher</b> — 더 깊은 모델 대신 고차 관계를 활용한다는 같은 문제의식을 다른 방식으로 다룬다.</li>
+</ul>
+
+</main>
+</body>
+</html>
