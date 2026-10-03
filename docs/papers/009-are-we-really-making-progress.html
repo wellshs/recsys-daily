@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#9 Are We Really Making Much Progress? A Worrying Analysis of Recent Neural Recommendation Approaches</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-04 · #9</span></div>
+<h1>Are We Really Making Much Progress? A Worrying Analysis of Recent Neural Recommendation Approaches</h1>
+<p class="meta">Maurizio Ferrari Dacrema, Paolo Cremonesi (Politecnico di Milano) · Dietmar Jannach (University of Klagenfurt) · RecSys 2019 Best Long Paper</p>
+<div class="chips"><span>2019</span><span>Best Long Paper</span><span>학계(이탈리아·오스트리아)</span><span>재현성</span><span>평가 방법론</span><span>Top-N 추천</span><span>베이스라인</span><span>kNN·그래프·SLIM</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3298689.3347058">10.1145/3298689.3347058</a> · arXiv: <a href="https://arxiv.org/abs/1907.06902">1907.06902</a> (<a href="https://arxiv.org/pdf/1907.06902v3">PDF</a>) · 코드: <a href="https://github.com/MaurizioFD/RecSys2019_DeepLearning_Evaluation">MaurizioFD/RecSys2019_DeepLearning_Evaluation</a> · 읽기 예상 시간: 약 15분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 2015~2018년 최상위 학회에 실린 딥러닝 Top-N 추천 논문 18편 중 재현 가능한 것은 7편뿐이었고, 그중 6편은 잘 튜닝한 kNN·그래프 기반 같은 단순한 방법에 자주 졌다. 나머지 1편(Mult-VAE)도 잘 튜닝한 선형 모델 SLIM을 일관되게 앞서지는 못했다.</p>
+<p><b>풀려는 문제.</b> 딥러닝 추천 논문이 쏟아지면서 "지금 진짜 SOTA가 무엇인가"를 판단하기 어려워졌다. 저자들은 두 가지를 묻는다. ① 재현성: 공개된 코드·데이터로 원 논문의 결과를 합리적인 노력으로 다시 얻을 수 있는가? ② 진보: 단순하지만 제대로 튜닝한 베이스라인과 비교해도 새 방법이 정말 더 나은가?</p>
+<p><b>방법의 핵심.</b> 새 모델을 제안하지 않는다. 원 논문의 코드를 리팩터링해 학습·예측과 평가를 분리하고, <i>원 논문과 똑같은 데이터 분할·지표·평가 절차</i>로 TopPopular, UserKNN, ItemKNN, P3α, RP3β(필요 시 콘텐츠 kNN, SLIM)를 베이지안 탐색으로 튜닝해 함께 돌린다. 원 실험을 그대로 둔 채 "빠졌던 강한 베이스라인"만 추가하는 설계라서, 결과 차이를 평가 절차 차이 탓으로 돌릴 수 없다.</p>
+<p><b>주요 결과.</b> CMN·MCRec·CVAE·CDL·NCF·SpectralCF는 대부분의 설정에서 단순 베이스라인에 졌다. 예컨대 MovieLens100k에서 ItemKNN은 MCRec보다 Precision@10이 높았고(0.3327 vs 0.3077), MovieLens1M에서 SLIM은 NeuMF보다 HR@10이 높았다(0.7161 vs 0.7120). SpectralCF는 저자가 공유한 비정상적 테스트 분할에서만 강했고, 무작위 분할에서는 TopPopular에도 졌다. Mult-VAE만 kNN류를 10~20% 앞섰지만 NDCG 기준으로는 SLIM과 거의 같았다.</p>
+<p><b>한계와 남는 질문.</b> 4개 학회·18편이라는 작은 표본이고, 재현 대상 모델은 원 논문이 보고한 하이퍼파라미터를 그대로 썼다(재튜닝은 향후 과제). 행렬 분해 계열 베이스라인은 일부 실험에만 들어갔다. 무엇보다 "오프라인 정확도 수치가 높으면 좋은 추천인가"라는 더 근본적인 질문은 열린 채로 남는다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — "개선이 쌓이지 않는다"는 의심</h3>
+<p>저자들은 비슷한 경고가 다른 분야에서 이미 나왔다는 점에서 출발한다. 정보검색에서는 2009년 Armstrong 등이 "보고된 개선을 다 합쳐도 실제로는 늘지 않는다(improvements that don't add up)"고 지적했고, 2019년 Jimmy Lin은 신경망 IR 모델이 잘 튜닝된 고전 베이스라인을 별로 이기지 못한다고 보였다. 추천에서도 세션 기반 추천의 RNN 모델이 단순한 최근접 이웃 방법에 대부분 진다는 분석(Ludewig &amp; Jannach)이 있었다.</p>
+<p>저자들이 꼽는 원인은 세 가지다. (i) 너무 약하거나 튜닝되지 않은 베이스라인, (ii) 그렇게 약한 방법이 다음 논문의 "새 베이스라인"으로 굳어지는 현상, (iii) 데이터셋·평가 프로토콜·지표·전처리가 논문마다 달라 서로 비교가 안 되는 문제. 특히 새 딥러닝 모델을 다른 딥러닝 모델과만 비교하면, 앞선 모델이 약한 베이스라인으로 검증됐을 때 약점이 그대로 전파된다. 코드가 공개돼도 전처리·튜닝·평가 코드가 빠진 경우가 많다는 점, 그리고 기계학습 학계 전반의 인센티브 문제(Lipton &amp; Steinhardt의 "troubling trends")도 배경으로 든다.</p>
+
+<h3>2. 연구 방법</h3>
+<p><b>(1) 논문 수집.</b> 2015~2018년 KDD, SIGIR, TheWebConf(WWW), RecSys의 롱 페이퍼 중 (a) 딥러닝 기반이고 (b) Top-N 추천 문제를 다루며 Precision·Recall·MAP 같은 분류·랭킹 지표로 평가한 논문을 손으로 골랐다. 그룹 추천·세션 기반 추천은 제외했고, 그 결과 18편이 남았다.</p>
+<p><b>(2) 재현 가능 판정.</b> 기준은 꽤 엄격하다. 작동하는 소스 코드가 있거나 최소한의 수정만으로 돌아가야 하고(핵심 알고리즘은 고치지 않음), 원 논문 데이터셋 중 하나 이상이 공개돼 있으며 원래의 학습/테스트 분할이 공개됐거나 논문 설명만으로 재구성 가능해야 한다. 코드가 없으면 저자 전원에게 연락하고 30일을 기다렸다. 뼈대만 있는 코드나 비공개 기업 데이터만 쓴 연구는 재현 불가로 분류했다.</p>
+<p>결과는 학회별로 KDD 3/4, RecSys 1/7, SIGIR 1/3, WWW 2/4, 합계 7/18(약 39%)이었다. 저자들은 표본이 작아 학회 간 차이를 해석하긴 어렵지만, 연도별로는 재현율이 올라가는 추세라고 덧붙인다.</p>
+<p><b>(3) 측정 방식.</b> 모든 방법을 하나의 공통 프레임워크에서 같은 절차로 평가하는 방법도 있지만, 그러면 원 논문과 평가가 미묘하게 달라져 "원래 보고된 것"을 재현했다고 말할 수 없다. 그래서 원 코드를 리팩터링해 학습·하이퍼파라미터 탐색·예측 코드를 평가 코드와 떼어 내고, <i>그 원래 평가 코드</i>를 베이스라인에도 그대로 적용했다. 재현 대상 모델의 하이퍼파라미터는 원 논문이 데이터셋별로 보고한 최적값을 썼다.</p>
+<p><b>(4) 베이스라인.</b> 모두 개념적으로 단순한 방법들이다.</p>
+<ul>
+<li><b>TopPopular</b>: 상호작용 수가 가장 많은 아이템을 모두에게 추천(비개인화).</li>
+<li><b>ItemKNN</b>: 아이템 간 코사인 유사도에 수축항을 더한 고전적 아이템 기반 CF.
+\[ s_{ij} = \frac{\mathbf{r}_i \cdot \mathbf{r}_j}{\lVert\mathbf{r}_i\rVert\,\lVert\mathbf{r}_j\rVert + h} \]
+여기서 \(\mathbf{r}_i \in \mathbb{R}^{|U|}\)는 아이템 \(i\)에 대한 모든 사용자의 암묵적 평점 벡터, \(|U|\)는 사용자 수다. \(h\)(shrink term)는 상호작용이 적은 아이템 쌍의 유사도를 깎아 우연히 높게 나온 유사도를 억제한다. 평점에 TF-IDF나 BM25 가중을 줄 수 있고, 정규화 여부와 이웃 수 \(k\)도 하이퍼파라미터다.</li>
+<li><b>UserKNN</b>: 같은 방식의 사용자-사용자 유사도.</li>
+<li><b>ItemKNN-CBF / ItemKNN-CFCBF</b>: 평점 벡터 대신 아이템 속성 벡터 \(\mathbf{f}_i\)로 유사도를 구하는 콘텐츠 기반 kNN, 그리고 \([\mathbf{r}_i, w\mathbf{f}_i]\)처럼 평점과 가중된 속성 벡터를 이어 붙인 하이브리드. \(w\)가 콘텐츠의 비중을 조절한다.</li>
+<li><b>P3α</b>: 사용자→아이템→사용자→아이템 3단계 랜덤 워크. 사용자 \(u\)에서 아이템 \(i\)로 갈 확률을 \(p_{ui} = (r_{ui}/N_u)^\alpha\), 반대 방향을 \(p_{iu} = (r_{ui}/N_i)^\alpha\)로 둔다(\(N_u\), \(N_i\)는 사용자·아이템의 상호작용 수, \(\alpha\)는 감쇠 계수). 이는 다음 유사도를 쓰는 아이템 기반 kNN과 같다.
+\[ s_{ij} = \sum_{v} p_{jv}\, p_{vi} \]
+</li>
+<li><b>RP3β</b>: P3α의 유사도를 아이템 인기도의 \(\beta\)제곱으로 나눠 인기 편향을 줄인 변형. \(\beta=0\)이면 P3α와 같다.</li>
+</ul>
+<p>튜닝은 Scikit-Optimize의 베이지안 탐색으로 알고리즘·데이터셋마다 35회(처음 5회는 무작위) 시도했다. 이웃 수 \(k\)는 5~800, 수축항 \(h\)는 0~1000, \(\alpha\)·\(\beta\)는 0~2 범위다. 결국 베이스라인 쪽에 쓴 노력도 "케이스당 35번 시도"로 크지 않다는 점이 이 논문의 메시지를 더 날카롭게 만든다.</p>
+
+<h3>3. 베이스라인과의 비교 (논문별)</h3>
+<p><b>3.1 CMN (SIGIR '18).</b> 메모리 네트워크와 어텐션을 잠재 요인·이웃 모델과 결합한 방법. 원 논문은 Epinions, CiteULike-a, Pinterest에서 leave-one-out으로 HR·NDCG를 쟀고, ItemKNN은 수축항 없이 넣었으며 베이스라인 튜닝 방법은 밝히지 않았다. 재현 결과 CMN은 어떤 데이터셋에서도 최고가 아니었다. CiteULike-a에서는 RP3β가 HR@5 0.8226으로 CMN(0.8069)을 앞섰고, Pinterest에서도 RP3β(0.7018)가 CMN(0.6872)보다 높았다. Epinions에서는 원 논문에 없던 TopPopular가 HR@5 0.5429로 CMN(0.4195)을 크게 이겼다. Epinions는 인기도 분포가 훨씬 치우쳐 있고(지니 계수 0.69 vs CiteULike-a 0.37), CMN이 추천한 아이템은 베이스라인보다 평균 8~25% 더 인기가 많았다. 즉 CMN의 "성공"은 인기 편향의 효과일 수 있다.</p>
+<p><b>3.2 MCRec (KDD '18).</b> 영화 장르 같은 부가 정보로 메타패스를 만들고 co-attention으로 표현을 개선하는 모델. 공개 코드는 MovieLens용 메타패스가 하드코딩돼 있고 전처리 코드가 없어 MovieLens100k만 비교했다. 그 결과 잘 설정한 ItemKNN이 Precision@10 0.3327, Recall@10 0.2199, NDCG@10 0.2603으로 MCRec(0.3077, 0.2061, 0.2363)을 모든 지표에서 앞섰다. 추가로 저자들은 원 논문의 NDCG 구현이 비표준적이었고(재현에선 표준 NDCG 사용), 코드가 <i>테스트셋에서 지표별로 가장 좋은 에폭</i>을 골라 보고하는 방식이었다는 방법론적 문제를 지적한다.</p>
+<p><b>3.3 CVAE (KDD '18).</b> 콘텐츠에서 비지도로 잠재 표현을 배우고 평점과 결합하는 하이브리드 VAE. CiteULike 데이터 두 종(각각 sparse/dense)에서 Recall@50~300으로 평가됐다. dense CiteULike-a에서 Recall@50은 하이브리드 ItemKNN-CFCBF가 0.1837로 CVAE(0.0772)의 두 배를 넘었고, 순수 CF 베이스라인 대부분도 CVAE를 앞섰다. Recall@300에서도 ItemKNN-CFCBF(0.4486)가 CVAE(0.3602)보다 높았다. CVAE가 이긴 경우는 일부 데이터셋에서 리스트 길이 100 이상일 때뿐이었고, 원 논문은 그렇게 긴 컷오프를 쓴 이유를 설명하지 않았다.</p>
+<p><b>3.4 CDL (KDD '15).</b> 적층 디노이징 오토인코더와 CF를 결합한 초기 대표작으로, CVAE의 베이스라인이기도 하다. dense CiteULike-a에서 콘텐츠만 쓰는 ItemKNN-CBF가 Recall@50 0.2135로 CDL(0.0543)을 크게 앞섰다. 흥미로운 관찰은 CVAE가 CDL보다는 늘 나았다는 점이다. 즉 딥러닝 계보 <i>내부</i>에서는 진보가 있었지만, 두 모델 모두 단순 베이스라인을 대부분 이기지 못했다.</p>
+<p><b>3.5 NCF / NeuMF (WWW '17).</b> MF의 내적을 신경망으로 대체한 모델. MovieLens1M과 Pinterest에서 leave-one-out으로 평가됐고 분할이 공개돼 재현이 가능했다. 원 코드도 에폭 수를 테스트셋 결과로 고르고 있어, 저자들은 검증셋으로 에폭을 정하도록 바꿨다. Pinterest에서는 ItemKNN(HR@5 0.7100)과 RP3β(0.7105)가 NeuMF(0.7024)를 모든 지표에서 앞섰다. MovieLens1M에서는 NeuMF(HR@10 0.7120)가 kNN·그래프 베이스라인을 분명히 이겼지만, scikit-learn ElasticNet으로 구현한 SLIM(0.7161)에는 졌다. 저자들은 이후 많은 논문이 NCF를 "SOTA 베이스라인"으로 쓴다는 점을 문제로 짚는다.</p>
+<p><b>3.6 SpectralCF (RecSys '18).</b> 이분 그래프의 스펙트럼 영역에서 합성곱을 하는 콜드스타트 지향 모델. 원 논문은 데이터셋마다 같은 하이퍼파라미터 한 세트만 보고했다. HetRec과 Amazon Instant Video에서는 TopPopular를 포함한 모든 베이스라인이 SpectralCF를 이겼다. 그런데 저자가 공유한 MovieLens 분할에서는 SpectralCF가 최고 베이스라인보다 Recall@20이 50%나 높았다. 분석해 보니 공유된 테스트셋의 인기도 분포가 무작위 분할과 크게 달랐다. 무작위 80/20 분할의 지니 계수는 학습·테스트 모두 약 0.79인데, 공유된 테스트셋은 0.92였다. 논문 설명대로 직접 무작위 분할을 만들어 다시 돌리자 SpectralCF는 Recall@20 0.1843으로 TopPopular(0.1853)보다도 낮았고, RP3β는 0.2910이었다. 저자에게 문의했지만 설명을 받지 못했다고 한다.</p>
+<p><b>3.7 Mult-VAE (WWW '18).</b> 다항 우도와 KL 가중 조절을 쓴 암묵적 피드백용 VAE. 7편 중 유일하게 모든 설정에서 kNN·그래프 베이스라인을 10~20% 앞섰다. 저자들은 한 걸음 더 나아가 SLIM과 WMF를 직접 튜닝해 비교했다. Netflix에서 NDCG@100으로 최적화했을 때 Mult-VAE는 Recall@20 0.2626 vs SLIM 0.2551, Recall@50 0.4138 vs 0.3995로 앞섰지만, NDCG@100은 0.3756 vs 0.3745로 거의 같았다. 추가 컷오프에서는 NDCG@20(SLIM 0.2473 vs 0.2448)처럼 SLIM이 근소하게 앞서는 경우도 나왔다. 결론은 "진보는 있지만 부분적이고, 어떤 지표를 쓰느냐에 달려 있다"이다.</p>
+
+<h3>4. 논의</h3>
+<p><b>재현성과 확장성.</b> 추천 알고리즘은 무작위 초기화 등으로 완전히 결정적이지는 않지만, 같은 설정을 반복했을 때의 결과 변동은 대개 작다. 그러니 코드와 데이터만 공유되면 재현은 다른 과학 분야보다 훨씬 쉬워야 한다. 실제로는 핵심 모델 코드만 올라오고 하이퍼파라미터 탐색·평가·전처리·베이스라인 코드는 빠지는 경우가 많았다. 또 넷플릭스 프라이즈(1억 건) 이후 10년이 지났는데도 수십만 건 규모의 작은 데이터셋이 흔히 쓰이고, 그 작은 데이터에서도 신경망의 하이퍼파라미터 탐색에 며칠~몇 주가 걸린다는 점을 지적한다. kNN도 확장성 문제가 있지만 샘플링·전처리로 다룰 수 있다고 본다.</p>
+<p><b>진보 평가.</b> 저자들은 이 현상을 "유령 진보(phantom progress)"라 부른다. 주된 원인은 베이스라인 선택과 튜닝 부족이고, 데이터 분할이나 지표 구현의 실수도 있었다. 데이터셋은 20개 이상의 공개 데이터와 MovieLens·Yelp의 여러 변형이 쓰여 대부분 한두 논문에서만 등장하고, 지표(Precision, Recall, MAP, NDCG, MRR)와 프로토콜(무작위 80/20, leave-last-out, leave-one-out, 양성 1개당 음성 100개 또는 50개 샘플링)도 제각각이다. 컷오프는 top-3부터 수백 개까지 다양한데 그 선택의 근거는 거의 제시되지 않는다.</p>
+<p>저자들은 이것이 신경망만의 문제가 아니라 "정확도 수치 사냥"에 쏠린 연구 문화의 문제라고 본다. 명시적 평점 데이터인 MovieLens를 암묵적 피드백 알고리즘 평가에 쓰는 관행처럼, 연구가 가설이나 실제 문제가 아니라 "한두 데이터셋에서 한두 지표로 기존보다 높게"에 맞춰져 있다는 것이다. 게다가 정확도가 조금 높다고 사용자·제공자에게 실제 가치가 늘어나는지도 불분명하며, 높은 정확도가 더 좋게 받아들여지는 추천으로 이어지지 않는다는 연구도 여럿 있다고 덧붙인다.</p>
+
+<h3>5. 결론</h3>
+<p>공개 연구의 재현은 여전히 어렵고, 검토한 대부분의 신경망 방법은 적어도 일부 데이터셋에서 개념적·계산적으로 더 단순한 알고리즘에 진다. 저자들은 평가의 엄밀성과 더 나은 연구 관행을 촉구하며, 향후 다른 학회·다른 추천 문제로 분석을 넓히고 MF 계열 베이스라인도 추가하겠다고 밝힌다(이후 TOIS 확장판으로 이어졌다).</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>재현(reproduction)과 복제(replication).</b> ACM 배지 정책은 원저자 산출물을 쓰는지 여부로 둘을 구분한다. 이 논문은 저자 코드·데이터와 자체 산출물을 섞어 쓰므로 엄밀히는 둘의 혼합이며, 편의상 "재현성"으로 통칭한다.</p>
+<p><b>Top-N 추천.</b> 평점 예측이 아니라 사용자별로 상위 N개 아이템 목록을 만드는 과제. Precision@N, Recall@N, HR@N, NDCG@N, MAP 같은 랭킹 지표로 평가한다.</p>
+<p><b>Leave-one-out과 샘플링 평가.</b> 사용자별로 상호작용 하나를 테스트로 빼고, 보통 무작위 음성 아이템(예: 100개)과 섞어 그 순위를 본다. HR@K는 테스트 아이템이 상위 K에 들어온 비율이다. 후보가 작아 수치가 높게 나오고, 전체 순위와 결론이 달라질 수 있다.</p>
+<p><b>수축항(shrinkage).</b> 공통 상호작용이 적은 쌍의 유사도를 분모에 상수 \(h\)를 더해 낮추는 기법. Bell &amp; Koren(2007) 이래 kNN 튜닝의 핵심 요소다.</p>
+<p><b>P3α / RP3β.</b> 사용자-아이템 이분 그래프 위 3단계 랜덤 워크의 도달 확률로 아이템을 랭킹하는 방법. RP3β는 인기도로 나눠 롱테일 아이템을 살린다. 계산이 싸고 의외로 강하다.</p>
+<p><b>SLIM.</b> Ning &amp; Karypis(2011)의 희소 선형 모델. 아이템-아이템 가중 행렬 \(W\)를 \(\lVert R - RW\rVert^2\)에 L1·L2 정규화를 더해 학습하고, 자기 자신을 쓰지 않도록 대각을 0으로 둔다. 학습된 아이템 kNN으로 볼 수 있다.</p>
+<p><b>베이지안 하이퍼파라미터 탐색.</b> 지금까지의 시도 결과로 대리 모델(가우시안 프로세스 등)을 세우고, 다음에 시도할 지점을 획득 함수로 고르는 방법. 무작위·격자 탐색보다 적은 시도로 좋은 설정을 찾는다.</p>
+<p><b>지니 계수와 인기 편향.</b> 아이템별 상호작용 수의 불균등 정도. 1에 가까울수록 소수 인기 아이템에 집중돼 있다. 테스트셋의 지니가 학습셋과 크게 다르면 분할이 무작위가 아니라는 신호다.</p>
+<p><b>테스트셋 누수(에폭 선택).</b> 에폭 수 같은 하이퍼파라미터를 테스트 성능으로 고르면 테스트 정보가 모델 선택에 섞여 성능이 낙관적으로 부풀려진다. 반드시 검증셋으로 골라야 한다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실·객관식] 저자들이 분석 대상으로 고른 논문 수와, 그중 재현 가능했던 논문 수는? (a) 18편 중 7편 (b) 20편 중 9편 (c) 18편 중 12편 (d) 7편 중 6편
+<details><summary>정답 보기</summary>(a). KDD·SIGIR·WWW·RecSys(2015~2018)에서 18편을 골랐고, 엄격한 기준으로 재현 가능한 것은 7편(약 39%)이었다. 재현된 7편 중 6편이 단순 베이스라인에 자주 졌다.</details></li>
+<li>[사실·서술형] 저자들이 "재현 가능"으로 판정한 두 조건은 무엇인가?
+<details><summary>정답 보기</summary>① 작동하는 소스 코드가 있거나 최소 수정으로 돌아갈 것(핵심 알고리즘은 수정하지 않음). ② 원 논문 데이터셋 중 하나 이상이 공개돼 있고, 원래 학습/테스트 분할이 공개됐거나 논문 설명으로 재구성 가능할 것. 코드가 없으면 저자에게 연락해 30일을 기다렸다.</details></li>
+<li>[사실·객관식] 7편 중 단순 kNN·그래프 베이스라인을 모든 설정에서 큰 폭으로 앞선 유일한 방법은? (a) NCF (b) CMN (c) Mult-VAE (d) SpectralCF
+<details><summary>정답 보기</summary>(c) Mult-VAE. kNN류보다 10~20% 높았지만, 직접 튜닝한 SLIM과 비교하면 NDCG 기준으로는 거의 차이가 없었다.</details></li>
+<li>[원리·서술형] 저자들은 모든 모델을 하나의 공통 평가 프레임워크에서 돌리지 않고, 원 논문의 평가 코드를 그대로 썼다. 왜 이것이 이 연구의 주장에 중요한가?
+<details><summary>정답 보기</summary>공통 프레임워크를 쓰면 평가 절차가 원 논문과 미묘하게 달라져, 결과 차이가 "평가 방식이 달라서"라는 반론을 허용한다. 원 코드의 분할·지표·절차를 그대로 쓰고 베이스라인만 추가하면, 원 저자가 정한 게임 규칙 안에서도 신경망이 단순 방법에 진다는 것을 보일 수 있다.</details></li>
+<li>[원리·서술형] ItemKNN 유사도의 분모에 수축항 \(h\)를 더하는 효과를 설명하라.
+<details><summary>정답 보기</summary>공통 사용자가 한두 명뿐인 아이템 쌍은 코사인 유사도가 우연히 1에 가깝게 나올 수 있다. 분모에 \(h\)를 더하면 노름이 작은(상호작용이 적은) 쌍일수록 유사도가 상대적으로 크게 깎여, 근거가 약한 유사도의 영향을 줄인다. CMN 원 논문은 이 수축항 없이 ItemKNN을 써서 베이스라인이 약해졌다.</details></li>
+<li>[원리·객관식] 원 코드가 "테스트셋 결과로 에폭 수를 고르는" 문제가 확인된 두 논문은? (a) CMN, CDL (b) MCRec, NCF (c) CVAE, SpectralCF (d) Mult-VAE, CMN
+<details><summary>정답 보기</summary>(b). MCRec은 지표별로 테스트에서 가장 좋은 에폭의 결과를 보고했고, NCF도 에폭 수를 테스트셋으로 정했다. 저자들은 NCF의 경우 검증셋으로 에폭을 고르도록 바꿔 재현했다.</details></li>
+<li>[결과·서술형] SpectralCF가 저자 공유 MovieLens 분할에서는 압도적이었지만 직접 만든 무작위 분할에서는 TopPopular에도 진 이유를 설명하라.
+<details><summary>정답 보기</summary>공유된 테스트셋의 인기도 분포가 무작위 분할과 크게 달랐다(지니 계수 0.92 vs 무작위 분할 약 0.79). 테스트셋이 비정상적으로 치우쳐 있어 특정 모델에 유리한 조건이 만들어졌던 것으로 보인다. 논문 설명대로 무작위 분할을 다시 만들면 SpectralCF는 Recall@20 0.1843으로 TopPopular(0.1853)보다 낮았다.</details></li>
+<li>[결과·서술형] Epinions에서 TopPopular가 모든 방법을 이겼고 CMN이 다른 개인화 베이스라인보다 나았다. 저자들은 이를 어떻게 해석했나?
+<details><summary>정답 보기</summary>Epinions는 인기도 분포가 매우 치우친(지니 0.69) 작고 희소한 데이터셋이다. CMN이 추천한 아이템은 베이스라인보다 평균 8~25% 더 인기가 많았으므로, CMN의 우위는 모델 능력보다 인기 편향과 데이터 특성에서 비롯됐을 가능성이 크다.</details></li>
+<li>[비판·서술형] 이 논문의 결론을 "딥러닝은 추천에 쓸모없다"로 읽으면 무엇을 놓치는가? 논문의 한계 두 가지와 함께 답하라.
+<details><summary>정답 보기</summary>논문의 주장은 "보고된 진보가 평가 관행 때문에 부풀려졌다"이지 신경망 자체를 부정하는 것이 아니다. Mult-VAE처럼 실제로 이기는 모델도 있었고, 대규모·다양한 부가 정보·시퀀스 같은 상황은 다루지 않았다. 한계: 4개 학회 18편의 작은 표본, 재현 대상 모델은 원 논문 하이퍼파라미터를 그대로 쓰고 재튜닝하지 않음, 수십만~수백만 건 규모의 작은 학술 데이터셋 중심, MF 계열 베이스라인은 일부만 포함, 오프라인 정확도만 평가.</details></li>
+<li>[적용·서술형] 팀에서 새 후보 생성 모델이 기존 MF보다 오프라인 Recall@50이 8% 높다는 보고를 받았다. 이 논문의 교훈을 적용해 채택 전 확인할 체크리스트를 만들어라.
+<details><summary>정답 보기</summary>예: ① 비교 대상에 잘 튜닝한 ItemKNN/RP3β/EASE·SLIM·iALS와 TopPopular를 포함했는가, 베이스라인에도 같은 탐색 예산을 썼는가. ② 에폭·조기 종료·하이퍼파라미터를 검증셋으로만 골랐는가(테스트 누수 없음). ③ 분할이 운영 상황(시간 순서)을 반영하고, 학습/테스트 인기도 분포가 이상하지 않은가. ④ 지표 구현이 표준이며 컷오프가 실제 노출 수와 맞는가, 여러 컷오프·지표에서 결과가 일관적인가. ⑤ 인기 편향·커버리지 변화를 함께 봤는가. ⑥ 학습·서빙 비용 대비 이득이 충분한가, 최종적으로 온라인 A/B로 확인했는가.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#1 Local Item-Item Models for Top-N Recommendation</b> (RecSys 2016 Best Paper) — 이 논문에서 신경망을 이긴 SLIM 계열(Karypis 그룹)의 확장. 아이템 기반 선형 모델이 얼마나 강한지 보여 준다.</li>
+<li><b>#8 HOP-rec: High-order Proximity for Implicit Recommendation</b> (RecSys 2018) — P3α/RP3β처럼 이분 그래프 랜덤 워크로 고차 근접도를 쓰는 방법. 그래프 베이스라인이 왜 강한지 연결해서 읽기 좋다.</li>
+<li><b>#374 Revisiting the Performance of iALS on Item Recommendation Benchmarks</b> (2022) — 같은 문제의식의 후속: 잘 튜닝한 고전 MF(iALS)가 최신 모델과 경쟁한다는 재검증.</li>
+<li><b>#27 Scalable Approximate NonSymmetric Autoencoder for Collaborative Filtering</b> (RecSys 2023 Best Short Paper Runner-up) — EASE·SLIM 계열 선형 오토인코더의 확장으로, "강한 단순 베이스라인" 계보를 잇는다.</li>
+<li><b>#265 Do Recommender Systems Promote Local Music? A Reproducibility Study Using Music Streaming Data</b> (2024) — 추천 연구의 재현성 연구가 이후 어떻게 이어졌는지 보여 주는 사례.</li>
+</ul>
+
+</main>
+</body>
+</html>
