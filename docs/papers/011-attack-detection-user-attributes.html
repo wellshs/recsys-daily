@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#11 Quick and Accurate Attack Detection in Recommender Systems through User Attributes</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-06 · #11</span></div>
+<h1>Quick and Accurate Attack Detection in Recommender Systems through User Attributes</h1>
+<p class="meta">Mehmet Aktukmak, Yasin Yilmaz, Ismail Uysal (University of South Florida) · RecSys 2019 Honorable Mention Short Paper</p>
+<div class="chips"><span>2019</span><span>Honorable Mention Short Paper</span><span>학계(미국)</span><span>쉴링 공격 탐지</span><span>확률적 행렬분해</span><span>사용자 속성</span><span>변분 EM</span><span>CUSUM</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3298689.3347050">10.1145/3298689.3347050</a> · arXiv: 없음 · PDF(저자 연구실 공개본): <a href="http://sis.eng.usf.edu/Papers/recsys19.pdf">USF SIS Lab</a> · 확장판: <a href="http://sis.eng.usf.edu/Papers/tifs21.pdf">Sequential Attack Detection in Recommender Systems (IEEE TIFS 2021)</a> · 4쪽 숏페이퍼 · 읽기 예상 12분</p>
+<div class="callout">참고: 저자 사이트의 PDF는 저자명이 가려진 제출본 형식이다. 본문 내용은 최종본과 같다고 가정하고 작성했으며, 실험 결과는 원문에서도 그림(ROC, 지연 곡선)으로만 제시되어 구체적 수치가 없다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 가입 시 받는 나이·성별·직업 같은 사용자 속성은 운영자만 볼 수 있으므로, 속성과 평점을 함께 임베딩하는 확률 모델로 "속성과 평점이 서로 안 맞는 사용자"를 찾고, 그 이상 점수를 CUSUM식으로 누적하면 쉴링(가짜 프로필) 공격을 더 정확하고 더 빨리 잡을 수 있다.</p>
+<p><b>풀려는 문제.</b> 기존 공격 탐지는 평점 분포만 본다. 그런데 취향이 독특한 진짜 신규 사용자도 평점 분포상 이상치로 보여 오탐이 생긴다. 또 하나씩 들어오는 사용자를 개별 판정하는 방식은 오탐이 잦고, 공격이 시작된 시점을 빨리 알아차리는 문제(속도)는 거의 다뤄지지 않았다.</p>
+<p><b>방법의 핵심.</b> ① 실수형(나이)·범주형(성별·직업) 속성과 평점을 하나의 잠재 벡터 \(u_i\)에서 생성하는 확률적 인수분해 모델을 진짜 사용자만으로 변분 EM 학습한다. ② 신규 사용자는 <i>속성만으로</i> 잠재 공간에 투영한 뒤, 그 위치에서 실제 평점이 얼마나 그럴듯한지(음의 로그우도)를 이상 점수로 쓴다. 공격자는 진짜 사용자의 "속성-취향" 대응을 모르니 아무 속성이나 붙일 수밖에 없고, 그래서 불일치가 커진다. ③ 이 점수를 진짜 사용자 분포에 대한 꼬리확률로 바꾸고 CUSUM처럼 누적해, 이상치가 <i>연달아</i> 나올 때만 시스템 경보를 울린다.</p>
+<p><b>주요 결과.</b> MovieLens 100K(943명, 1,682편)에 random·average·bandwagon을 섞은 10%(94개) 공격 프로필을 주입한 실험에서, 제안법은 NP·PCA·RDMA·UnRAP보다 ROC 곡선이 위에 있었고, 평점만 쓰는 GLR 순차 탐지기보다 같은 오경보 주기에서 평균 탐지 지연이 짧았다. 50회 반복 평균이며 구체적 AUC·지연 수치는 그림으로만 제시된다(논문 참조).</p>
+<p><b>한계와 남는 질문.</b> 데이터셋이 하나, 공격 모델이 고전적 3종뿐이고, 공격자가 "진짜 사용자 속성을 무작위로 복사"한다는 가정에 성능이 기대고 있다. 속성-평점 상관을 학습해 맞춰 오는 정교한 공격자, 속성이 없거나 부정확한 서비스, 공격자가 시간상 몰려 들어온다는 가정이 깨지는 경우는 다뤄지지 않는다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 공격자가 모르는 정보를 쓰자</h3>
+<p>추천 결과가 매출과 직결되면서, 특정 아이템을 띄우거나(push) 경쟁 아이템을 깎아내리거나(nuke) 플랫폼 자체를 망가뜨리려는 가짜 프로필 공격이 생긴다. 협업 필터링은 "이웃은 취향이 비슷하다"는 가정에 기대므로, 가짜 평점으로 이웃 관계를 조작하면 결과가 휘둘린다. 기존 탐지기 대부분도 같은 가정 위에서 평점 분포의 특이성을 특징으로 삼는다.</p>
+<p>저자들이 짚는 약점은 두 가지다. 첫째, 취향이 평균과 다른 <i>진짜</i> 신규 사용자도 이상치로 보여 오탐이 된다. 둘째, 단일 사용자 단위의 판정은 본질적으로 오경보가 잦다. 해법으로 콜드스타트 추천에서 속성을 보조 정보로 쓰듯, 탐지에도 속성을 쓰자고 제안한다. 핵심 관찰은 <b>가입 시 입력한 인구통계 정보는 운영자만 볼 수 있다</b>는 점이다. 공격자가 "이 나이·직업의 사람은 이런 영화를 좋아한다"는 대응까지 맞추려면 내부 데이터 수준의 지식이 필요하므로, 현실적으로는 속성을 무작위로 고를 것이고 이것이 평점 이상과는 별개의 증거가 된다.</p>
+<p>또 공격이 효과를 내려면 가짜 프로필이 짧은 기간에 대량 등록된다고 가정한다. 그러면 공격은 "지속되는 이상치"로 나타나고, 가끔 한 명씩 나타나는 독특한 진짜 사용자는 지속성이 없으므로 경보를 피할 수 있다. 목표는 오경보율을 통제하면서 가능한 한 빨리 공격을 감지하는 것이다. 기여는 (i) 평점과 혼합형 속성을 함께 임베딩하는 확률적 행렬분해, (ii) 그 모델이 내는 통계를 쓰는 순차 탐지 프레임워크 두 가지다.</p>
+
+<h3>2. 관련 연구 — 평점 통계, 군집, 그래프, 그리고 순차 탐지</h3>
+<p>비지도 탐지 계열로는 이웃을 두 군집으로 나눠 걸러내는 초기 방법, 평균 합의에서의 평점 편차(RDMA), 사용자·아이템·전역 평균에서의 제곱 편차 합인 Hv 점수를 쓰는 UnRAP, 사용자 공분산의 작은 고유값 주성분으로 서로 높게 상관된 공격자 무리를 찾는 PCA 방법, 신규 사용자의 아이템 선택이 진짜 사용자와 얼마나 겹치는지로 우도비 검정을 하는 Neyman-Pearson(NP) 방법이 소개된다. RDMA·WDA·WDMA·Length Variance·Hv를 묶어 k-means를 하거나, 다차원 척도법·계층 군집·그래프의 최대 부분행렬·HMM을 쓰는 연구도 정리된다.</p>
+<p>이상 탐지 관점에서는 시간 구간별 아이템 평균 평점을 감시하는 평균 탐지기, 이를 CUSUM과 결합해 평판 시스템의 부정 평점을 잡은 연구, 그리고 평점을 범주형 분포로 보고 일반화 우도비(GLR)로 변화를 감지하는 방법이 있다. 이 논문은 정확도는 NP·PCA·RDMA·UnRAP와, 속도는 GLR 탐지기와 비교하겠다고 밝힌다. 공통된 차이점은 기존 방법이 모두 <i>평점만</i> 본다는 것이다.</p>
+
+<h3>3.1 생성 모델 — 속성과 평점을 한 잠재 벡터에서</h3>
+<p>사용자 \(i\)에게 \(M\)개의 실수형 속성과 \(N\)개의 범주형 속성이 있다. 모든 관측이 사용자 잠재 벡터 \(u_i\)(차원 \(K\))로부터 선형으로 생성된다고 본다.</p>
+\[ p(x_{i,m}\mid u_i)=\mathcal N(x_{i,m}\mid W_m u_i,\ \Sigma_{x,m}) \]
+<p>\(x_{i,m}\)은 \(m\)번째 실수 속성(예: 나이, 중심화됨), \(W_m\)은 잠재 공간에서 그 속성으로 가는 가중치, \(\Sigma_{x,m}\)은 잡음 공분산이다. 즉 인자 분석(factor analysis)과 같은 구조다.</p>
+\[ p(y_{i,n}\mid u_i)=\mathrm{Cat}\big(y_{i,n}\mid S(H_n u_i)\big) \]
+<p>\(y_{i,n}\)은 \(n\)번째 범주 속성(성별, 직업)의 원-핫 값, \(H_n\)은 가중치 행렬, \(S\)는 softmax다. 잠재 벡터를 선형 변환해 로짓을 만들고 범주 확률로 바꾸는 다항 로지스틱 회귀와 같다.</p>
+\[ p(r_{ij}\mid u_i,v_j)=\mathcal N(r_{ij}\mid u_i^\top v_j,\ c^{-1}) \]
+<p>평점은 고전적 PMF처럼 사용자·아이템 잠재 벡터의 내적을 평균으로 하는 가우시안이다. \(c\)는 평점 신뢰도(정밀도), \(v_j\)는 아이템 \(j\)의 잠재 벡터다. 평점은 원래 순서형이지만 단순하고 널리 쓰인다는 이유로 가우시안을 택했다. 잠재 변수에는 평균 0의 구형(spherical) 사전분포를 두며, 학습 목표는 사전분포 × 실수 속성 우도 × 범주 속성 우도 × 평점 우도의 곱을 최대화하는 것이다.</p>
+<p>직관: 같은 \(u_i\)가 속성과 평점을 동시에 설명해야 하므로, 학습 후 잠재 공간에서는 "속성이 비슷하고 평점도 비슷한" 사용자들이 모인다. 이것이 뒤에서 탐지의 근거가 된다.</p>
+
+<h3>3.2 추론과 학습 — 변분 EM</h3>
+<p>추정할 것은 각 \(u_i, v_j\)의 사후분포와 파라미터 \(\Theta=\{W_m, H_n, \Sigma_{x,m}\}\)이다. EM이 자연스럽지만, softmax 우도 때문에 사후분포가 닫힌 형태로 나오지 않는다. 저자들은 log-sum-exp에 Böhning 이차 상한을 적용해 범주 로그우도를 \(u_i\)에 대한 이차식 하한으로 바꾼다.</p>
+\[ \log p(y_{i,n}\mid u_i)\ \ge\ y_{i,n}^\top H_n u_i-\tfrac12 u_i^\top H_n^\top F H_n u_i + g_{i,n}^\top H_n u_i - e_{i,n} \]
+<p>여기서 \(F\)는 범주 수에만 의존하는 고정 곡률 행렬, \(g_{i,n}, e_{i,n}\)은 전개 지점 \(\psi_{i,n}\)에서 계산되는 보정 항이다. \(\psi_{i,n}=H_n m_{u,i}\)로 계속 갱신해 하한을 조인다. 우도가 이차식이 되니 사후분포를 가우시안 \(q(u_i)=\mathcal N(m_{u,i},\Sigma_{u,i})\), \(q(v_j)=\mathcal N(m_{v,j},\Sigma_{v,j})\)로 근사할 수 있다.</p>
+<p>E-step에서 사용자 공분산의 역(정밀도)은 네 원천의 합이다: 사전분포 \(\lambda_u I_K\), 범주 속성 \(\sum_n H_n^\top F H_n\), 실수 속성 \(\sum_m W_m^\top\Sigma_{x,m}^{-1}W_m\), 그리고 사용자가 평가한 아이템들의 \(c\,\mathbb E[V O_i V^\top]\)(\(O_i\)는 관측된 평점을 표시하는 대각 행렬). 평균 \(m_{u,i}\)는 평점·범주 속성·실수 속성 각각이 끌어당기는 방향의 정밀도 가중 합이다. 즉 평점이 적은 사용자일수록 속성 쪽 정보의 비중이 커지는, 콜드스타트에 유리한 구조다. M-step에서 \(H_n, W_m, \Sigma_{x,m}\)은 인자 분석과 같은 최소제곱형 닫힌 해로 갱신하며, 수렴할 때까지 반복한다. 결과물은 "진짜 사용자"의 속성-취향 구조를 담은 잠재 공간이다.</p>
+
+<h3>3.3 순차 공격 탐지 — 이상 점수를 누적하기</h3>
+<p><b>투영.</b> 새 사용자 \(t\)가 속성 전부와 희소한 평점을 갖고 들어오면, 먼저 <i>속성만으로</i> 잠재 평균 \(m_{u,t}\)를 구한다. 이것은 E-step 식에서 평점 항을 뺀 계산이라 닫힌 형태로 즉시 나온다.</p>
+<p><b>이상 점수.</b> 그 위치에서 실제 평점의 평균 음의 로그우도를 계산한다.</p>
+\[ d_t=\frac{1}{|\Omega_t|}\sum_{j\in\Omega_t}-\log \mathcal N\big(r_{tj}\mid m_{u,t}^\top m_{v,j},\ c^{-1}\big) \]
+<p>\(\Omega_t\)는 사용자 \(t\)가 평가한 아이템 집합이다. 진짜 사용자라면 "이 속성의 사람이 줄 법한 평점"과 실제 평점이 대체로 맞아 \(d_t\)가 작고, 속성을 아무렇게나 붙인 가짜 프로필은 어긋나서 크다. 아이템 수로 평균을 내 프로필 길이의 영향을 줄였다.</p>
+<p><b>꼬리확률과 통계량.</b> 학습 데이터의 모든 진짜 사용자에 대해 \(d_i\)를 미리 계산해 두고, \(p_t=\frac1I\sum_i \mathbb 1\{d_i\ge d_t\}\)로 경험적 p-값을 구한다. 그런데 \(p_t\le\alpha\)이면 바로 공격자로 판정하는 단발성 검정은 오경보가 잦다(저자들은 ASA의 p-값 성명을 근거로 든다). 그래서 다음처럼 누적한다.</p>
+\[ s_t=\log\frac{\alpha}{p_t},\qquad g_t=\max\{g_{t-1}+s_t,\ 0\},\ g_0=0,\qquad t_d=\min\{t: g_t\ge h\} \]
+<p>\(s_t\)는 \(p_t\)가 유의수준 \(\alpha\)보다 작으면(이상하면) 양수, 크면 음수다. \(g_t\)는 0 아래로 내려가지 않는 누적합이라, 정상 사용자가 이어지면 0 근처에 머물고 이상치가 <i>연속으로</i> 들어올 때만 빠르게 커진다. 임계값 \(h\)를 넘는 첫 시점 \(t_d\)에 시스템 경보가 울린다. 이는 CUSUM과 같은 형태로, 정상·이상 분포를 완전히 알 때 오경보 제약 하에서 평균 탐지 지연을 최소화하는 minimax 최적성이 알려져 있다(여기서는 분포를 근사하므로 "CUSUM-like"라고 부른다). \(h\)가 크면 오경보는 줄지만 탐지가 늦어진다.</p>
+<p><b>개별 공격자 식별.</b> 경보 후, 그 직전에 \(g_t\)가 마지막으로 0이었던 시점 \(t_b\)와 직후 처음 0으로 돌아가는 시점 \(t_e\)를 공격 구간으로 잡는다. 이 구간에서 \(s_t\ge0\)인 사용자를 공격자로 표시하고 그 평점을 제거한다. 시스템 단위의 "공격이 시작됐다" 판단과 사용자 단위의 "누가 공격자인가" 판단을 하나의 통계로 처리하는 셈이다.</p>
+
+<h3>4. 실험</h3>
+<p><b>데이터.</b> MovieLens 100K: 사용자 943명, 아이템 1,682편, 희소도 약 0.94(관측 비율 약 6%). 사용자 속성은 나이(실수형), 직업·성별(범주형)을 쓴다.</p>
+<p><b>공격 생성.</b> random(무작위 평점), average(아이템 평균 근처 평점), bandwagon(인기 아이템 위주) 세 유형을 같은 확률로 섞는다. 공격 규모는 10%(94개 프로필), 필러(타깃 외에 위장용으로 평가하는 아이템) 크기는 전체 밀도에 맞춘 5%(85편). 속성은 속성마다 무작위로 고른 진짜 사용자의 값을 복사해, 개별적으로는 그럴듯하지만 평점과는 무관하게 만든다. 진짜 사용자 100명을 학습에서 떼어 두고, 그중 5명을 공격자들 사이 무작위 위치에 끼워 넣은 뒤 "나머지 진짜 사용자 → 공격자 무리" 순서의 시퀀스를 만든다. 이를 mixed sequential attack이라 부른다.</p>
+<p><b>정확도 실험.</b> 베이스라인은 NP, PCA(결측을 0으로 채우고 주성분 3개), RDMA, UnRAP(r=10). 50회 무작위 실험의 평균 ROC를 비교했고, 제안법의 곡선이 모든 베이스라인보다 위에 있었다(그래프의 거짓양성률 축은 0~0.25 구간). 저자들은 속성에 맞는 평점까지 꾸며내기 어렵다는 점이 추가적인 이상 증거를 만들어 낸다고 해석한다.</p>
+<p><b>속도 실험.</b> 비교 대상은 아이템별 평점 범주분포의 변화를 GLR로 감시하다 어느 아이템이든 임계값을 넘으면 경보를 울리는 탐지기다. 지표는 평균 탐지 지연(MDD) 대 로그 오경보 주기이며, \(h\)를 바꿔 가며 트레이드오프 곡선을 그렸다(50회 평균). 제안법이 같은 오경보 주기에서 더 짧은 지연을 보였고, 차이의 원인을 속성이라는 추가 정보원으로 돌린다. 수치 표는 없다.</p>
+
+<h3>5. 결론</h3>
+<p>속성과 평점을 함께 담는 생성 모델을 EM으로 학습하고, 신규 사용자를 속성으로 투영해 평점 불일치를 순차적으로 누적하는 탐지기를 제안했다. 무작위지만 현실적인 속성을 가진 공격 시나리오에서 정확도와 속도 모두 베이스라인을 앞섰으며, 저자들 스스로 "초기 실험"이라 부르며 더 정교한 공격 모델에 대한 검증을 과제로 남긴다. 이 후속은 2021년 IEEE TIFS의 "Sequential Attack Detection in Recommender Systems"로 확장되었다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>쉴링(shilling) 공격.</b> 가짜 사용자 프로필로 평점을 주입해 특정 아이템의 추천 순위를 올리거나(push) 내리는(nuke) 공격. 프로필 주입(profile injection) 또는 데이터 중독(poisoning) 공격의 한 형태다.</li>
+<li><b>random / average / bandwagon 공격.</b> 필러 아이템에 각각 전체 평균 근처의 무작위 값, 아이템별 평균 근처 값, 인기 아이템 위주의 높은 점수를 주는 고전적 공격 모델. average가 가장 효과적이지만 아이템 평균이라는 지식이 필요하다.</li>
+<li><b>필러(filler) 크기 / 공격 크기.</b> 공격 프로필 하나가 타깃 외에 평가하는 아이템 비율, 그리고 전체 사용자 대비 주입된 공격 프로필 비율.</li>
+<li><b>PMF(확률적 행렬분해).</b> 평점을 사용자·아이템 잠재 벡터 내적 + 가우시안 잡음으로 보는 모델. 사전분포가 L2 정규화 역할을 한다.</li>
+<li><b>인자 분석(factor analysis).</b> 관측 벡터를 저차원 잠재 변수의 선형 변환 + 대각 공분산 잡음으로 설명하는 모델. 이 논문의 실수형 속성 부분과 M-step 갱신식이 이 구조다.</li>
+<li><b>변분 EM과 Böhning 상한.</b> 사후분포를 직접 못 구할 때 다루기 쉬운 분포로 근사하며 EM을 도는 방식. Böhning 상한은 log-sum-exp를 고정 곡률의 이차식으로 위에서 누르는 기법으로, softmax 우도를 가우시안과 결합 가능하게 만든다.</li>
+<li><b>경험적 p-값(꼬리확률).</b> 정상 표본 중 관측값 이상으로 극단적인 비율. 분포 가정 없이 이상 정도를 0~1 척도로 표준화한다.</li>
+<li><b>CUSUM.</b> 로그우도비 같은 증분을 0 아래로 내려가지 않게 누적하다 임계값을 넘으면 변화가 일어났다고 판단하는 순차 변화점 탐지 기법. Page(1954)에서 유래했다.</li>
+<li><b>평균 탐지 지연(MDD)과 오경보 주기.</b> 순차 탐지의 두 축. 변화 후 경보까지 걸린 평균 시간과, 변화가 없을 때 오경보 사이 평균 간격이다. 임계값으로 둘을 맞바꾼다.</li>
+<li><b>GLR(일반화 우도비) 탐지기.</b> 변화 후 분포의 파라미터를 모를 때 최대우도 추정치를 넣어 우도비를 계산하는 검정. 비교 대상은 아이템별 평점 범주분포의 변화를 감시한다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 실험에 쓴 사용자 속성 세 가지와 각각의 데이터 유형은?
+<details><summary>정답 보기</summary>나이(실수형, 가우시안), 직업(범주형), 성별(범주형, 둘 다 softmax 범주분포). 데이터는 MovieLens 100K(943명, 1,682편)다.</details></li>
+<li>[사실] 공격 시나리오 설정으로 옳은 것은? (객관식) ① 공격 5%, 필러 10%, 속성은 무작위 생성 ② 공격 10%(94개), 필러 5%(85편), 속성은 무작위 진짜 사용자의 값을 속성별로 복사 ③ 공격 10%, 필러 5%, 속성은 공격자끼리 동일
+<details><summary>정답 보기</summary>②. 공격 유형은 random·average·bandwagon을 같은 확률로 섞고, 진짜 사용자 5명을 공격자 사이에 섞어 넣는다.</details></li>
+<li>[사실] 정확도와 속도 비교에 각각 쓰인 베이스라인은?
+<details><summary>정답 보기</summary>정확도(ROC): NP, PCA, RDMA, UnRAP. 속도(MDD 대 로그 오경보 주기): 아이템별 평점 범주분포를 감시하는 GLR 탐지기. 각 50회 실험 평균.</details></li>
+<li>[원리] 신규 사용자를 잠재 공간에 투영할 때 평점이 아니라 <i>속성만</i> 쓰는 이유는 무엇인가? 평점까지 함께 쓰면 무엇이 문제인가?
+<details><summary>정답 보기</summary>탐지 신호가 "속성으로 예측한 취향과 실제 평점의 불일치"이기 때문이다. 평점까지 넣어 \(u_t\)를 추정하면 잠재 벡터가 그 평점에 맞춰지면서 불일치가 흡수되어, 가짜 평점도 그럴듯하게 설명되고 \(d_t\)가 작아진다.</details></li>
+<li>[원리] \(s_t=\log(\alpha/p_t)\)와 \(g_t=\max\{g_{t-1}+s_t,0\}\)가 "독특하지만 진짜인 사용자" 한 명에게 오경보를 내지 않는 원리를 설명하라.
+<details><summary>정답 보기</summary>한 명의 이상치는 \(s_t\)를 한 번 양수로 만들지만, 이후 정상 사용자들의 \(p_t>\alpha\)가 음수 \(s_t\)를 더해 \(g_t\)를 다시 0으로 끌어내린다. 임계값 \(h\)를 넘으려면 양수 증분이 연속적으로 쌓여야 하므로, 짧은 기간에 몰려 들어오는 공격 무리에만 반응한다.</details></li>
+<li>[원리] Böhning 상한이 이 모델에서 해결하는 문제는 무엇인가?
+<details><summary>정답 보기</summary>범주형 속성의 softmax 우도 때문에 사후분포가 닫힌 형태로 나오지 않는 문제. log-sum-exp를 고정 곡률 이차식으로 근사하면 로그우도가 \(u_i\)의 이차식이 되어 가우시안 사후 근사와 닫힌 형태의 E-step 갱신이 가능해진다.</details></li>
+<li>[해석] 정확도 실험에서 제안법이 앞선 이유를 저자들은 어떻게 설명하는가? 이 설명이 실험 설계에 얼마나 의존하는가?
+<details><summary>정답 보기</summary>공격자가 속성에 맞춰 평점까지 꾸며내기 어려워 속성-평점 불일치가 추가 증거가 된다고 설명한다. 다만 실험에서 공격 속성은 의도적으로 평점과 무관하게(진짜 사용자 값 무작위 복사) 생성되었으므로, 그 가정이 성립할 때의 이득이다. 속성을 평점과 맞게 고르는 공격자에 대한 성능은 검증되지 않았다.</details></li>
+<li>[해석] MDD 대 로그 오경보 주기 그래프에서 "곡선이 더 아래에 있다"는 것은 무엇을 뜻하며, 임계값 \(h\)는 그 곡선 위에서 어떤 역할을 하는가?
+<details><summary>정답 보기</summary>같은 오경보 빈도(같은 x값)에서 공격을 더 빨리 감지한다는 뜻이다. \(h\)를 키우면 오경보 주기는 길어지지만(오른쪽) 지연도 늘어나며(위), \(h\)를 바꿔 가며 찍은 점들이 곡선을 이룬다.</details></li>
+<li>[비판] 실제 서비스에 적용할 때 이 방법을 무력화할 수 있는 공격 전략을 두 가지 제시하라.
+<details><summary>정답 보기</summary>예: ① 공개 데이터나 크롤링으로 속성-취향 상관을 추정해 속성에 맞춘 필러 평점 생성(불일치 제거). ② 가짜 프로필을 오랜 기간에 걸쳐 드문드문 등록해 CUSUM 누적을 피하는 저속(low-and-slow) 공격. 그 밖에 기존 진짜 계정 탈취로 진짜 속성을 사용하는 방법도 있다.</details></li>
+<li>[적용] 가입 정보가 거의 없는 현대 서비스(이메일 가입, 소셜 로그인)에서 이 아이디어를 살린다면 어떤 "운영자만 아는 신호"를 속성 대신 쓰겠는가? 설계하라.
+<details><summary>정답 보기</summary>예: 기기·앱 버전·지역·가입 경로·결제 이력·세션 행동 패턴 같은 서버 측 맥락 신호를 범주/실수 속성으로 넣어 같은 방식으로 잠재 공간을 학습하고, 신규 계정은 맥락만으로 투영해 초기 상호작용과의 불일치를 점수화한 뒤 시간축으로 누적한다. 공격자가 관찰하기 어렵고 위조 비용이 큰 신호일수록 좋다. 개인정보 보호와 공정성(특정 집단 오탐) 점검이 필수다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#377 Accelerating the Surrogate Retraining for Poisoning Attacks against Recommender Systems</b> — 이 논문이 방어하려는 평점 주입(중독) 공격을 공격자 관점에서 더 정교하게 최적화하는 최근 연구. 고전적 random/average 공격과의 차이를 비교해 보자.</li>
+<li><b>#296 Improving the Shortest Plank: Vulnerability-Aware Adversarial Training for Robust Recommender System</b> — 탐지·제거 대신 모델 자체를 중독 공격에 강건하게 만드는 방어 방향.</li>
+<li><b>#124 Attacking and Defending Multi-Agent Collaborative Filtering Systems Through Connectivity</b> — 협업 필터링에 대한 공격과 방어를 연결 구조 관점에서 다룬다.</li>
+<li><b>#344 Private Matrix Factorization with Public Item Features</b> — 행렬분해에 부가 특징을 결합하는 또 다른 사례로, 여기서는 사용자 속성 대신 공개 아이템 특징과 프라이버시가 주제다.</li>
+<li><b>#9 Are We Really Making Much Progress?</b> — 같은 RecSys 2019 수상작. 단일 데이터셋·제한된 베이스라인 평가의 위험을 짚는 메시지가 이 숏페이퍼의 평가 한계를 읽는 데 도움이 된다.</li>
+</ul>
+</main>
+</body>
+</html>
