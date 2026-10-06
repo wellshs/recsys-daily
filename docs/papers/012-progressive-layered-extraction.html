@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#12 Progressive Layered Extraction (PLE): A Novel Multi-Task Learning (MTL) Model for Personalized Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-07 · #12</span></div>
+<h1>Progressive Layered Extraction (PLE): A Novel Multi-Task Learning (MTL) Model for Personalized Recommendations</h1>
+<p class="meta">Hongyan Tang, Junning Liu, Ming Zhao, Xudong Gong (Tencent PCG) · RecSys 2020 Best Long Paper</p>
+<div class="chips"><span>2020</span><span>Best Long Paper</span><span>Tencent</span><span>멀티태스크 학습</span><span>Mixture-of-Experts</span><span>랭킹 모델</span><span>시소 현상</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3383313.3412236">10.1145/3383313.3412236</a> · arXiv: 없음 · PDF(공개 사본): <a href="https://github.com/tangxyw/RecSysPapers/blob/main/Multi-Task/%5B2020%5D%5BTencent%5D%5BPLE%5D%20Progressive%20Layered%20Extraction%20(PLE)%20-%20A%20Novel%20Multi-Task%20Learning%20(MTL)%20Model%20for%20Personalized%20Recommendations.pdf">tangxyw/RecSysPapers</a> · 참고 구현: <a href="https://github.com/shenweichen/DeepCTR/blob/master/deepctr/models/multitask/ple.py">DeepCTR</a> · 10쪽 롱페이퍼 · 읽기 예상 15분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 멀티태스크 랭킹 모델에서 한 태스크가 좋아지면 다른 태스크가 나빠지는 "시소 현상"은 전문가(expert)를 모든 태스크가 뒤섞어 쓰기 때문이니, 공용 전문가와 태스크 전용 전문가를 명시적으로 나누고(CGC), 그 구조를 여러 층으로 쌓아 위로 갈수록 점진적으로 분리하면(PLE) 모든 태스크를 동시에 끌어올릴 수 있다.</p>
+<p><b>풀려는 문제.</b> 실서비스 추천은 클릭, 시청 완료율, 공유, 댓글 등 여러 목표를 한 모델로 예측한다. 그런데 태스크 사이 상관이 느슨하거나 샘플마다 달라지면 부정적 전이(negative transfer)가 생기고, 기존 MTL 모델(hard sharing, cross-stitch, sluice, MMOE)은 한쪽을 올리면 다른 쪽을 단일 태스크 모델보다 떨어뜨리는 시소 현상을 보였다.</p>
+<p><b>방법의 핵심.</b> MMOE는 모든 전문가를 모든 태스크가 공유하므로, 한 태스크에만 필요한 지식이 다른 태스크의 그래디언트에 오염된다. CGC는 전문가를 "공용"과 "태스크 A 전용", "태스크 B 전용"으로 나누고, 각 태스크의 게이트는 공용+자기 전용만 섞게 한다. PLE는 이를 여러 층으로 쌓되 아래층에는 공용 게이트를 하나 더 두어 공용 전문가가 모든 전문가의 출력을 다시 모으게 한다. 그래서 하위층에서는 지식이 섞이고, 상위층으로 갈수록 태스크별로 갈라진다.</p>
+<p><b>주요 결과.</b> Tencent News 동영상 로그(약 9.95억 샘플)의 VTR/VCR 조합에서 PLE는 VCR MSE 0.1307로 최저, VTR AUC 0.6831로 CGC(0.6832)와 함께 최상위였고, 두 태스크 모두 단일 태스크 대비 개선됐다. 4주 온라인 A/B에서 단일 태스크 대비 사용자당 총 조회수 +4.17%, 총 시청시간 +3.57%로 MMOE(+1.94%, +1.73%)보다 각각 2.23%p, 1.84%p 높았다. 공개 데이터(Census-income, Ali-CCP, 합성 데이터)에서도 MMOE와 단일 태스크를 모두 앞섰다.</p>
+<p><b>한계와 남는 질문.</b> AUC 차이가 소수점 넷째 자리 수준이고 반복 실험·유의성 검정이 제시되지 않는다. "시소 현상"은 버블 차트로 정성적으로 정의될 뿐 정량 기준이 약하고, 전문가 수·층 수 같은 하이퍼파라미터가 늘어나는 비용도 다뤄지지 않는다. 손실 가중치 스케줄(지수 감쇠)도 어떻게 정했는지는 논문 참조 수준이다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 MTL인데 왜 시소인가</h3>
+<p>사용자 만족도는 직접 학습하기 어려운 목표라서, 현업은 클릭·완주·공유·즐겨찾기·댓글처럼 측정 가능한 하위 신호를 여러 개 예측하고 이를 조합한다. 이 신호들을 한 모델에서 같이 배우는 MTL은 정보 공유로 학습 효율을 높이는 주류 방식이 됐다(YouTube의 MMOE 기반 랭커, Alibaba의 ESMM 등).</p>
+<p>문제는 추천의 태스크들이 서로 느슨하게 연관되거나 아예 충돌한다는 점이다. 저자들은 Tencent의 대규모 동영상 추천과 공개 데이터에서, 기존 모델이 어떤 태스크는 단일 태스크보다 낫게 만들지만 다른 태스크는 손해를 보게 만드는 현상을 반복적으로 관찰했고 이를 <b>시소 현상(seesaw phenomenon)</b>이라 부른다. 기존 연구는 부정적 전이에만 집중했다. cross-stitch와 sluice는 태스크 표현을 정적 선형 결합으로 섞어 샘플별 차이를 반영하지 못하고, MMOE는 입력에 따라 게이트가 전문가를 섞지만 전문가 사이의 역할 분담과 상호작용을 고려하지 않는다.</p>
+<p>기여는 세 가지다. (1) 시소 현상의 실증적 관찰, (2) 공용·전용 전문가를 분리하고 점진적으로 라우팅하는 PLE, (3) 산업 데이터·공개 데이터·온라인 A/B에서의 검증.</p>
+
+<h3>2. 관련 연구 — 공유 구조의 계보</h3>
+<p><b>MTL 구조.</b> 가장 기본은 하위층을 통째로 공유하는 hard parameter sharing이다. 단순하지만 태스크가 충돌하면 바로 부정적 전이가 일어난다. cross-stitch와 sluice는 태스크별 표현을 학습된 가중치로 섞지만 가중치가 모든 샘플에 동일하다. MOE는 하단에 여러 전문가를 두고 게이트로 섞었고, MMOE는 태스크마다 별도 게이트를 둬 태스크별로 다른 혼합 비율을 쓰게 했다. 그러나 이 계열에는 "어떤 전문가가 어느 태스크 전용인가"라는 개념이 없다. 저자들은 MMOE가 이론상 CGC 구조로 수렴할 수도 있지만 실제로는 그 경로를 찾기 어렵기 때문에, 구조에 사전지식을 넣는 것이 중요하다고 주장한다.</p>
+<p>SNR, Gumbel-matrix routing, 강화학습 기반 routing network처럼 AutoML로 연결 구조를 찾는 연구도 있지만, 단순화 가정이 강하거나(예: 층마다 태스크당 블록 하나만 선택) 결합 가중치가 입력에 따라 바뀌지 않고, 탐색 비용이 크다는 한계가 지적된다.</p>
+<p><b>추천에서의 MTL.</b> 행렬분해·협업필터링과 MTL을 결합한 초기 연구, ESMM처럼 임베딩을 공유해 CVR을 개선한 연구, 랭킹·평점을 함께 배우는 연구가 있다. 대부분 hard sharing이라 상관이 복잡할 때 시소를 피하기 어렵고, YouTube의 MMOE 적용도 전문가를 구분 없이 다룬다는 점에서 PLE와 다르다.</p>
+
+<h3>3. 시소 현상 — Tencent 동영상 랭킹에서의 관찰</h3>
+<p><b>랭킹 시스템.</b> Tencent News의 MTL 랭커는 각 행동별 예측값을 곱으로 결합해 최종 점수를 만든다.</p>
+\[ \text{score}=p_{VTR}^{\,w_{VTR}}\times p_{VCR}^{\,w_{VCR}}\times p_{SHR}^{\,w_{SHR}}\times\cdots\times p_{CMR}^{\,w_{CMR}}\times f(\text{video\_len}) \]
+<p>\(p_{\cdot}\)는 각 태스크의 예측값, 지수 \(w_{\cdot}\)는 태스크별 중요도로 온라인 실험 탐색으로 정하는 하이퍼파라미터, \(f\)는 영상 길이에 대한 시그모이드나 로그 같은 비선형 변환이다. 곱 형태라서 어느 한 예측이라도 나빠지면 최종 순위가 흔들린다.</p>
+<p><b>VCR와 VTR.</b> 핵심 지표인 조회수와 시청시간에 대응하는 두 태스크가 VTR(View-Through Rate, 일정 시청시간을 넘긴 "유효 시청" 여부, 이진 분류·교차 엔트로피)과 VCR(View Completion Ratio, 완주 비율, 회귀·MSE)이다. 둘의 관계가 복잡한 이유는 두 가지다. 첫째, VTR 라벨은 재생 여부와 완주 비율이 얽혀 만들어진다(재생했고 시청시간이 임계를 넘어야 1). 둘째, Wi-Fi 자동재생 상황의 샘플은 재생 확률이 높고 명시적 클릭 상황은 낮아, 샘플마다 상관 패턴이 다르다.</p>
+<p><b>실험 관찰.</b> 단일 태스크 모델과 hard sharing, cross-stitch, sluice, MMOE에 더해 저자들이 새로 고안한 두 구조도 비교했다. <i>Asymmetric sharing</i>은 한 태스크의 하위층 출력을 다른 태스크에 비대칭으로 넘겨 주는 방식이고, <i>customized sharing</i>은 단일 태스크 모델에 공용 하위층을 하나 추가해 공용 출력과 태스크 전용 출력을 이어 붙여 타워에 넣는 방식이다. 결과는 VTR AUC와 VCR MSE를 두 축으로 한 버블 차트로 제시되는데, hard sharing과 cross-stitch는 VTR이 크게 나빠졌고, asymmetric sharing과 sluice는 VTR은 크게 좋아졌지만 VCR이 나빠졌다. customized sharing은 VCR을 개선했지만 VTR이 약간 손해였고, MMOE는 둘 다 개선했으나 VCR 개선이 +0.0001로 경계선 수준이었다. 즉 어느 모델도 두 태스크를 함께 확실히 끌어올리지 못했다. 저자들은 이 시스템에서 AUC나 MSE 0.1% 개선도 온라인 지표에 의미 있게 반영된다고 강조한다.</p>
+<p>해석은 이렇다. 정적 가중치 모델은 샘플별 상관을 담을 수 없고, MMOE는 입력 의존 게이트로 어느 정도 대응하지만 모든 전문가를 무차별 공유해 일부 태스크엔 잡음이 섞이고, 전문가 사이 상호작용도 무시한다.</p>
+
+<h3>4.1 CGC — 공용과 전용을 나눈 게이트</h3>
+<p>customized sharing이 단일 태스크 수준의 성능을 보였다는 데서 출발한다. CGC는 하단에 전문가 모듈들을, 상단에 태스크별 타워를 둔다. 공용 전문가 \(m_s\)개는 모든 태스크의 그래디언트를 받고, 태스크 \(k\)의 전용 전문가 \(m_k\)개는 태스크 \(k\)의 그래디언트만 받는다. 각 태스크 타워는 공용과 자기 전용 전문가의 출력만 게이트로 섞어 받는다.</p>
+\[ g^k(x)=w^k(x)\,S^k(x),\qquad w^k(x)=\mathrm{Softmax}(W_g^k x) \]
+<p>\(x\)는 입력 표현(차원 \(d\)), \(W_g^k\in\mathbb R^{(m_k+m_s)\times d}\)는 게이트의 선형 변환, \(w^k(x)\)는 합이 1인 \(m_k+m_s\)차원 가중치 벡터다. \(S^k(x)\)는 태스크 \(k\) 전용 전문가 출력 \(E_{(k,1)},\dots,E_{(k,m_k)}\)과 공용 전문가 출력 \(E_{(s,1)},\dots,E_{(s,m_s)}\)를 행으로 쌓은 행렬이므로, \(g^k(x)\)는 이 전문가 출력들의 입력 의존 가중합이다. 최종 예측은 \(y^k(x)=t^k(g^k(x))\)이며 \(t^k\)는 태스크 \(k\)의 타워 네트워크다.</p>
+<p>MMOE와의 차이는 "다른 태스크의 전용 전문가로 가는 연결을 끊었다"는 한 가지다. 그 결과 전용 전문가는 다른 태스크의 그래디언트에 간섭받지 않고 자기 태스크 고유 패턴에 집중하고, 공용 전문가는 공통 패턴에 집중한다. 게이트가 입력에 따라 혼합 비율을 바꾸므로 샘플별 상관에도 대응한다.</p>
+
+<h3>4.2 PLE — 여러 층으로 쌓고 점진적으로 분리</h3>
+<p>깊은 네트워크에서는 층이 올라갈수록 더 추상적인 표현이 만들어지는데, 중간 표현을 공용으로 볼지 전용으로 볼지 처음부터 명확하지 않다. PLE는 CGC를 일반화해 <b>추출 네트워크(extraction network)</b>를 여러 층 쌓는다. 각 층에는 공용 전문가, 태스크별 전용 전문가, 태스크별 게이트가 있고, 마지막 층을 제외하면 <b>공용 게이트</b>가 하나 더 있다. 공용 게이트는 그 층의 공용 전문가뿐 아니라 모든 태스크의 전용 전문가 출력까지 섞어 다음 층의 공용 전문가 입력을 만든다.</p>
+\[ g^{k,j}(x)=w^{k,j}\big(g^{k,j-1}(x)\big)\,S^{k,j}(x),\qquad y^k(x)=t^k\big(g^{k,N}(x)\big) \]
+<p>\(j\)는 추출 층 번호(총 \(N\)층), \(S^{k,j}\)는 \(j\)층에서 태스크 \(k\)가 선택할 수 있는 전문가 출력 행렬이다. 중요한 점은 게이트의 선택자(selector)가 원시 입력 \(x\)가 아니라 <b>아래층에서 같은 태스크 게이트가 낸 결과</b> \(g^{k,j-1}\)라는 것이다. 추상적인 상위 전문가를 고를 때는 이미 한 번 정제된 표현이 더 좋은 단서가 된다는 판단이다. 공용 모듈의 선택 행렬은 그 층의 공용+모든 전용 전문가로 구성된다는 점만 다르다.</p>
+<p>이 라우팅을 저자들은 화학에서 혼합물로부터 원하는 물질을 단계적으로 추출하는 과정에 비유한다. 하위층에서는 모든 전문가의 지식이 공용 전문가로 모였다가 다시 나뉘고, 상위층으로 갈수록 태스크별 파라미터가 분리된다. 라우팅 관점에서 MMOE는 "완전 연결", CGC는 "초기 분리", PLE는 "점진적 분리"다. MMOE의 완전 연결이 형식상 CGC·PLE를 포함하지만, 5.3절 분석에서 실제로는 그 구조로 수렴하지 못함을 보인다.</p>
+
+<h3>4.3 결합 손실 최적화</h3>
+<p>MTL 손실은 보통 태스크별 손실의 가중합 \(L(\theta_1,\dots,\theta_K,\theta_s)=\sum_{k=1}^{K}\omega_k L_k(\theta_k,\theta_s)\)이다(\(\theta_s\)는 공용 파라미터, \(\theta_k\)는 태스크 \(k\) 전용 파라미터, \(\omega_k\)는 손실 가중치). 저자들은 현업에서 부딪힌 두 문제를 손본다.</p>
+<p><b>이질적인 샘플 공간.</b> 공유·댓글은 클릭 뒤에만 가능하므로 태스크마다 유효한 샘플 집합이 다르다. 전체 학습 집합은 모든 태스크 샘플 공간의 합집합으로 잡고, 각 태스크 손실은 자기 공간 밖의 샘플을 빼고 평균낸다.</p>
+\[ L_k(\theta_k,\theta_s)=\frac{1}{\sum_i\delta_k^i}\sum_i \delta_k^i\,\mathrm{loss}_k\big(\hat y_k^i(\theta_k,\theta_s),\,y_k^i\big) \]
+<p>\(\delta_k^i\in\{0,1\}\)은 샘플 \(i\)가 태스크 \(k\)의 샘플 공간에 속하는지를 나타내는 마스크다. 클릭하지 않은 노출을 공유 태스크의 음성으로 잘못 쓰지 않게 하는 장치다.</p>
+<p><b>동적 손실 가중치.</b> 학습 단계마다 태스크의 중요도가 달라진다는 관찰에 따라 \(\omega_k^{(t)}=\omega_{k,0}\times\gamma_k^{\,t}\)로 에폭 \(t\)에 따라 지수적으로 바꾼다. \(\omega_{k,0}\)(초기 가중치)과 \(\gamma_k\)(갱신 비율)는 하이퍼파라미터이며, 실제 값은 공개되지 않았다.</p>
+
+<h3>5.1 Tencent 동영상 추천 실험</h3>
+<p><b>데이터.</b> Tencent News 동영상 추천의 8일 연속 로그 샘플: 사용자 약 4,693만 명, 동영상 약 268만 개, 샘플 약 9.95억 건. 태스크는 VCR, CTR, VTR, SHR(공유율), CMR(댓글률). 앞 7일로 학습하고 마지막 날로 평가했다.</p>
+<p><b>설정.</b> VCR은 MSE로, 나머지 이진 태스크는 AUC로 평가한다. 모든 모델의 타워는 [256, 128, 64] ReLU MLP, 전문가는 단일층 네트워크다. 공정 비교를 위해 다층 모델은 모두 2층으로 맞췄고, PLE와 같은 깊이 비교를 위해 MMOE를 2층으로 쌓은 ML-MMOE(모든 게이트가 같은 선택자 공유)를 추가했다. 단일 태스크 대비 개선을 재는 <b>MTL gain</b>을 정의한다: 높을수록 좋은 지표는 \(M_{MTL}-M_{single}\), 낮을수록 좋은 지표(MSE)는 \(M_{single}-M_{MTL}\).</p>
+<p><b>복잡한 상관: VTR/VCR (Table 1).</b> 단일 태스크는 VTR AUC 0.6787, VCR MSE 0.1321. 주요 행만 추리면 다음과 같다.</p>
+<table>
+<tr><th>모델</th><th>VTR AUC</th><th>VCR MSE</th><th>Gain (VTR / VCR)</th></tr>
+<tr><td>Hard Sharing</td><td>0.6740</td><td>0.1320</td><td>−0.0047 / +1.8E-5</td></tr>
+<tr><td>Asymmetric</td><td>0.6823</td><td>0.1346</td><td>+0.0036 / −0.0025</td></tr>
+<tr><td>Sluice</td><td>0.6825</td><td>0.1329</td><td>+0.0038 / −0.0008</td></tr>
+<tr><td>MMOE</td><td>0.6803</td><td>0.1319</td><td>+0.0016 / +0.0001</td></tr>
+<tr><td>ML-MMOE</td><td>0.6815</td><td>0.1329</td><td>+0.0028 / −0.0009</td></tr>
+<tr><td>CGC</td><td>0.6832</td><td>0.1320</td><td>+0.0045 / +3.5E-5</td></tr>
+<tr><td>PLE</td><td>0.6831</td><td>0.1307</td><td>+0.0044 / +0.0013</td></tr>
+</table>
+<p>음의 gain이 모델마다 VTR·VCR을 번갈아 나타나는 "지그재그"가 곧 시소 현상이다. CGC는 VTR을 크게 올리면서 VCR도 소폭 개선했고, PLE는 가장 좋은 VCR과 최상위 VTR을 동시에 달성했다. 단순히 층만 쌓은 ML-MMOE는 오히려 VCR이 나빠져, 성능이 깊이가 아니라 라우팅 설계에서 나온다는 근거가 된다.</p>
+<p><b>보통 상관: CTR/VCR (Table 2).</b> 단일 태스크 CTR AUC 0.7379, VCR MSE 0.1179. cross-stitch는 CTR gain −0.0158로 크게 손해였고, MMOE는 +0.0003/+0.0004, CGC는 +0.0020/+0.0023, PLE는 CTR AUC 0.7406·VCR MSE 0.1150으로 +0.0027/+0.0029였다. 시소가 거의 없는 쉬운 조합에서도 CGC·PLE가 가장 컸다는 점에서 이점이 일반적이라고 저자들은 해석한다(표에서 ML-MMOE의 CTR gain −0.0001도 보인다).</p>
+<p><b>온라인 A/B (Table 3).</b> VTR/VCR 조합으로 4주간 사용자 버킷을 나눠 C++ 서빙 프레임워크에서 테스트했다. 단일 태스크 대비 사용자당 총 조회수/총 시청시간 개선은 hard sharing −1.65%/−1.79%, sluice +0.75%/+1.29%, MMOE +1.94%/+1.73%, ML-MMOE +1.96%/+1.10%, CGC +3.92%/+2.75%, PLE +4.17%/+3.57%. 오프라인의 작은 AUC·MSE 차이가 온라인에서 큰 차이로 증폭된다는 것이 저자들의 메시지이며, PLE는 이후 실서비스에 배포됐다.</p>
+<p><b>3~4개 태스크 (Table 4).</b> 태스크를 늘릴 때는 태스크마다 전용 전문가 모듈·게이트·타워만 추가하면 된다. VTR+VCR+SHR에서 CGC는 SHR gain −0.0001이었지만 PLE는 +0.0013, 네 태스크 모두에서는 PLE가 VTR +0.0128, VCR +0.0017, SHR +0.0058, CMR +0.0080으로 모든 태스크에서 CGC(+0.0097, +0.0016, +0.0008, +0.0012)를 앞섰다. 태스크 수가 늘수록 점진적 분리의 이득이 커지는 모습이다.</p>
+
+<h3>5.2 공개 데이터 실험</h3>
+<p><b>데이터.</b> (1) MMOE 논문의 절차로 두 태스크의 상관을 조절해 만든 합성 데이터(상관별 140만 샘플, \(c=1, m=10, d=512\)), (2) 1994년 인구조사 기반 Census-income(299,285 샘플, 40개 특성; 소득 5만 달러 초과 여부·미혼 여부), (3) Taobao의 Ali-CCP(8,400만 샘플; CTR·CVR).</p>
+<p><b>결과.</b> 합성 데이터에서는 상관 수준과 관계없이 PLE가 두 태스크 모두 가장 좋았고, MTL gain이 MMOE 대비 평균 87.2% 컸다(구체 곡선은 그림, 논문 참조). Table 5에서 PLE의 AUC는 Census 태스크1 0.9522, 태스크2 0.9945, Ali-CCP CTR 0.6112, CVR 0.6097로 단일 태스크(0.9445, 0.9923, 0.6088, 0.6040)와 MMOE를 모두 앞섰다. 특히 Ali-CCP CVR에서 MMOE는 0.5738(gain −0.0302)로 크게 무너졌는데 PLE는 +0.0057이었다. 참고로 Census 태스크1의 MMOE는 AUC 0.9393이 단일 태스크보다 낮은데도 gain이 +0.0048로 표기되어 있어 원문 표에 불일치가 있다.</p>
+
+<h3>5.3 전문가 활용 분석</h3>
+<p>VTR/VCR에서 게이트가 전문가에 준 가중치 분포(평균·표준편차)를 시각화했다. 비교 공정성을 위해 CGC·PLE는 모듈당 전문가 1개, MMOE·ML-MMOE는 층당 전문가 3개로 설정했다. 관찰은 세 가지다. ① CGC에서는 VTR과 VCR 게이트가 전문가를 확연히 다른 비율로 쓰지만 MMOE에서는 두 태스크의 가중치가 비슷하다 — 구조가 전문가 분화를 돕는다. ② MMOE·ML-MMOE에는 가중치가 0인 전문가가 하나도 없다 — 이론적으로 CGC 구조(다른 태스크 전용 전문가의 가중치 0)를 표현할 수 있어도 실제로는 수렴하지 않는다. ③ PLE에서는 CGC보다 공용 전문가가 타워 입력에 미치는 영향이 크고, 특히 VTR에서 그렇다 — 상위층에서 공유되는 깊은 표현에 가치가 있다는 증거로 해석된다.</p>
+
+<h3>6. 결론</h3>
+<p>공용·전용 파라미터를 명시적으로 분리하고 점진적으로 라우팅하는 PLE로 부정적 전이와 시소 현상을 완화했으며, 산업·공개 데이터와 온라인 실험 모두에서 일관된 개선을 보였다. 향후 과제로 태스크 그룹 간 계층적 상관 탐구를 제시한다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>멀티태스크 학습(MTL).</b> 여러 예측 목표를 한 모델에서 파라미터 일부를 공유하며 함께 학습하는 방법. 데이터가 적은 태스크가 큰 태스크의 표현을 빌려 쓰는 효과가 있지만, 태스크가 충돌하면 서로 방해한다.</p>
+<p><b>부정적 전이(negative transfer).</b> 다른 태스크와 함께 학습한 결과가 따로 학습했을 때보다 나빠지는 현상. 공유 파라미터에 상충하는 그래디언트가 들어오는 것이 주된 원인이다.</p>
+<p><b>시소 현상.</b> 이 논문이 이름 붙인 개념으로, MTL 모델이 일부 태스크를 단일 태스크보다 개선하는 대신 다른 태스크를 악화시켜 모든 태스크를 동시에 개선하지 못하는 상태.</p>
+<p><b>Hard parameter sharing.</b> 하위 은닉층을 모든 태스크가 통째로 공유하고 상단에 태스크별 출력층만 두는 가장 기본적인 MTL 구조(Caruana, 1997).</p>
+<p><b>Mixture-of-Experts(MoE)와 게이트.</b> 여러 하위 네트워크(전문가)의 출력을, 입력을 보고 softmax 가중치를 내는 게이트 네트워크로 가중합하는 구조. 입력마다 다른 전문가 조합을 쓸 수 있다.</p>
+<p><b>MMOE.</b> Google의 Multi-gate MoE(KDD 2018). 전문가는 모든 태스크가 공유하되 태스크마다 별도 게이트를 둬 태스크별 혼합 비율을 다르게 한다. PLE의 직접 비교 대상이다.</p>
+<p><b>Cross-stitch / Sluice network.</b> 태스크별 네트워크의 중간 표현을 학습된 선형 결합 계수로 섞는 구조. 계수가 입력과 무관하게 고정된다는 것이 PLE가 지적하는 한계다.</p>
+<p><b>VTR·VCR.</b> VTR은 일정 시청시간을 넘긴 유효 재생 여부(분류), VCR은 영상 완주 비율(회귀). 각각 조회수와 시청시간이라는 비즈니스 지표에 대응한다.</p>
+<p><b>샘플 공간 마스킹.</b> 공유·전환처럼 앞선 행동(클릭) 이후에만 정의되는 라벨을, 해당 조건을 만족한 샘플에서만 손실에 반영하는 기법. ESMM이 다룬 표본 선택 편향 문제와 맞닿아 있다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실 확인) Tencent 산업 데이터의 규모와 학습/평가 분할 방식은?
+<details><summary>정답 보기</summary>8일간 로그에서 사용자 약 4,693만 명, 동영상 약 268만 개, 샘플 약 9.95억 건. 앞 7일로 학습, 나머지(마지막 날)로 평가했다.</details></li>
+<li>(사실 확인, 객관식) 온라인 A/B에서 PLE가 단일 태스크 대비 낸 총 조회수·총 시청시간 개선은? ① +1.94%/+1.73% ② +3.92%/+2.75% ③ +4.17%/+3.57% ④ +2.23%/+1.84%
+<details><summary>정답 보기</summary>③. ①은 MMOE, ②는 CGC다. ④는 PLE와 MMOE의 차이(4.17−1.94, 3.57−1.73)로, 초록의 "SOTA 대비 2.23%·1.84% 개선"이 이 값이다.</details></li>
+<li>(사실 확인) 공개 데이터 실험에 쓰인 세 데이터셋과 각 데이터셋의 태스크는?
+<details><summary>정답 보기</summary>합성 데이터(상관 조절된 두 회귀 라벨), Census-income(소득 5만 달러 초과 여부, 미혼 여부), Ali-CCP(CTR, CVR).</details></li>
+<li>(방법 원리) CGC가 MMOE에서 "제거한" 연결은 무엇이며, 그로 인해 무엇이 좋아지는가?
+<details><summary>정답 보기</summary>태스크 타워(게이트)와 다른 태스크 전용 전문가 사이의 연결. 전용 전문가는 자기 태스크의 그래디언트만 받으므로 다른 태스크의 간섭 없이 고유 패턴을 배우고, 공용 전문가는 공통 패턴에 집중하게 된다.</details></li>
+<li>(방법 원리) PLE의 상위층 게이트는 선택자로 무엇을 쓰며, 왜 그렇게 설계했는가?
+<details><summary>정답 보기</summary>원시 입력 \(x\)가 아니라 아래층에서 같은 태스크의 게이트가 낸 출력 \(g^{k,j-1}(x)\)를 쓴다. 상위 전문가는 더 추상적인 지식을 담으므로, 이미 한 번 정제된 표현이 어떤 전문가를 골라야 할지 판단하는 데 더 좋은 정보를 준다는 이유다.</details></li>
+<li>(방법 원리, 서술형) 식 (9)의 \(\delta_k^i\) 마스크가 없다면 SHR(공유율) 태스크 학습에 어떤 문제가 생기는가?
+<details><summary>정답 보기</summary>공유는 클릭 후에만 가능하므로, 클릭되지 않은 노출까지 SHR 손실에 넣으면 "공유 기회가 없었던" 샘플이 공유하지 않은 음성으로 대량 들어가 라벨 의미가 오염되고 예측이 클릭 확률과 뒤섞인다. 마스크로 자기 샘플 공간 안의 샘플만 평균내 이를 막는다.</details></li>
+<li>(결과 해석) Table 1에서 ML-MMOE는 VTR gain +0.0028이지만 VCR gain −0.0009이다. 이것이 PLE의 주장에 어떤 근거가 되는가?
+<details><summary>정답 보기</summary>층을 하나 더 쌓아 깊이를 PLE와 맞췄는데도 시소 현상이 남았다. 따라서 PLE의 이득은 단순한 깊이나 용량 증가가 아니라 공용/전용 분리와 점진적 분리 라우팅이라는 구조 설계에서 나온다는 근거가 된다.</details></li>
+<li>(결과 해석) 전문가 활용 분석에서 "MMOE에 가중치 0인 전문가가 없다"는 관찰은 무엇을 뜻하는가?
+<details><summary>정답 보기</summary>MMOE는 이론상 일부 전문가의 가중치를 0으로 만들어 CGC·PLE와 같은 분리 구조를 표현할 수 있지만, 실제 학습에서는 그렇게 수렴하지 않는다. 그래서 공용·전용 분리를 구조에 사전지식으로 박아 넣는 것이 필요하다는 주장의 실증 근거다.</details></li>
+<li>(비판) 이 논문의 실험 설계에서 결론의 신뢰도를 낮출 수 있는 요소를 두 가지 들어라.
+<details><summary>정답 보기</summary>예: (1) AUC·MSE 차이가 \(10^{-3}\)~\(10^{-4}\) 수준인데 반복 실험의 분산이나 유의성 검정이 없다. (2) 시소 현상이 정량 기준 없이 버블 차트로 정성적으로 판단된다. (3) 모델별 하이퍼파라미터 탐색 범위와 파라미터 수·연산량이 맞춰졌는지 불분명하다. (4) Table 5에 AUC와 gain이 맞지 않는 항목이 있다. (5) 동적 손실 가중치의 효과를 따로 떼어 본 실험이 없다.</details></li>
+<li>(적용, 서술형) 커머스 랭킹에서 CTR·CVR·장바구니 세 태스크로 PLE를 도입하려 한다. 설계 시 결정해야 할 것과 검증 방법을 제안하라.
+<details><summary>정답 보기</summary>예시 답: 태스크별 전용 전문가 수와 공용 전문가 수, 추출 층 수를 정하고, CVR·장바구니는 클릭 후 샘플 공간이므로 식 (9)식 마스킹(혹은 ESMM식 전체 공간 모델링)을 적용한다. 최종 점수 결합 지수 \(w\)는 온라인 탐색으로 정한다. 검증은 단일 태스크·MMOE 대비 태스크별 MTL gain을 모두 확인해 시소가 없는지 보고, 게이트 가중치 분포로 전문가 분화를 점검한 뒤, 오프라인 차이가 작더라도 A/B로 비즈니스 지표를 확인한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#211</b> An Analysis Of Entire Space Multi-Task Models For Post-Click Conversion Prediction — 클릭 후 샘플 공간 문제(ESMM 계열)를 깊게 분석. PLE의 손실 마스킹과 비교해 읽기 좋다.</li>
+<li><b>#196</b> STAN: Stage-Adaptive Network for Multi-Task Recommendation by Learning User Lifecycle-Based Representation — 사용자 생애주기에 따라 태스크 관계가 바뀌는 MTL.</li>
+<li><b>#197</b> Task Aware Feature Extraction Framework for Sequential Dependence Multi-Task Learning — 순차 의존(클릭→전환) 태스크 간 특성 추출.</li>
+<li><b>#235</b> Learned Cross-Task Relationships in Multi-Task Models — 태스크 간 관계를 학습으로 드러내는 최근 연구로, PLE의 "고정된 공용/전용 분리"와 대비된다.</li>
+<li><b>#231</b> DRanker: A Transformer-Based Multi-Task Ranking Model for the Disney+ Homepage — 산업 멀티태스크 랭커의 최근 사례.</li>
+</ul>
+</main>
+</body>
+</html>
