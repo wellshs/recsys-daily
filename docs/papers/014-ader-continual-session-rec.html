@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#14 ADER: Adaptively Distilled Exemplar Replay Towards Continual Learning for Session-based Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-09 · #14</span></div>
+<h1>ADER: Adaptively Distilled Exemplar Replay Towards Continual Learning for Session-based Recommendation</h1>
+<p class="meta">Fei Mi, Xiaoyu Lin, Boi Faltings (EPFL 인공지능 연구실) · RecSys 2020 Best Short Paper</p>
+<div class="chips"><span>2020</span><span>Best Short Paper</span><span>학계</span><span>세션 기반 추천</span><span>지속 학습</span><span>지식 증류</span><span>Exemplar Replay</span><span>SASRec</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3383313.3412218">10.1145/3383313.3412218</a> · arXiv: <a href="https://arxiv.org/abs/2007.12000">2007.12000</a> (<a href="https://arxiv.org/pdf/2007.12000v1">PDF</a>) · 코드: <a href="https://github.com/DoubleMuL/ADER">DoubleMuL/ADER</a> · 숏페이퍼 · 읽기 예상 12분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 세션 추천 모델을 주기마다 새 데이터로 이어서 학습할 때, 과거 데이터에서 대표 샘플을 조금만 골라 두었다가 다시 보여 주고 이전 모델의 예측을 따라가도록 증류 손실을 걸면 망각을 줄일 수 있다. 그 결과 매번 전체 이력으로 재학습하는 것보다도 약간 더 나은 성능을 낸다.</p>
+<p><b>풀려는 문제.</b> GRU4Rec, SASRec 같은 신경망 세션 추천기는 보통 고정된 데이터셋으로 한 번 학습하고 한 번 평가한다. 실서비스에서는 새 아이템과 새 행동이 계속 들어오므로 모델을 주기적으로 갱신해야 한다. 새 데이터로만 이어서 학습하면 예전 선호 패턴을 잊는 catastrophic forgetting이 생긴다. 반대로 매번 전체 이력으로 재학습하면 계산과 저장 비용이 커진다.</p>
+<p><b>방법의 핵심.</b> ADER는 세 가지 부품으로 이루어진다. ① 고정된 총량 \(N\)개의 exemplar(과거 세션 샘플)를 저장하되, 아이템별 개수를 최근 등장 빈도에 비례해 배분한다. ② 아이템별로 herding 방식을 써서, 그 아이템을 정답으로 하는 세션 표현의 평균에 가장 가깝게 모이는 샘플들을 고른다. ③ exemplar에는 정답 레이블 대신 이전 모델의 softmax 분포를 따라가게 하는 증류 손실을 건다. 이 손실의 가중치 \(\lambda_t\)는 이번 주기에 새 아이템과 새 데이터가 얼마나 많은지에 따라 자동으로 조절된다.</p>
+<p><b>주요 결과.</b> DIGINETICA(주 단위)와 YOOCHOOSE(일 단위)를 각각 16번의 갱신 주기로 나눠, SASRec 위에서 Finetune·Dropout·EWC·Joint와 비교했다. 16주기 평균 Recall@20은 DIGINETICA에서 ADER 50.21%, Joint 50.03%, Dropout 49.07%, Finetune 47.28%였다. YOOCHOOSE에서는 ADER 72.38%, Joint 72.22%, Finetune 71.86%였다. 새 아이템 비율이 높은 DIGINETICA에서 효과가 더 컸다.</p>
+<p><b>한계와 남는 질문.</b> 베이스 모델은 SASRec 하나뿐이다. ADER와 Joint의 차이(DIGINETICA Recall@20 기준 0.18%p)는 매우 작은데, 통계적 유의성 검정이나 반복 실행 결과는 제시되지 않았다. 저장 비용과 학습 시간을 실제로 얼마나 아꼈는지도 수치로 보여 주지 않는다. 신규 아이템의 임베딩이나 출력층을 어떻게 늘리는지 같은 구현 세부는 코드 참조로 남는다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 오프라인 한 번 학습은 현실과 다르다</h3>
+<p>세션 기반 추천(SR)은 로그인 정보나 장기 이력 없이, 지금 브라우저 세션 안의 클릭 순서만 보고 다음 행동을 맞히는 문제다. 저자들은 개인정보 규제 때문에 장기 사용자 프로필을 쓰기 어려워지면서 SR의 쓰임새가 커졌다고 본다.</p>
+<p>기존 신경망 SR 연구는 거의 모두 "큰 정적 학습셋으로 학습 → 짧은 테스트 구간에서 평가"라는 단발성 설정을 따른다. 실제 시스템은 일정 주기마다 새 데이터로 모델을 갱신하고, 갱신된 모델은 다음 갱신 전까지 들어오는 행동에 대해 추천을 내야 한다. 저자들은 이 상황을 지속 학습(continual learning) 문제로 정식화한다.</p>
+<p>지속 학습의 대표적인 어려움은 망각이다. 새 분포로 학습된 신경망은 예전 분포에서 배운 것을 잃는 경향이 있다. 가장 단순한 해법은 매번 모든 이력으로 재학습하는 것이지만, 대규모 추천에서는 비용이 크다. 그래서 저자들은 대표 샘플 몇 개만 남겨 다시 학습에 섞는 exemplar replay와, 이전 모델의 출력을 보존하도록 하는 지식 증류를 결합한다. 기여는 세 가지로 정리된다. SR에서 지속 학습 설정을 처음 다뤘다는 점, ADER를 제안하고 기존 지속 학습 기법들과 벤치마크했다는 점, 두 데이터셋에서 효과를 보였다는 점이다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>세션 추천.</b> GRU4Rec이 GRU로 세션을 인코딩한 이후, 랭킹 손실 개선, 데이터 증강, NARM의 어텐션, STAMP의 장·단기 관심 분리, RepeatNet의 반복 행동 모델링이 뒤따랐다. Transformer 계열로는 SASRec과 양방향 BERT4Rec이 있다. 이 연구들은 모두 정적·오프라인 설정에서 다뤄졌다. SKNN 같은 비모수 이웃 기법이나 context tree는 갱신은 쉽지만, 지속 학습 상황에서의 망각 문제는 다뤄지지 않았다.</p>
+<p><b>지속 학습.</b> 망각 완화 기법은 크게 세 갈래다. 첫째는 정규화다. Learning without Forgetting처럼 로짓 변화를 증류 손실로 벌주거나, EWC처럼 과거 지식에 중요한 파라미터의 변화를 벌준다. 둘째는 exemplar replay다. 과거 샘플을 저장해 두고 다시 학습에 섞으며, iCaRL이 herding으로 대표 샘플을 고르는 방식을 퍼뜨렸다. 셋째는 학습 중에 파라미터를 늘리는 동적 구조다. 동적 구조는 모델 크기가 달라져 공정한 비교가 어렵다는 이유로 이 논문에서는 제외했다.</p>
+
+<h3>3. 방법</h3>
+<p><b>3.1 기본 모델 구조.</b> 신경망 SR 모델 \(f(\theta)\)는 두 부분으로 볼 수 있다. 하나는 이전 행동 시퀀스 \(x\)를 압축된 벡터로 만드는 특징 추출기 \(\phi(x)\)이고, 다른 하나는 그 벡터로 다음 아이템을 예측하는 출력층 \(\omega(\phi(x))\)이다. 실험은 SASRec으로 했지만, 제안 기법은 \(f\)의 구조와 무관하게 적용할 수 있다고 저자들은 말한다.</p>
+<p><b>3.2 지속 학습 설정.</b> 갱신 주기 \(t\)에서 직전 모델 \(f(\theta_{t-1})\)을 새 데이터 \(D_t\)로 학습해 \(f(\theta_t)\)를 얻는다. 이 모델은 다음 주기 데이터 \(D_{t+1}\)로 평가된다. 즉 "이번 주기까지 학습하고 다음 주기를 예측"하는 일을 반복하는 구조이며, 실서비스의 배포 주기를 흉내 낸 것이다.</p>
+
+<p><b>3.3.1 Exemplar 배분과 선택.</b> 메모리를 일정하게 유지하려고 전체 exemplar 수는 \(N\)으로 고정한다. 결정할 것은 두 가지다. 아이템마다 몇 개를 둘지, 그리고 어떤 샘플을 고를지다. 개수는 빈도에 비례하게 정한다.</p>
+\[ m_{t,i} = N \cdot \frac{\left|\{(x, y=i)\} \in D_t \cup E_{t-1}\right|}{\left|D_t \cup E_{t-1}\right|} \]
+<p>여기서 \(m_{t,i}\)는 주기 \(t\)에서 아이템 \(i\)에 배정되는 exemplar 수다. \(D_t\)는 이번 주기 새 데이터, \(E_{t-1}\)은 지난 주기에 남겨 둔 exemplar 집합이다. 분수는 "이번 데이터와 기존 exemplar를 합친 풀에서 정답이 \(i\)인 샘플의 비율"이다. 결과적으로 자주 등장하는 인기 아이템일수록 더 많은 샘플이 다음 주기로 넘어간다. \(I_t\)는 주기 \(t\)까지 등장한 아이템 집합이다.</p>
+<p>어떤 샘플을 고를지는 herding으로 정한다. 아이템 \(y\)를 정답으로 하는 모든 시퀀스의 특징 벡터 평균을 \(\mu=\frac{1}{|P_y|}\sum_{x\in P_y}\phi(x)\)라 하자. \(k\)번째 exemplar는 이미 고른 \(k-1\)개와 합쳐 평균을 냈을 때 \(\mu\)에 가장 가까워지는 샘플이다.</p>
+\[ x_k = \arg\min_{x\in P_y} \left\| \mu - \frac{1}{k}\Big[\phi(x) + \sum_{j=1}^{k-1}\phi(x_j)\Big] \right\| \]
+<p>직관적으로 보면, 무작위로 뽑는 것보다 적은 수의 샘플로 그 아이템 주변의 세션 분포 "중심"을 잘 대표하도록 탐욕적으로 고르는 방식이다. 선택에는 막 학습을 마친 \(\theta_t\)의 특징 추출기를 쓴다.</p>
+
+<p><b>3.3.2 Exemplar에 대한 적응형 증류.</b> exemplar 수를 작게 유지해야 하므로, 단순히 정답 레이블로 다시 학습시키는 것만으로는 망각을 막는 힘이 약하다. 그래서 exemplar에 대해 이전 모델의 예측 분포를 현재 모델이 따라가도록 증류 손실을 건다.</p>
+\[ L_{KD}(\theta_t) = -\frac{1}{|E_{t-1}|}\sum_{(x,y)\in E_{t-1}} \sum_{i=1}^{|I_{t-1}|} \hat{p}_i \log p_i \]
+<p>\(\hat{p}_i\)는 이전 모델 \(f(\theta_{t-1})\)이 지난 주기까지의 아이템 집합 \(I_{t-1}\) 위에서 낸 softmax 확률이고, \(p_i\)는 현재 모델이 같은 아이템들에 대해 낸 확률이다. 정답 하나만 맞히라는 것이 아니라 "예전 모델이 이 세션에서 어떤 아이템들을 얼마만큼 그럴듯하다고 봤는지" 전체 분포를 보존하라는 제약이다. 그래서 정답 레이블보다 정보가 풍부한 신호가 된다.</p>
+<p>새 데이터에는 일반적인 교차 엔트로피를 쓴다.</p>
+\[ L_{CE}(\theta_t) = -\frac{1}{|D_t|}\sum_{(x,y)\in D_t}\sum_{i=1}^{|I_t|}\delta_{i=y}\log p_i \]
+<p>\(\delta_{i=y}\)는 \(i\)가 정답일 때만 1인 지시 함수다. 최종 손실은 두 항을 합친 것이고, 가중치가 주기마다 달라진다.</p>
+\[ L_{ADER} = L_{CE} + \lambda_t L_{KD}, \qquad \lambda_t = \lambda_{base}\sqrt{\frac{|I_{t-1}|}{|I_t|}\cdot\frac{|E_{t-1}|}{|D_t|}} \]
+<p>첫 번째 비율 \(|I_{t-1}|/|I_t|\)는 기존 아이템 수 대비 전체 아이템 수다. 이번 주기에 새 아이템이 적으면 1에 가까워진다. 두 번째 비율 \(|E_{t-1}|/|D_t|\)는 exemplar 수 대비 새 데이터 양이다. 새로 배울 것이 적은 주기에는 \(\lambda_t\)가 커져 과거 보존에 무게를 싣고, 새 아이템이나 새 데이터가 많은 주기에는 \(\lambda_t\)가 작아져 새 패턴 학습을 우선한다. \(\lambda_{base}\)는 데이터셋마다 정하는 하이퍼파라미터다.</p>
+<p><b>전체 절차.</b> 주기 \(t\)마다 ① \(\theta_t\)를 \(\theta_{t-1}\)로 초기화하고 ② 수렴할 때까지 \(L_{ADER}\)로 학습한 뒤 ③ 학습된 \(\theta_t\)와 위의 \(m_{t,i}\)로 다음 주기에 쓸 exemplar 집합 \(E_t\)를 herding으로 새로 고른다. 이 과정을 반복한다.</p>
+
+<h3>4. 실험</h3>
+<p><b>데이터.</b> DIGINETICA(CIKM Cup 2016, 약 5개월 전자상거래 클릭)와 YOOCHOOSE(RecSys Challenge 2015, 약 6개월 전자상거래 클릭)를 썼다. 관례대로 길이 1인 세션과 5회 미만 등장 아이템을 제거했다. DIGINETICA는 주 단위, 데이터가 훨씬 많은 YOOCHOOSE는 일 단위로 나눠 16번의 갱신 주기를 만들었다. 0번 구간은 학습에만, 마지막 16번 구간은 테스트에만 쓰고, 각 주기 학습 데이터의 10%를 검증용으로 떼었다. 전체 행동 수는 DIGINETICA 993,483건, YOOCHOOSE 3,370,578건이다.</p>
+<p>두 데이터의 성격 차이가 중요하다. "새 아이템에 대한 행동 비율"이 DIGINETICA는 1주차 18.25%에서 시작해 서서히 줄어 마지막 즈음 0.27%가 된다. YOOCHOOSE는 1일차 3.04%이고 이후로는 대부분 1% 안팎이다. 즉 YOOCHOOSE는 기존 아이템이 반복 등장하는 정적인 데이터이고, DIGINETICA가 훨씬 동적이다.</p>
+<p><b>지표.</b> Recall@k(정답이 상위 k 안에 있는 비율)와 MRR@k(상위 k 안 정답 순위의 역수 평균)를 쓰고, 16주기 평균값을 보고한다.</p>
+<p><b>베이스라인.</b> 모두 SASRec(은닉 150차원, self-attention 블록 2개) 위에 적용했다.</p>
+<ul>
+<li><b>Finetune</b>: 직전 모델을 이번 주기 데이터로만 이어서 학습.</li>
+<li><b>Dropout</b>: Finetune에 self-attention·FFN 층마다 dropout(0.3)을 건 것. dropout이 망각을 줄인다는 선행 연구에 기반한다.</li>
+<li><b>EWC</b>: exemplar로 계산한 Fisher 정보 대각 성분으로 중요한 파라미터의 변화를 벌준다.</li>
+<li><b>Joint</b>: 매 주기 지금까지의 모든 데이터로 학습(dropout 포함). 지속 학습 문헌에서 흔히 쓰는 성능 "상한"이다.</li>
+<li><b>ADER</b>: dropout을 포함하고, 기본 30,000개 exemplar를 쓴다. \(\lambda_{base}\)는 DIGINETICA 0.8, YOOCHOOSE 1.0이다.</li>
+</ul>
+<p>학습 설정은 Adam, 학습률 5e-4, 배치 256(DIGINETICA)/512(YOOCHOOSE), 최대 100 epoch이며, 검증 Recall@20이 5 epoch 연속 개선되지 않으면 조기 종료한다.</p>
+
+<p><b>전체 결과(16주기 평균, 핵심 행).</b></p>
+<table>
+<tr><th>방법</th><th>DIGI R@20</th><th>DIGI MRR@20</th><th>YOO R@20</th><th>YOO MRR@20</th></tr>
+<tr><td>Finetune</td><td>47.28</td><td>16.01</td><td>71.86</td><td>36.49</td></tr>
+<tr><td>Dropout</td><td>49.07</td><td>16.86</td><td>72.20</td><td>36.60</td></tr>
+<tr><td>EWC</td><td>47.66</td><td>16.28</td><td>71.91</td><td>36.53</td></tr>
+<tr><td>Joint</td><td>50.03</td><td>17.31</td><td>72.22</td><td>36.65</td></tr>
+<tr><td>ADER</td><td><b>50.21</b></td><td><b>17.32</b></td><td><b>72.38</b></td><td><b>36.71</b></td></tr>
+</table>
+<p>저자들의 해석은 네 가지다. 첫째, Finetune도 생각보다 괜찮고 Joint와의 격차가 이미지 분류 같은 전형적인 지속 학습 벤치마크보다 작다. 추천에서는 기존 아이템이 계속 다시 등장하므로 망각이 덜 심각하기 때문이다. 둘째, EWC는 Finetune보다 아주 조금 나을 뿐이고 Dropout보다 못하다. 셋째, Dropout은 특히 동적인 DIGINETICA에서 Finetune보다 뚜렷이 좋다. 넷째, ADER는 모든 방법을 앞서고 Joint보다도 높으며, 격차는 DIGINETICA에서 더 크다.</p>
+<p>주기별 곡선을 보면, YOOCHOOSE에서는 ADER의 이득이 새 아이템 비율이 상대적으로 높은 초반 주기에 몰려 있다. 새 아이템이 거의 없는 후반 주기에는 Finetune을 포함해 모든 방법이 비슷하다.</p>
+
+<p><b>심층 분석(DIGINETICA).</b></p>
+<p><i>Exemplar 수.</i> 30k → 20k → 10k로 줄여도 Recall@20은 50.21% → 50.05% → 49.59%로 소폭만 떨어진다. 10k에서도 Dropout(49.07%)보다 높으니, exemplar 수에 크게 민감하지 않다는 것이 저자들의 결론이다.</p>
+<p><i>Ablation.</i> 다섯 가지 축소판과 비교했다.</p>
+<ul>
+<li>ER<sub>random</sub>: exemplar를 무작위로 고르고 CE로 재학습 — Recall@20 49.14%</li>
+<li>ER<sub>loss</sub>: CE 손실이 가장 작은 샘플을 고름 — 49.31%</li>
+<li>ER<sub>herding</sub>: herding으로 고르되 증류 없이 CE로 재학습 — 49.34%</li>
+<li>ADER<sub>equal</sub>: 아이템마다 같은 개수 배정 — 49.92%</li>
+<li>ADER<sub>fix</sub>: \(\lambda\)를 고정값으로 — 50.09%</li>
+<li>ADER(전체) — 50.21%</li>
+</ul>
+<p>정리하면 herding 선택이 무작위나 손실 기준보다 낫고, 증류 손실을 넣은 세 변형이 모두 증류 없는 ER 세 변형보다 낫다. 빈도 비례 배분과 적응형 \(\lambda_t\)도 각각 조금씩 기여한다. 가장 큰 도약은 증류 유무(49.34 → 49.92 이상)에서 나온다. 참고로 표 4의 ER<sub>herding</sub> MRR@10이 16.98%로 적혀 있는데, MRR@20(16.85%)보다 크고 같은 표의 다른 값들과도 맞지 않아 오기로 보인다.</p>
+
+<h3>5. 결론</h3>
+<p>저자들은 세션 추천을 현실적인 지속 학습 설정에서 다뤘다. 그리고 잘 고른 소수의 exemplar 재생과 적응형 증류만으로 전체 재학습 수준 이상의 성능을 낼 수 있음을 보였다. 다양한 베이스 모델에서의 비교는 향후 과제로 남겼다.</p>
+
+<div class="callout"><b>실무 관점 한 줄.</b> 이 논문의 Joint는 "매 주기 전체 재학습"이고 Finetune은 "증분 학습"이다. 많은 서비스가 그 사이 어딘가에서 운영된다. ADER는 "작은 replay 버퍼 + 이전 모델을 teacher로 둔 증류"라는, 구현 부담이 적은 중간 해법을 제시한다. 다만 이득의 크기는 신규 아이템 유입 속도에 크게 좌우된다.</div>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>세션 기반 추천(SR)</b>: 사용자 ID나 장기 이력 없이 현재 세션의 행동 순서만으로 다음 클릭·조회·구매를 예측하는 과제다. GRU4Rec, NARM, STAMP, SASRec 등이 대표 모델이다.</li>
+<li><b>지속 학습(continual learning)</b>: 데이터가 시간에 따라 순차적으로 들어올 때 모델을 계속 갱신하면서 과거 지식도 유지하는 학습 설정이다. 증분 학습(incremental learning)이라고도 부른다.</li>
+<li><b>Catastrophic forgetting</b>: 신경망이 새 분포로 학습되면서 이전 분포에서 배운 것을 급격히 잃는 현상이다. McCloskey &amp; Cohen(1989), French(1999)가 고전적 출처다.</li>
+<li><b>Exemplar replay</b>: 과거 데이터에서 일부 샘플(exemplar)을 저장해 두고, 새 데이터 학습 시 함께 섞어 다시 보여 주는 방식이다. 강화학습의 experience replay와 같은 발상이다.</li>
+<li><b>Herding</b>: 선택한 샘플 집합의 특징 평균이 전체 평균에 최대한 가깝도록 샘플을 하나씩 탐욕적으로 고르는 방법이다. iCaRL이 클래스 증분 학습의 exemplar 선택에 썼다.</li>
+<li><b>지식 증류(KD)</b>: teacher 모델의 softmax 분포를 student가 따라가도록 학습시키는 기법이다(Hinton 등, 2015). 지속 학습에서는 이전 시점 모델이 teacher 역할을 하며, Learning without Forgetting이 대표 사례다.</li>
+<li><b>EWC(Elastic Weight Consolidation)</b>: Fisher 정보로 각 파라미터가 과거 과제에 얼마나 중요한지 추정하고, 중요한 파라미터가 크게 바뀌지 않도록 이차 벌점을 주는 정규화 기법이다.</li>
+<li><b>SASRec</b>: Transformer의 self-attention을 단방향으로 써서 다음 아이템을 예측하는 순차 추천 모델이다(Kang &amp; McAuley, 2018).</li>
+<li><b>Recall@k / MRR@k</b>: Recall@k는 정답이 상위 k 안에 들었는지의 비율이다. MRR@k는 상위 k 안에서 정답 순위의 역수를 평균한 값으로, 순위가 높을수록 점수가 크다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실 확인) 두 데이터셋의 갱신 주기 단위는 각각 무엇이며, 총 몇 번의 갱신 주기를 사용했나?
+<details><summary>정답 보기</summary>DIGINETICA는 주 단위, YOOCHOOSE는 일 단위(데이터가 더 많아서)이며 둘 다 16번의 갱신 주기를 썼다. 0번 구간은 학습 전용, 16번 구간은 테스트 전용이다.</details></li>
+<li>(사실 확인) 다음 중 ADER의 기본 실험 설정으로 옳은 것은? ① GRU4Rec 위에서 10k exemplar ② SASRec 위에서 30,000 exemplar, dropout 0.3 ③ BERT4Rec 위에서 exemplar 없이 증류만 ④ SASRec 위에서 전체 이력 재학습
+<details><summary>정답 보기</summary>②. 베이스는 SASRec(은닉 150, 블록 2개)이고, 기본 exemplar 수는 30,000, dropout 0.3이다. ④는 Joint 베이스라인에 해당한다.</details></li>
+<li>(사실 확인) DIGINETICA에서 16주기 평균 Recall@20 기준으로 Finetune, Joint, ADER의 값은?
+<details><summary>정답 보기</summary>Finetune 47.28%, Joint 50.03%, ADER 50.21%.</details></li>
+<li>(방법 원리) 아이템별 exemplar 수 \(m_{t,i}\)를 빈도에 비례하게 정하는 이유와, 그 분모·분자가 무엇을 세는지 설명하라.
+<details><summary>정답 보기</summary>분자는 새 데이터 \(D_t\)와 기존 exemplar \(E_{t-1}\)을 합친 풀에서 정답이 아이템 \(i\)인 샘플 수, 분모는 그 풀 전체 크기다. 자주 등장하는 아이템일수록 다음 주기에도 다시 나올 가능성이 높고 성능 기여도도 크므로 더 많이 보존한다. ablation에서 균등 배분(ADER<sub>equal</sub>, 49.92%)보다 빈도 비례(50.21%)가 나았다.</details></li>
+<li>(방법 원리) exemplar에 CE 대신 증류 손실 \(L_{KD}\)를 거는 것이 왜 더 강한 망각 방지 제약이 되는가?
+<details><summary>정답 보기</summary>CE는 정답 아이템 하나의 확률만 올리라는 신호다. 반면 KD는 이전 모델이 그 세션에서 모든 기존 아이템에 매긴 확률 분포 전체를 보존하라고 요구한다. 아이템 간 상대적 유사도 같은 "어두운 지식"까지 전달되므로, 적은 수의 exemplar로도 과거 모델의 행동을 더 많이 묶어 둘 수 있다.</details></li>
+<li>(방법 원리) \(\lambda_t=\lambda_{base}\sqrt{\frac{|I_{t-1}|}{|I_t|}\cdot\frac{|E_{t-1}|}{|D_t|}}\)에서, 새 아이템이 대거 유입되고 새 데이터도 많은 주기라면 \(\lambda_t\)는 어떻게 변하며 그 의도는 무엇인가?
+<details><summary>정답 보기</summary>\(|I_t|\)가 커져 첫 비율이 작아지고, \(|D_t|\)가 커져 두 번째 비율도 작아지므로 \(\lambda_t\)가 작아진다. 배워야 할 새 패턴이 많은 주기에는 과거 보존(증류) 비중을 낮추고 새 데이터 학습(CE)을 우선하려는 의도다.</details></li>
+<li>(결과 해석) Finetune과 Joint의 격차가 이미지 분류 등 전형적인 지속 학습 벤치마크보다 작게 나온 이유를 저자들은 어떻게 설명했나?
+<details><summary>정답 보기</summary>추천에서는 기존 아이템이 새 주기에도 자주 다시 등장하므로, 새 데이터만으로 학습해도 예전 지식이 상당 부분 자연스럽게 복습된다. 그래서 망각이 덜 심각하다. 특히 새 아이템 비율이 아주 낮은 YOOCHOOSE에서 격차가 작았다.</details></li>
+<li>(결과 해석) YOOCHOOSE에서 ADER의 이득이 어느 주기에 집중되었고, 이것이 시사하는 바는?
+<details><summary>정답 보기</summary>새 아이템 행동 비율이 상대적으로 높은 초반 주기에 집중되었다. 새 아이템이 거의 없는 후반 주기에는 Finetune을 포함한 모든 방법이 비슷했다. 즉 ADER의 가치는 데이터 분포가 많이 바뀌는 구간에서 크고, 정적인 환경에서는 단순 증분 학습으로도 충분할 수 있다.</details></li>
+<li>(비판) "ADER가 Joint보다 낫다"는 결론을 그대로 받아들이기 어려운 이유를 두 가지 이상 들어 보라.
+<details><summary>정답 보기</summary>예: ① 차이가 Recall@20 기준 0.18%p(DIGINETICA), 0.16%p(YOOCHOOSE)로 매우 작은데 반복 실행 분산이나 유의성 검정이 없다. ② Joint는 매 주기 전체 데이터로 학습하므로 하이퍼파라미터·epoch 예산이 ADER와 같은 조건으로 공정하게 튜닝됐는지 알기 어렵다. ③ 베이스 모델이 SASRec 하나뿐이다. ④ 계산·메모리 절감 효과를 수치로 보이지 않았다. ⑤ 표 4에 오기로 보이는 값이 있다. 오히려 Joint가 오래된 데이터까지 같은 비중으로 학습해 최근 분포 적응이 늦어졌을 가능성도 생각해 볼 수 있다.</details></li>
+<li>(적용) 매일 증분 학습하는 커머스 시퀀스 추천 모델에 ADER를 도입한다면, 무엇을 추가로 설계·측정하겠나?
+<details><summary>정답 보기</summary>예시 답: exemplar 버퍼 크기 \(N\)을 메모리 예산에 맞춰 정하고, 빈도 비례 배분에 최근성 가중을 섞을지 검토한다. 대규모 카탈로그에서는 \(|I_{t-1}|\) 전체에 대한 softmax 증류가 비싸므로, 이전 모델의 top-K 로짓만 증류하거나 샘플링 softmax로 근사한다. 신규 아이템 임베딩 초기화 방식을 정한다. 평가는 전체 재학습 대비 학습 시간·GPU 비용과, 신규/기존 아이템 세그먼트별 Recall·MRR을 함께 본다. 최종적으로는 온라인 A/B로 확인한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#75</b> Transformers4Rec: Bridging the Gap between NLP and Sequential / Session-Based Recommendation — 세션 추천에 Transformer 계열을 체계적으로 적용한 프레임워크다. 증분 학습 기반의 시간순 평가도 다룬다.</li>
+<li><b>#23</b> gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling — ADER의 베이스 모델인 SASRec의 학습 손실 문제를 다룬다.</li>
+<li><b>#18</b> Denoising Self-Attentive Sequential Recommendation — 같은 SASRec 계열 모델을 시퀀스 잡음 관점에서 개선한다.</li>
+<li><b>#213</b> Investigating the effects of incremental training on neural ranking models — 증분 학습이 실제 랭킹 모델에 미치는 영향을 산업 관점에서 본다. 이 논문의 Finetune 대 Joint 질문과 직접 이어진다.</li>
+<li><b>#191</b> Data-free Knowledge Distillation for Reusing Recommendation Models — 원본 데이터 없이 기존 추천 모델의 지식을 증류로 옮긴다. "과거 모델을 teacher로 쓴다"는 ADER의 발상과 맞닿아 있다.</li>
+</ul>
+
+</main>
+</body>
+</html>
