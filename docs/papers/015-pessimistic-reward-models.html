@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#15 Pessimistic Reward Models for Off-Policy Learning in Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-10 · #15</span></div>
+<h1>Pessimistic Reward Models for Off-Policy Learning in Recommendation</h1>
+<p class="meta">Olivier Jeunen, Bart Goethals (University of Antwerp, Adrem Data Lab) · RecSys 2021 Best Student Paper</p>
+<div class="chips"><span>2021</span><span>Best Student Paper</span><span>학계</span><span>Off-policy learning</span><span>Bandit</span><span>Bayesian ridge</span><span>Pessimism / LCB</span><span>Optimiser's Curse</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3460231.3474247">10.1145/3460231.3474247</a> · arXiv: 없음 · 저널 확장판: <a href="https://doi.org/10.1145/3568029">Pessimistic Decision-Making for Recommender Systems (ACM TORS, 2023)</a> · RecSys '21 pp. 63–74 · 읽기 예상 13분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성. ACM DL·ResearchGate는 접근이 막혀 있었고, arXiv에도 올라와 있지 않았으며, 기관 저장소의 공개본도 찾지 못했다. 아래 해설은 공식 초록과 이 분야의 표준 정식화(Bayesian ridge 회귀, LCB 의사결정, 오프라인 RL의 pessimism)를 바탕으로 재구성했다. 실험 수치, 정확한 섹션 구성, 하이퍼파라미터는 "논문 참조"로 남겼다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 로그 데이터로 학습한 보상 모델(예: 클릭 확률 모델)을 그대로 argmax하면 "운 좋게 과대평가된" 아이템을 고르게 된다. 보상 추정의 Bayesian 불확실성만큼 점수를 깎아서(pessimism) 고르면 오프라인 학습 정책의 실제 성능이 일관되게 오른다.</p>
+<p><b>풀려는 문제.</b> 산업 추천은 대개 off-policy 학습이다. 이미 배포된 정책이 고른 아이템과 그 반응만 기록되므로, 데이터는 그 정책의 취향대로 치우쳐 있다(selection bias). 이런 데이터로 학습한 보상 모델은 거의 노출되지 않은 아이템에 대해 추정 분산이 크다. 그런데 의사결정은 추정값의 최댓값을 고르는 연산이라, 분산이 큰 추정치가 우연히 높게 나오면 그 아이템이 뽑힌다.</p>
+<p><b>방법의 핵심.</b> 보상 모델을 ridge 회귀로 두면 Bayesian 해석에서 사후 평균과 사후 분산을 닫힌 형태로 얻는다. 결정 규칙을 \(\arg\max_a \hat\mu(a|x)\)에서 \(\arg\max_a \big(\hat\mu(a|x) - \alpha\,\hat\sigma(a|x)\big)\), 즉 하한 신뢰 경계(LCB)로 바꾼다. 데이터가 적은 행동일수록 \(\hat\sigma\)가 커서 더 많이 깎이므로, "확신 있게 좋은" 행동이 우선된다. 이것이 Optimiser's Curse(최적화자의 저주)를 완화한다는 것이 저자들의 논지다.</p>
+<p><b>주요 결과.</b> 저자들은 여러 시뮬레이션 환경에서 비관적 결정 규칙이 일반 MLE식 결정 규칙보다 추천 성능을 유의하고 견고하게 높인다고 보고한다. 이득은 로깅 정책의 무작위성이 낮을 때, 학습 샘플이 적을 때, 행동(아이템) 공간이 클 때 가장 두드러진다. 구체적인 CTR 수치와 개선 폭은 논문 참조.</p>
+<p><b>한계와 남는 질문.</b> 닫힌 형태의 분산은 선형(ridge) 보상 모델에 기대므로, 딥러닝 보상 모델로 옮기려면 앙상블·MC dropout 같은 근사가 필요하다. 비관 강도 \(\alpha\)를 오프라인에서 어떻게 고를지가 실무의 핵심 과제로 남는다. 또한 비관주의는 탐색(exploration)과 정반대 방향이므로, 오프라인 일회 학습이 아닌 반복 배포 환경에서는 신규·롱테일 아이템을 계속 덜 보여 주는 피드백 루프 위험이 있다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구성을 확인하지 못해, 초록이 밝힌 논리 흐름(문제 → 원인 → 방법 → 기존 연구와의 연결 → 효율적 계산 → 실험)을 따라 정리했다.</p>
+
+<h3>1. 서론 — 보상 모델링은 왜 off-policy에서 어려운가</h3>
+<p>Bandit 관점의 추천은 문맥 \(x\)(사용자 상태)에서 행동 \(a\)(추천 아이템)를 고르고 보상 \(r\)(클릭 등)을 받는 문제다. 학습 데이터는 \((x_i, a_i, r_i)\) 형태의 로그이며, \(a_i\)는 당시 배포된 로깅 정책 \(\pi_0(a|x)\)가 고른 것이다.</p>
+<p>가치 기반(value-based) 접근은 \(\mathbb{E}[r|x,a]\)를 추정하는 보상 모델 \(\hat\mu(a|x)\)를 학습한 뒤, 각 문맥에서 점수가 가장 높은 행동을 고른다. CTR 예측 모델로 랭킹하는 일반적인 산업 파이프라인이 정확히 이 구조다.</p>
+<p>문제는 \(\pi_0\)가 균등 무작위가 아니라는 점이다. 기존 시스템이 인기 아이템을 주로 보여 줬다면, 비인기 아이템의 \((x,a)\) 조합은 데이터에 거의 없다. 모델은 그런 영역에서 사실상 추측을 하며, 저자들은 이것이 효과적인 보상 모델링을 막는 선택 편향이라고 설명한다.</p>
+
+<h3>2. Optimiser's Curse — argmax가 만드는 체계적 과대평가</h3>
+<p>Optimiser's Curse는 의사결정 이론에서 알려진 현상이다(Smith &amp; Winkler, 2006). 각 선택지의 가치를 편향 없이(unbiased) 추정하더라도, 추정치가 가장 큰 선택지를 고르면 고른 선택지의 추정 가치는 실제 가치보다 기대적으로 크다.</p>
+<p>직관은 간단하다. 참값이 모두 같은 행동 100개가 있고 추정에 노이즈가 섞여 있다면, 최댓값으로 뽑힌 행동은 "노이즈가 가장 위로 튄" 행동이다. 그래서 선택 후의 추정치는 낙관적으로 편향된다.</p>
+<p>추천에 적용하면 상황은 더 나쁘다. 노이즈 크기가 행동마다 다르기 때문이다. 로그에 드물게 등장한 아이템은 추정 분산이 크고, 분산이 큰 행동일수록 위쪽으로 크게 튈 확률이 높다. 결국 argmax 정책은 "잘 모르는" 아이템을 체계적으로 선호하게 되고, 배포 후 실제 성과는 기대에 못 미친다. 이것이 오프라인 평가와 온라인 성과의 괴리를 만드는 한 원인이라는 것이 이 논문의 문제의식이다.</p>
+
+<h3>3. 방법 — 비관적 보상 모델</h3>
+<p>해법은 추정치 자체에 대한 회의(scepticism)를 결정 규칙에 반영하는 것이다. 보상 추정의 사후 분포를 얻으면 다음과 같은 비관적 점수를 정의할 수 있다.</p>
+\[ \pi_{\text{pess}}(x) = \arg\max_{a \in \mathcal{A}} \Big( \hat\mu(a|x) - \alpha \cdot \hat\sigma(a|x) \Big) \]
+<p>여기서 \(\mathcal{A}\)는 추천 가능한 아이템 집합, \(\hat\mu(a|x)\)는 보상의 사후 평균, \(\hat\sigma(a|x)\)는 사후 표준편차, \(\alpha \ge 0\)은 비관 강도다. \(\alpha = 0\)이면 일반적인 탐욕적(greedy) MLE 정책이 되고, \(\alpha\)가 커질수록 불확실한 행동을 더 강하게 피한다. 이것은 온라인 bandit의 UCB(\(+\alpha\sigma\))와 부호만 반대인 LCB(Lower Confidence Bound) 규칙이다.</p>
+<p>왜 부호가 반대일까. 온라인 학습에서는 불확실한 행동을 시도해 정보를 얻는 것이 이득이므로 낙관(UCB)이 맞다. 오프라인 학습에서는 배포 전에 더 이상 데이터를 모을 수 없으므로, 불확실성은 위험일 뿐이다. 그래서 비관(LCB)이 맞다.</p>
+
+<h3>4. Ridge 회귀의 닫힌 형태 사후 분포</h3>
+<p>초록은 보상을 ridge 회귀로 모델링할 때 사후 평균과 분산이 닫힌 형태로 주어진다는 점을 활용한다고 밝힌다. 표준 Bayesian 선형 회귀로 쓰면 다음과 같다. 문맥-행동 쌍을 특징 벡터 \(\phi(x,a) \in \mathbb{R}^d\)로 표현하고, 보상을 \(r = \theta^\top \phi(x,a) + \varepsilon\), \(\varepsilon \sim \mathcal{N}(0,\sigma^2)\)로 둔다. 가중치에 사전분포 \(\theta \sim \mathcal{N}(0, \sigma^2/\lambda \cdot I)\)를 주면 사후 분포는 다음과 같다.</p>
+\[ A = \Phi^\top \Phi + \lambda I, \qquad \hat\theta = A^{-1}\Phi^\top \mathbf{r}, \qquad \mathrm{Cov}[\theta \mid \mathcal{D}] = \sigma^2 A^{-1} \]
+<p>\(\Phi\)는 로그의 특징 벡터를 쌓은 \(n\times d\) 행렬, \(\mathbf{r}\)은 관측 보상 벡터, \(\lambda\)는 ridge 정규화 계수다. \(\hat\theta\)는 일반 ridge 해와 같다. 새로운 쌍 \((x,a)\)에 대해서는 다음을 얻는다.</p>
+\[ \hat\mu(a|x) = \hat\theta^\top \phi(x,a), \qquad \hat\sigma^2(a|x) = \sigma^2\, \phi(x,a)^\top A^{-1} \phi(x,a) \]
+<p>분산 항 \(\phi^\top A^{-1}\phi\)는 "그 방향으로 데이터가 얼마나 적었나"를 잰다. 로그에서 자주 본 특징 방향이면 \(A\)의 해당 고유값이 커서 분산이 작고, 거의 본 적 없는 방향이면 \(\lambda\)만 남아 분산이 크다. 즉 로깅 정책이 만든 데이터 공백이 자동으로 불확실성으로 번역된다. 저자들이 강조하는 장점은 이 계산이 추가 학습 없이 ridge 해를 구하는 과정에서 거의 공짜로 나온다는 점이다. 구체적인 특징 설계(\(\phi\)의 형태)와 \(\sigma^2\) 추정 방식은 논문 참조.</p>
+
+<h3>5. 효율적 적용</h3>
+<p>추천에서는 행동 수가 많고 매 요청마다 모든 후보의 \(\hat\sigma\)를 계산해야 한다. 초록은 비관주의를 "효과적이고 효율적으로" 적용하는 방법을 보인다고 말한다. 일반적으로는 \(A^{-1}\)을 한 번 미리 계산해 두거나, 데이터가 쌓일 때 Sherman–Morrison 공식으로 순위-1 갱신을 해서 매번 역행렬을 새로 구하지 않는다. 이렇게 하면 후보 하나당 비용은 \(O(d^2)\)의 이차 형식 계산으로 끝난다. 논문이 정확히 어떤 구현 트릭을 썼는지는 논문 참조.</p>
+
+<h3>6. 기존 비관적 정책 학습과의 연결</h3>
+<p>초록은 기존의 비관적 정책 학습(pessimistic policy learning)과의 유사점도 다룬다고 밝힌다. 정책 기반 off-policy 학습에서는 IPS 추정치를 최대화하는데, Swaminathan &amp; Joachims의 CRM/POEM처럼 추정치의 분산을 벌점으로 빼는 방식이 이미 있었다. "추정값 − 불확실성 벌점"을 최적화한다는 구조는 같고, 이 논문은 그것을 가치 기반(보상 모델) 쪽에서 구현한 짝으로 볼 수 있다.</p>
+<p>또한 같은 시기 오프라인 강화학습 이론에서 "고정 데이터셋으로 정책을 최적화할 때는 pessimism이 핵심"이라는 결과가 나오고 있었다(예: Buckman 외 2020, Jin 외 2021). 이 논문은 그 아이디어를 추천의 단일 단계 bandit 설정에 맞게 실용적으로 적용한 사례로 읽힌다. 장점 하나는 IPS 계열과 달리 로깅 성향(propensity) \(\pi_0(a|x)\)를 몰라도 된다는 점이다. 실제 로그에서 성향이 기록되지 않는 경우가 많으므로 이것은 실무상 의미가 크다.</p>
+
+<h3>7. 실험</h3>
+<p><b>환경.</b> 초록은 "다양한 환경"에서 경험적으로 검증했다고만 밝힌다. 오프라인 데이터셋으로는 학습된 정책의 실제 보상을 잴 수 없으므로, 저자들의 이전 연구 흐름을 보면 RecoGym 같은 추천 시뮬레이터에서 로그를 만들고 학습된 정책을 다시 시뮬레이터에 배포해 CTR을 측정하는 방식일 가능성이 높다. 정확한 환경 목록과 설정은 논문 참조.</p>
+<p><b>변인.</b> 초록에서 확인되는 실험 축은 세 가지다. ① 로깅 정책의 무작위성(균등에 가까운가, 특정 아이템에 치우쳤는가) ② 학습 샘플 수 ③ 행동 공간 크기(아이템 수).</p>
+<p><b>비교 대상과 지표.</b> 핵심 비교는 같은 ridge 보상 모델에 \(\alpha=0\)(탐욕적 결정)과 \(\alpha>0\)(비관적 결정)을 적용한 결과다. 지표는 학습된 정책의 기대 보상(시뮬레이션상 CTR)으로 보인다. 다른 off-policy 학습 기법과의 비교 여부와 그 수치는 논문 참조.</p>
+<p><b>결과와 해석.</b> 비관적 결정은 거의 모든 설정에서 유의하고 견고한 개선을 보였다. 개선 폭은 (a) 로깅 무작위성이 낮을수록 (b) 샘플이 적을수록 (c) 아이템이 많을수록 커졌다. 세 조건 모두 "추정 분산이 행동마다 크게 다르고 전반적으로 크다"는 공통점이 있으며, 2절의 Optimiser's Curse 설명과 정확히 맞아떨어진다. 반대로 데이터가 충분하고 로깅이 균등하면 불확실성이 작고 고르게 퍼지므로 비관주의의 효과도 줄어든다. 저자들은 이 조건들이 실제 산업 환경과 가깝다고 강조한다.</p>
+
+<h3>8. 결론</h3>
+<p>보상 모델을 "점 추정치"가 아니라 "분포"로 다루고, 결정할 때 그 분포의 아래쪽을 보라는 것이 핵심 메시지다. 구현 변경은 결정 규칙 한 줄 수준이지만, 데이터가 편향되고 부족한 현실적인 off-policy 상황에서 효과가 크다. 이후 저자들은 이 내용을 확장해 ACM TORS에 "Pessimistic Decision-Making for Recommender Systems"(2023)를 발표했다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Off-policy learning.</b> 다른 정책(로깅 정책)이 수집한 데이터로 새 정책을 학습하는 것. 새 정책이 고를 행동의 결과가 로그에 없을 수 있다는 것이 근본적인 어려움이다.</p>
+<p><b>로깅 정책 \(\pi_0\)과 선택 편향.</b> 데이터를 모을 당시 배포돼 있던 추천 정책이다. 이 정책이 특정 아이템을 자주 골랐다면 데이터가 그쪽에 몰려, 보상 모델이 나머지 영역에서 부정확해진다.</p>
+<p><b>가치 기반 vs 정책 기반.</b> 가치 기반은 보상 \(\mathbb{E}[r|x,a]\)를 예측한 뒤 argmax하고, 정책 기반은 IPS 등으로 정책의 기대 보상을 직접 추정해 정책 파라미터를 최적화한다. 이 논문은 가치 기반 쪽에 비관주의를 넣는다.</p>
+<p><b>IPS(Inverse Propensity Scoring).</b> 로그의 보상에 \(\pi(a|x)/\pi_0(a|x)\)를 곱해 새 정책의 가치를 편향 없이 추정하는 방법이다. 성향 \(\pi_0\)를 알아야 하고, 성향이 작으면 분산이 폭발한다.</p>
+<p><b>Optimiser's Curse.</b> 노이즈가 있는 추정치들 중 최댓값을 고르면, 고른 대상의 추정 가치가 실제보다 기대적으로 높게 나오는 현상이다. 추정 분산이 클수록 심하다.</p>
+<p><b>Bayesian ridge 회귀.</b> 가우시안 사전분포와 가우시안 노이즈를 가정한 선형 회귀다. 사후 평균은 일반 ridge 해와 같고, 사후 공분산 \(\sigma^2(\Phi^\top\Phi+\lambda I)^{-1}\)이 닫힌 형태로 나온다.</p>
+<p><b>UCB / LCB.</b> 평균에 표준편차의 배수를 더하면(UCB) 낙관적 탐색, 빼면(LCB) 비관적 활용이다. LinUCB가 앞의 대표 예이고, 이 논문은 뒤의 규칙을 오프라인에서 쓴다.</p>
+<p><b>오프라인 RL의 pessimism.</b> 고정 데이터셋으로 정책을 학습할 때 데이터 지지(support) 밖의 행동 가치를 낮게 잡아야 성능이 보장된다는 원칙이다. CQL, 그리고 pessimism의 효율성을 증명한 이론 연구들이 이 흐름에 속한다.</p>
+<p><b>Sherman–Morrison 공식.</b> \((A+uv^\top)^{-1}\)을 \(A^{-1}\)로부터 \(O(d^2)\)에 갱신하는 공식이다. 선형 bandit에서 공분산 역행렬을 점진적으로 유지할 때 쓴다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> 이 논문에서 보상 모델로 사용해 사후 평균과 분산을 닫힌 형태로 얻는 모델은? (a) 로지스틱 회귀 (b) ridge 회귀 (c) GBDT (d) 신경망 앙상블
+<details><summary>정답 보기</summary>(b). Bayesian 해석의 ridge 회귀는 사후 평균 \(A^{-1}\Phi^\top r\)와 공분산 \(\sigma^2 A^{-1}\)가 닫힌 형태라서, 추가 비용 없이 불확실성을 얻을 수 있다.</details></li>
+<li><b>[사실]</b> 저자들이 비관적 결정 규칙으로 완화한다고 주장하는 의사결정 현상의 이름은?
+<details><summary>정답 보기</summary>Optimiser's Curse. 노이즈 섞인 추정치 중 최댓값을 고르면 선택된 대상의 가치가 체계적으로 과대평가되는 현상이다.</details></li>
+<li><b>[사실]</b> 초록이 꼽은, 비관주의의 이득이 가장 큰 세 가지 조건은?
+<details><summary>정답 보기</summary>로깅 정책의 무작위성이 낮을 때, 학습 샘플이 적을 때, 행동(아이템) 공간이 클 때.</details></li>
+<li><b>[원리]</b> 각 행동의 보상 추정치가 편향 없이(unbiased) 추정되었다면, argmax로 고른 행동의 추정치도 편향이 없을까? 이유를 설명하라.
+<details><summary>정답 보기</summary>아니다. 개별 추정치는 편향이 없어도, "최댓값"이라는 선택 연산이 위로 튄 노이즈를 골라내므로 선택된 값의 기대치는 참값보다 크다. 즉 \(\mathbb{E}[\max_a \hat\mu_a] \ge \max_a \mu_a\)이다.</details></li>
+<li><b>[원리]</b> \(\hat\sigma^2(a|x) = \sigma^2 \phi^\top A^{-1}\phi\)가 로깅 정책이 거의 고르지 않은 행동에서 커지는 이유는?
+<details><summary>정답 보기</summary>\(A=\Phi^\top\Phi+\lambda I\)는 관측된 특징 방향으로만 커진다. 그 행동의 특징 방향으로 데이터가 거의 없으면 \(A\)의 해당 성분이 \(\lambda\) 수준에 머물러 \(A^{-1}\)이 크고, 따라서 분산이 커진다.</details></li>
+<li><b>[원리]</b> 온라인 bandit에서는 UCB(낙관)를, 이 논문의 오프라인 설정에서는 LCB(비관)를 쓰는 이유는?
+<details><summary>정답 보기</summary>온라인에서는 불확실한 행동을 시도하면 정보를 얻어 이후 결정이 좋아지므로 낙관이 탐색 가치를 반영한다. 오프라인 일회 학습에서는 배포 전에 추가 정보를 얻을 수 없으므로, 불확실성은 손실 위험일 뿐이고 비관이 기대 성과를 높인다.</details></li>
+<li><b>[결과 해석]</b> 로깅 정책이 균등 무작위이고 샘플이 매우 많다면, \(\alpha>0\)과 \(\alpha=0\)의 성능 차이는 어떻게 될 것으로 예상되는가?
+<details><summary>정답 보기</summary>차이가 줄어든다. 모든 행동의 분산이 작고 비슷해져 LCB 순위가 평균 순위와 거의 같아지기 때문이다. 초록의 "제한된 무작위성·적은 샘플에서 이득이 크다"는 결과와 일치한다.</details></li>
+<li><b>[결과 해석]</b> 아이템 수가 늘수록 비관주의의 이득이 커지는 이유를 Optimiser's Curse로 설명하라.
+<details><summary>정답 보기</summary>후보가 많을수록 그중 하나가 노이즈로 크게 과대평가될 확률이 높아지고, 행동당 데이터도 줄어 분산이 커진다. 그래서 argmax의 낙관 편향이 심해지고, 이를 깎아 주는 LCB의 효과도 커진다.</details></li>
+<li><b>[비판·적용]</b> 이 방법을 딥러닝 CTR 모델에 적용하려 할 때의 어려움과 대안을 서술하라.
+<details><summary>정답 보기</summary>신경망에는 닫힌 형태의 사후 분산이 없다. 대안으로는 마지막 층만 Bayesian 선형 회귀로 두는 방식(neural-linear), 딥 앙상블, MC dropout, 부트스트랩 등이 있다. 이 경우 계산 비용과 불확실성 보정(calibration)의 품질이 새 과제가 된다.</details></li>
+<li><b>[비판·적용]</b> 비관적 정책을 매일 재학습·재배포하는 실서비스에 넣으면 어떤 부작용이 생길 수 있고, 어떻게 완화할 수 있는가?
+<details><summary>정답 보기</summary>불확실한 신규·롱테일 아이템이 계속 덜 노출되고, 그래서 데이터가 더 안 쌓여 불확실성이 유지되는 피드백 루프가 생길 수 있다. 일부 트래픽에 무작위 탐색(ε-greedy)이나 UCB 슬롯을 두거나, 신규 아이템에는 \(\alpha\)를 낮추는 식으로 완화할 수 있다. 탐색 트래픽은 이후 학습의 데이터 다양성도 높여 준다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#35</b> Evaluating Off-Policy Evaluation: Sensitivity and Robustness (2021) — 같은 off-policy 주제에서 평가 쪽 신뢰성을 다룬다.</li>
+<li><b>#37</b> Off-Policy Actor Critic for Recommender Systems (2022) — 가치 모델과 정책 학습을 결합한 off-policy 추천의 다른 접근.</li>
+<li><b>#34</b> Accordion: A Trainable Simulator for Long-Term Interactive Systems (2021) — 이 논문처럼 시뮬레이터로 정책 성과를 재는 평가 인프라.</li>
+<li><b>#74</b> Uncertainty-Aware Reward Modeling: A Large-Scale Case Study in Video Recommendation (2026) — 보상 모델의 불확실성을 대규모 실서비스에서 활용하는 후속 흐름.</li>
+<li><b>#61</b> Why the Shooting in the Dark Method Dominates Recommender Systems Practice (2024) — 오프라인 지표와 온라인 성과의 괴리라는 같은 문제의식.</li>
+</ul>
+</main>
+</body>
+</html>
