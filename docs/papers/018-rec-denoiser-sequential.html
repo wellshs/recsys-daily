@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#18 Denoising Self-Attentive Sequential Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-13 · #18</span></div>
+<h1>Denoising Self-Attentive Sequential Recommendation</h1>
+<p class="meta">Huiyuan Chen, Yusan Lin, Menghai Pan, Lan Wang, Chin-Chia Michael Yeh, Xiaoting Li, Yan Zheng, Fei Wang, Hao Yang (Visa Research) · RecSys 2022 Papers · Best Paper</p>
+<div class="chips"><span>2022</span><span>Best Paper</span><span>Visa Research</span><span>Sequential RecSys</span><span>Self-attention</span><span>Sparse attention</span><span>Differentiable mask</span><span>Jacobian regularization</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3546788">10.1145/3523227.3546788</a> · arXiv: <a href="https://arxiv.org/abs/2212.04120">2212.04120</a> (<a href="https://arxiv.org/pdf/2212.04120v1">PDF</a>) · 읽기 예상 14분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> SASRec·BERT4Rec 같은 Transformer 순차 추천기는 시퀀스 안의 모든 아이템에 attention을 조금씩 나눠 준다. Rec-Denoiser는 attention 행렬마다 학습 가능한 0/1 마스크를 씌워 관련 없는 아이템과의 연결을 정확히 0으로 끊는다. 여기에 Jacobian 정규화로 입력 섭동에 대한 민감도를 줄인다. 두 장치 모두 기존 모델 구조를 바꾸지 않는 플러그인이다.</p>
+<p><b>풀려는 문제.</b> 실제 행동 시퀀스에는 잡음이 많다. 취향과 무관한 클릭, 결국 반품하거나 나쁜 리뷰를 남긴 구매가 섞인다. 아버지가 아들 것(폰·헤드폰·노트북)과 딸 것(가방·바지)을 번갈아 사면, 노트북을 예측하는 데 바지는 쓸모가 없다. 그런데 softmax attention은 확률이 0이 될 수 없어서 모든 아이템에 어느 정도 가중치를 준다.</p>
+<p><b>방법의 핵심.</b> 마스크 원소 하나하나를 베르누이 확률변수로 보고, 켜진 마스크 개수(L0 노름)에 벌점을 준다. 이산 변수라 역전파가 안 되는 문제는 편향 없고 분산이 작은 ARM 그래디언트 추정량으로 푼다. 여기에 각 Transformer 블록의 Jacobian 크기를 줄이는 정규화를 더해 출력이 입력 변화에 덜 출렁이게 만든다. 잡음 아이템은 덜 보고, 남은 잡음에는 덜 흔들리게 하는 두 갈래 전략이다.</p>
+<p><b>주요 결과.</b> 데이터셋 5개(MovieLens, Amazon Beauty·Games·Movies&amp;TV, Steam), 백본 4개(SASRec, BERT4Rec, TiSASRec, SSE-PT) 조합 모두에서 Rec-Denoiser를 붙인 쪽이 이겼다. 상대 개선 폭은 5.05%~19.55%다. 예를 들어 SASRec은 Hit@10 평균 8.04%, NDCG@10 평균 12.42% 올랐다. 학습 데이터에 인공 잡음을 최대 25%까지 넣어도 Sparse Transformer, α-entmax보다 일관되게 높았다.</p>
+<p><b>한계와 남는 질문.</b> 평가는 정답 1개와 무작위 음성 100개를 섞은 샘플링 기반 지표라, 전체 아이템 랭킹에서도 같은 차이가 나는지는 알 수 없다. 마스크와 Jacobian 정규화 각각의 기여를 나눈 ablation 표가 없다. 또 "마스크가 정말 잡음 아이템을 골라 끊었는가"를 정성적으로 보여 주는 분석도 없다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — dense attention은 잡음에도 몫을 준다</h3>
+<p>순차 추천은 과거 행동 순서를 보고 다음 아이템을 맞히는 과제다. 마르코프 체인은 직전 몇 개만 봐서 장기 취향을 놓쳤다. 그 뒤 RNN(GRU4Rec)과 CNN(Caser)이 나왔고, 지금은 self-attention 기반 모델(SASRec, BERT4Rec, SSE-PT, TiSASRec 등)이 주류다. self-attention은 시퀀스 안의 모든 아이템 쌍 사이 관계를 계산하므로 먼 과거 의존성도 잡는다.</p>
+<p>저자들은 이 장점이 곧 약점이라고 본다. 다음 행동이 실제로 기대는 것은 시퀀스의 일부뿐인데, softmax는 모든 위치에 양의 가중치를 준다. 근거는 두 가지다. 첫째, NLP에서도 BERT attention 상당 부분이 "[SEP]"나 마침표처럼 의미 없는 토큰에 쏠린다는 관찰이 있다. 둘째, 내적 기반 self-attention은 Lipschitz 연속이 아니어서 입력이 조금 바뀌어도 출력이 크게 바뀔 수 있다는 이론 결과가 있다(Kim et al., 2021).</p>
+<p>고정된 희소 패턴(Sparse Transformer, Longformer, BigBird)은 긴 문서용으로 설계됐고 데이터에 맞춰 바뀌지 않는다. 무작위 드롭(LayerDrop, DropHead)은 "지워도 되는 연결"과 "우연히 지워진 연결"을 구별하지 못한다. 그래서 저자들은 데이터로부터 어떤 연결을 끊을지 배우는 미분 가능한 마스크를 제안한다. 기여는 네 가지로 정리된다. 잡음 제거라는 문제 설정, 마스크 기반 일반 프레임워크, ARM 추정량과 Jacobian 정규화, 그리고 5.05~19.55% 성능 향상이다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>순차 추천.</b> FPMC 같은 마르코프 모델에서 RNN·CNN·메모리 네트워크·GNN(SR-GNN)을 거쳐 Transformer로 왔다. Transformer 변형은 양방향(BERT4Rec), 시간 간격(TiSASRec), 개인화(SSE-PT) 등을 더했지만 견고성(robustness)은 거의 다루지 않았다.</p>
+<p><b>희소 Transformer.</b> 두 갈래가 있다. 하나는 Reformer(LSH), Star Transformer, Sparse Transformer, BigBird처럼 연결 패턴을 미리 정하는 방식이다. 다른 하나는 softmax 대신 sparsemax·α-entmax를 써서 일부 가중치가 정확히 0이 되도록 학습하는 방식이다. Rec-Denoiser는 두 번째 갈래와 가깝지만, 정규화 함수를 바꾸는 대신 attention 위에 별도의 이진 마스크를 곱한다는 점이 다르다.</p>
+
+<h3>3. 문제 정의와 배경 — SASRec 복습</h3>
+<p>사용자 \(u\)의 시퀀스 \(S^u=(S^u_1,\dots,S^u_{|S^u|})\)를 길이 \(n\)으로 자르거나 패딩한다. 아이템 임베딩 \(\mathbf{E}\in\mathbb{R}^{n\times d}\)에 학습 가능한 위치 임베딩 \(\mathbf{P}\)를 더해 \(\hat{\mathbf{E}}=\mathbf{E}+\mathbf{P}\)를 만든다. 학습 때 입력은 앞의 \(n\)개, 정답은 한 칸 밀린 시퀀스다.</p>
+<p>self-attention은 표준 scaled dot-product다.</p>
+\[ \mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})=\mathrm{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt d}\right)\mathbf{V} \]
+<p>\(\mathbf{Q}=\hat{\mathbf{E}}\mathbf{W}^Q\), \(\mathbf{K}=\hat{\mathbf{E}}\mathbf{W}^K\), \(\mathbf{V}=\hat{\mathbf{E}}\mathbf{W}^V\)는 각각 질의·키·값 투영이고, \(\sqrt d\)는 점수 분포를 부드럽게 하는 스케일이다. SASRec처럼 미래 위치를 가리면 단방향, BERT4Rec처럼 열어 두면 양방향이 된다. 그 뒤 ReLU가 있는 위치별 FFN을 지나고, 이런 블록 \(L\)개를 쌓는다.</p>
+<p>점수는 마지막 블록 출력 \(\mathbf{F}^{(L)}_t\)와 아이템 임베딩 \(\mathbf{T}_i\)의 내적 \(r_{i,t}=\langle \mathbf{F}^{(L)}_t,\mathbf{T}_i\rangle\)이다. 손실은 위치마다 정답 \(o_t\) 하나와 음성 샘플 \(o'_t\) 하나를 쓰는 이진 교차엔트로피다.</p>
+\[ \mathcal{L}_{BCE}=-\sum_{S^u}\sum_{t=1}^{n}\Big[\log\sigma(r_{o_t,t})+\log\big(1-\sigma(r_{o'_t,t})\big)\Big]+\alpha\lVert\Theta\rVert_F^2 \]
+<p>\(\sigma\)는 시그모이드, \(\Theta\)는 모델 파라미터, \(\alpha\)는 가중치 감쇠 계수다. 저자들이 짚는 문제는 softmax가 만드는 attention 분포가 항상 dense하다는 점이다(3.3절 "noisy attentions problem").</p>
+
+<h3>4. 방법 ① — 미분 가능한 마스크</h3>
+<p>\(l\)번째 층에 이진 행렬 \(\mathbf{Z}^{(l)}\in\{0,1\}^{n\times n}\)을 둔다. \(\mathbf{Z}^{(l)}_{u,v}=1\)이면 질의 위치 \(u\)가 키 위치 \(v\)를 볼 수 있고, 0이면 그 연결이 끊긴다.</p>
+\[ \mathbf{A}^{(l)}=\mathrm{softmax}\!\left(\frac{\mathbf{Q}^{(l)}\mathbf{K}^{(l)\top}}{\sqrt d}\right),\quad \mathbf{M}^{(l)}=\mathbf{A}^{(l)}\odot\mathbf{Z}^{(l)},\quad \text{출력}=\mathbf{M}^{(l)}\mathbf{V}^{(l)} \]
+<p>\(\odot\)는 원소별 곱이다. 주목할 점은 마스크를 softmax <i>뒤</i>에 곱한다는 것이다. 그래서 남은 가중치의 합이 1이 아닐 수 있다(재정규화는 하지 않는다). 희소성을 유도하려면 켜진 마스크 개수, 곧 L0 노름에 벌점을 준다.</p>
+\[ R_M=\sum_{l=1}^{L}\lVert\mathbf{Z}^{(l)}\rVert_0=\sum_{l=1}^{L}\sum_{u=1}^{n}\sum_{v=1}^{n}\mathbb{I}\big[\mathbf{Z}^{(l)}_{u,v}\neq0\big] \]
+<p>문제는 L0가 불연속이라 거의 모든 곳에서 미분값이 0이라는 점, 그리고 한 층 마스크의 경우의 수가 \(2^{n^2}\)이나 된다는 점이다.</p>
+<p><b>확률적 완화.</b> 각 \(\mathbf{Z}^{(l)}_{u,v}\)를 확률 \(\Pi^{(l)}_{u,v}\)인 베르누이에서 뽑는다고 본다(Louizos et al.의 L0 정규화 발상). 그러면 L0 벌점의 기댓값은 \(\sum\Pi^{(l)}_{u,v}\)로 연속이 된다. \(\Pi=g(\Phi)\), \(g\)는 시그모이드로 두어 실수 파라미터 \(\Phi\)를 학습한다. 전체 목적은 다음과 같다.</p>
+\[ \mathcal{L}(\mathbf{Z},\Theta)=\mathbb{E}_{\mathbf{Z}\sim\prod_l\mathrm{Bern}(\Pi^{(l)})}\big[\mathcal{L}_{BCE}(\mathbf{Z},\Theta)\big]+\beta\sum_{l,u,v}\Pi^{(l)}_{u,v} \]
+<p>\(\beta\)는 희소성 강도다. 두 번째 항은 이제 미분 가능하지만, 첫 번째 항의 기댓값은 여전히 이산 샘플 위에서 계산된다.</p>
+<p><b>ARM 추정량.</b> REINFORCE는 분산이 크고 Straight-Through는 편향이 있다. 저자들은 Yin &amp; Zhou(2019)의 ARM(Augment-REINFORCE-Merge)을 쓴다. 균등분포 \(\mathbf{U}\sim\mathrm{Uni}(0,1)\)를 하나 뽑아 서로 반대 방향인 마스크 두 개를 만들고, 두 손실의 차이로 그래디언트를 낸다.</p>
+\[ \nabla^{ARM}_{\Phi}\mathcal{L}=\mathbb{E}_{\mathbf{U}}\Big[\big(\mathcal{L}_{BCE}(\mathbb{I}[\mathbf{U}>g(-\Phi)])-\mathcal{L}_{BCE}(\mathbb{I}[\mathbf{U}<g(\Phi)])\big)\big(\mathbf{U}-\tfrac12\big)\Big]+\beta\nabla_\Phi g(\Phi) \]
+<p>순전파를 두 번 하지만 편향이 없고 분산이 작다. 한 번만 하는 AR 변형도 있다. \(\mathbb{E}_{\mathbf{U}}[\mathcal{L}_{BCE}(\mathbb{I}[\mathbf{U}<g(\Phi)])(1-2\mathbf{U})]\) 꼴로, 역시 비편향이지만 분산이 더 크다. 추천 Transformer는 보통 \(L=2\) 정도로 얕아서 ARM의 두 배 비용도 부담이 작다는 것이 저자들의 판단이다.</p>
+<p><b>추론.</b> 추론 때는 샘플링 대신 기댓값 \(\Pi=g(\Phi)\)를 쓴다. 다만 시그모이드는 0이 되지 않으므로 \(g(\Phi)\le0.5\)인 칸을 0으로 잘라 진짜 희소 행렬을 만든다.</p>
+
+<h3>5. 방법 ② — Jacobian 정규화</h3>
+<p>블록 \(f^{(l)}\)의 입력 \(\mathbf{x}\)에 \(\lVert\boldsymbol\epsilon\rVert_2\le\delta\)인 작은 섭동을 주면, 1차 테일러 전개로 출력 변화는 \(\mathbf{J}_i(\mathbf{x})^\top\boldsymbol\epsilon\) 정도다(\(\mathbf{J}\)는 출력의 입력에 대한 Jacobian, \(\mathbf{J}_i\)는 그 \(i\)번째 행). 횔더 부등식으로 이 변화는 \(\lVert\mathbf{J}_i\rVert_2\lVert\boldsymbol\epsilon\rVert_2\) 이하이므로, Jacobian 크기를 줄이면 국소적으로 Lipschitz 제약을 거는 효과가 난다. 그래서 다음 항을 더한다.</p>
+\[ R_J=\sum_{l=1}^{L}\lVert\mathbf{J}^{(l)}\rVert_F^2,\qquad \lVert\mathbf{J}\rVert_F^2=\mathrm{Tr}(\mathbf{J}\mathbf{J}^\top)=\mathbb{E}_{\boldsymbol\eta\sim\mathcal N(0,I)}\big[\lVert\boldsymbol\eta^\top\mathbf{J}\rVert_F^2\big] \]
+<p>Jacobian 전체를 만들면 비싸므로 Hutchinson 추정량을 쓴다. 무작위 가우시안 벡터 \(\boldsymbol\eta\)와 Jacobian의 곱만 계산하면 되고, 이는 역전파 한 번(벡터-Jacobian 곱)으로 얻는다(Hoffman et al., 2019의 random projection).</p>
+
+<h3>6. 최적화와 복잡도</h3>
+<p>최종 목적함수는 세 항의 합이다.</p>
+\[ \mathcal{L}_{Rec\text{-}Denoiser}=\mathcal{L}_{BCE}+\beta R_M+\gamma R_J \]
+<p>\(\beta\)는 희소성, \(\gamma\)는 매끄러움(견고성)을 조절한다. 미니배치마다 층별로 full attention을 구하고, \(\mathbf{U}\)를 뽑아 마스크 \(\mathbb{I}[\mathbf{U}&lt;g(\Phi)]\)를 만들어 곱한 뒤 나머지 Transformer를 통과시킨다. 그다음 \(\Theta\)와 \(\Phi\)를 SGD로 함께 갱신한다. 마스크를 모두 1로 두고 \(\beta=\gamma=0\)이면 원래 모델로 돌아가고, 마스크를 무작위로 끄면 DropHead류 구조적 드롭아웃과 같아진다. 학습 비용은 원래 Transformer와 같은 차수이고, 추론 때는 attention이 희소해 계산이 빨라질 수 있다고 저자들은 주장한다(실측 시간은 제시하지 않았다).</p>
+
+<h3>7. 실험</h3>
+<p><b>데이터.</b> MovieLens(사용자 6,040, 아이템 3,416, 사용자당 평균 163.5 행동), Amazon Beauty(51,369 / 19,369 / 4.39), Games(30,935 / 12,111 / 6.46), Movies&amp;TV(40,928 / 37,564 / 25.55), Steam(114,796 / 8,648 / 7.58). 각 사용자의 마지막 아이템은 테스트, 그 앞은 검증, 나머지는 학습에 쓴다.</p>
+<p><b>설정.</b> Hit@10과 NDCG@10을 쓰며, 정답 1개와 무작위 음성 100개, 총 101개 안에서 순위를 매긴다. 최대 길이는 밀집 데이터(MovieLens, Movies&amp;TV) \(n=50\), 희소 데이터 \(n=25\)다. \(L=2\), \(H=2\), 임베딩 차원은 {10~50}에서 탐색했다. \(\beta,\gamma\)는 \(10^{-1}\)~\(10^{-5}\)에서 찾고, 추정량은 ARM을 썼다. 백본 하이퍼파라미터는 원 모델 것을 그대로 쓴다.</p>
+<p><b>RQ1 — 전체 성능(표 2 핵심 행).</b></p>
+<table>
+<tr><th>모델</th><th>ML Hit / NDCG</th><th>Beauty Hit / NDCG</th><th>Steam Hit / NDCG</th></tr>
+<tr><td>SASRec</td><td>0.7434 / 0.5012</td><td>0.4345 / 0.2765</td><td>0.7723 / 0.5514</td></tr>
+<tr><td>+Denoiser</td><td>0.7980 / 0.5610</td><td>0.4783 / 0.3025</td><td>0.8345 / 0.5946</td></tr>
+<tr><td>BERT4Rec</td><td>0.7549 / 0.5245</td><td>0.4528 / 0.3013</td><td>0.7901 / 0.5641</td></tr>
+<tr><td>+Denoiser</td><td>0.8045 / 0.5814</td><td>0.4883 / 0.3348</td><td>0.8410 / 0.6223</td></tr>
+</table>
+<p>Transformer 계열 네 모델은 FPMC·GRU4Rec·Caser를 큰 차이로 이겼다. 시간·양방향·개인화 정보를 더한 변형들은 SASRec보다 대체로 조금 낫다. Denoiser를 붙이면 모든 조합이 개선되며 범위는 5.05%(SASRec, Steam Hit)부터 19.55%(SSE-PT, Beauty NDCG)까지다. NDCG 개선이 Hit보다 대체로 크다. 맞는 아이템을 top-10 안에 넣는 것보다 순위를 더 위로 끌어올리는 효과가 크다는 뜻이다. 백본 대비 유의성 검정에서 p-값은 모두 \(10^{-6}\) 미만이었다고 보고한다.</p>
+<p><b>RQ2 — 잡음 견고성.</b> 학습 시퀀스의 아이템 일부(0~25%)를 검증·테스트에 없는 무작위 아이템으로 바꿔 5회 반복했다. 비교 대상은 SASRec, 고정 패턴의 Sparse Transformer, α-entmax다. 잡음이 늘면 모든 모델이 떨어지지만, Rec-Denoiser(ARM·AR 모두)가 모든 데이터셋·잡음 비율에서 위에 있었다. 순서는 ARM &gt; AR &gt; α-entmax였다. 저자들은 α-entmax가 학습 파라미터 α 하나에 의존해 과적합될 수 있고, Sparse Transformer의 고정 패턴은 Beauty·Games처럼 짧은 시퀀스에서 불안정하다고 해석한다. 구체적인 곡선 값은 그림 2로만 제시돼 있다(논문 참조).</p>
+<p><b>RQ3 — 하이퍼파라미터.</b> \(n\)을 20~80으로 바꾸면 시퀀스가 길수록 SASRec 대비 격차가 커졌다. 긴 시퀀스일수록 잡음 아이템이 섞일 가능성이 높다는 직관과 맞는다. \(\beta,\gamma\)는 다른 하나를 0.01로 고정하고 바꿨을 때 성능이 비교적 안정적이었고, MovieLens 최적값은 \(\beta=0.01\), \(\gamma=0.001\)이었다. \(H, L\)은 4 이하의 작은 값이 좋았다.</p>
+
+<h3>8. 결론</h3>
+<p>저자들은 마스크로 관련 없는 연결을 끊고, Jacobian 정규화로 작은 섭동에 대한 민감도를 낮추는 두 장치를 합쳐 self-attentive 추천기의 잡음 문제를 다뤘다고 정리한다. 구조를 바꾸지 않으므로 다른 Transformer 과제에도 쓸 수 있고, 선형 attention과 결합해 비용을 더 낮추는 방향은 향후 과제로 남겼다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>SASRec / BERT4Rec.</b> SASRec은 왼쪽→오른쪽 인과 마스크를 쓴 self-attention 다음 아이템 예측 모델이다. BERT4Rec은 양방향 attention과 마스킹 학습(cloze)을 쓴다. 이 논문의 대표 백본이다.</li>
+<li><b>암묵 피드백의 잡음.</b> 클릭·조회는 싫어도 일어나고, 구매 뒤 반품될 수도 있다. 관측된 상호작용이 곧 선호라는 가정이 깨지는 상황을 말한다.</li>
+<li><b>희소 attention.</b> attention 가중치 일부를 정확히 0으로 만드는 방식이다. 고정 패턴형(Sparse Transformer, BigBird)과 학습형(sparsemax, α-entmax, 학습된 마스크)이 있다.</li>
+<li><b>L0 정규화.</b> 0이 아닌 원소 개수에 벌점을 주는 정규화다. 진짜 희소성을 만들지만 미분이 안 되므로 확률적 게이트로 완화해 학습한다(Louizos et al., 2018).</li>
+<li><b>REINFORCE / Straight-Through / ARM.</b> 이산 확률변수를 거치는 기댓값의 그래디언트를 추정하는 방법들이다. REINFORCE는 비편향이지만 분산이 크고, ST는 분산이 작지만 편향이 있다. ARM은 반대 방향 샘플 쌍을 이용해 비편향이면서 분산을 줄인다.</li>
+<li><b>Lipschitz 연속.</b> 입력 변화량에 상수 배를 곱한 것 이상으로 출력이 변하지 않는 성질이다. 내적 기반 self-attention은 입력 공간 전체에서는 이 성질이 없음이 증명돼 있다.</li>
+<li><b>Jacobian 정규화.</b> 출력의 입력에 대한 미분 행렬의 크기에 벌점을 줘 함수를 국소적으로 매끄럽게 만든다. 적대적 견고성 연구에서 쓰이던 기법이다.</li>
+<li><b>Hutchinson 추정량.</b> 무작위 벡터 \(\boldsymbol\eta\)로 \(\mathbb{E}[\boldsymbol\eta^\top\mathbf{A}\boldsymbol\eta]=\mathrm{Tr}(\mathbf{A})\)를 이용해 행렬의 대각합을 행렬 전체를 만들지 않고 추정하는 방법이다.</li>
+<li><b>샘플링 기반 평가(1+100).</b> 정답과 무작위 음성 100개만 놓고 순위를 매기는 프로토콜이다. 계산은 싸지만 전체 랭킹 지표와 순위가 뒤바뀔 수 있다는 비판이 있다(Krichene &amp; Rendle, 2020).</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] Rec-Denoiser를 구성하는 두 장치는 무엇이고, 각각 무엇을 겨냥하나?
+<details><summary>정답 보기</summary>① attention 행렬에 곱하는 학습 가능한 이진 마스크: 관련 없는 아이템과의 연결을 0으로 끊어 잡음 아이템을 덜 보게 한다. ② Transformer 블록의 Jacobian 정규화: 입력 섭동에 대한 출력 민감도를 낮춰 남은 잡음에 덜 흔들리게 한다.</details></li>
+<li>[사실·객관식] 실험에서 사용한 기본 설정이 아닌 것은? (a) \(L=2\), \(H=2\) (b) 정답 1개+음성 100개로 순위 계산 (c) 희소 데이터에서 \(n=25\) (d) 마스크 추정량으로 AR 사용
+<details><summary>정답 보기</summary>(d). 모델이 얕아 두 번 순전파 비용이 크지 않으므로 ARM을 기본으로 썼다. AR은 견고성 실험에서 비교용으로만 등장한다.</details></li>
+<li>[사실] 표 2에서 가장 작은 상대 개선과 가장 큰 상대 개선은 어느 조합이었나?
+<details><summary>정답 보기</summary>최소 5.05%는 SASRec+Denoiser, Steam, Hit@10이다. 최대 19.55%는 SSE-PT+Denoiser, Beauty, NDCG@10이다.</details></li>
+<li>[원리] 왜 L0 벌점을 바로 경사하강으로 최적화할 수 없고, 저자들은 이를 어떻게 우회했나?
+<details><summary>정답 보기</summary>L0는 지시함수의 합이라 불연속이고 거의 모든 곳에서 기울기가 0이다. 또 마스크 조합 수가 \(2^{n^2}\)로 폭발한다. 그래서 각 마스크를 확률 \(\Pi=g(\Phi)\)인 베르누이로 보고 벌점을 기댓값 \(\sum\Pi\)로 바꿨다. 손실 항의 기댓값 그래디언트는 ARM 추정량으로 구했다.</details></li>
+<li>[원리·서술] ARM이 REINFORCE·Straight-Through 대비 갖는 장점과 대가는?
+<details><summary>정답 보기</summary>장점: 같은 균등 난수에서 서로 반대인 마스크 두 개를 만들어 손실 차이를 쓰므로(대조 변량 효과) 비편향이면서 분산이 작다. ST처럼 편향이 생기지 않는다. 대가: 손실을 두 번 계산(순전파 2회)해야 한다. 한 번만 하는 AR은 싸지만 분산이 크다.</details></li>
+<li>[원리] Jacobian의 Frobenius 노름을 줄이는 것이 왜 견고성과 이어지며, 계산은 어떻게 싸게 하나?
+<details><summary>정답 보기</summary>1차 근사로 출력 변화는 \(\mathbf{J}^\top\boldsymbol\epsilon\)이고 그 크기는 \(\lVert\mathbf{J}\rVert\lVert\boldsymbol\epsilon\rVert\) 이하다. 따라서 Jacobian이 작으면 국소적으로 Lipschitz 상수가 작아진다. 계산은 Hutchinson 추정량, 곧 무작위 가우시안 벡터와 Jacobian의 곱(역전파 한 번)으로 \(\mathrm{Tr}(\mathbf{J}\mathbf{J}^\top)\)를 추정한다.</details></li>
+<li>[결과 해석] NDCG@10 개선율이 Hit@10 개선율보다 대체로 큰 것은 무엇을 뜻하나?
+<details><summary>정답 보기</summary>정답을 top-10 안에 새로 넣는 효과보다, 이미 top-10 안에 있던 정답을 더 위 순위로 올리는 효과가 크다는 뜻이다. 잡음 연결을 끊으면 정답과 관련된 신호가 덜 희석돼 점수 차이가 더 분명해진다는 해석과 맞는다.</details></li>
+<li>[결과 해석] 최대 길이 \(n\)이 길어질수록 SASRec 대비 격차가 커졌다. 이 결과가 방법의 동기와 어떻게 맞물리나?
+<details><summary>정답 보기</summary>시퀀스가 길수록 현재 의도와 무관한 과거 아이템이 섞일 확률이 높아지고, dense attention은 그 모두에 가중치를 나눠 준다. 마스크가 그런 연결을 끊는다면 긴 입력에서 이득이 커지는 것이 자연스럽다. 다만 MovieLens·Beauty 두 데이터셋, SASRec 한 백본만의 결과다.</details></li>
+<li>[비판] 이 논문의 평가 설계에서 결론을 약하게 만드는 점 두 가지를 들어 보라.
+<details><summary>정답 보기</summary>① 1+100 샘플링 지표만 써서 전체 아이템 랭킹에서도 우위가 유지되는지 알 수 없다. ② 마스크와 Jacobian 정규화를 따로 뺀 ablation 표가 없어 각 장치의 기여가 불분명하다. 그 밖에 인공 잡음이 균등 무작위 치환이라 실제 잡음(충동 클릭, 반품)과 다르다는 점, 마스크가 실제로 무엇을 끊었는지 사례 분석이 없다는 점, 추론 속도 향상 주장에 실측이 없다는 점도 있다.</details></li>
+<li>[적용·서술] 실서비스 순차 추천 모델에 Rec-Denoiser를 도입하려 할 때 고려할 점은?
+<details><summary>정답 보기</summary>마스크 파라미터 \(\Phi\)가 위치 쌍 \((u,v)\)마다 하나씩, \(n\times n\times L\)개로 정의되어 사용자·아이템과 무관하게 위치에만 묶인다. 따라서 수천 길이의 긴 시퀀스에서는 메모리와 일반화가 문제가 될 수 있다. 입력 의존 마스크로 바꾸는 방안을 검토할 만하다. 그 밖에 ARM의 2배 순전파 비용, \(\beta,\gamma\) 튜닝, 반품·짧은 체류 같은 명시적 잡음 신호와의 결합, 전체 랭킹 기반 오프라인 평가와 A/B 검증이 필요하다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#23</b> gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling (2023) — 같은 SASRec 계열에서 학습 목적함수(음성 샘플링에 따른 과신)를 고친 Best Paper.</li>
+<li><b>#88</b> Covariance-Aware Newton-Schulz Orthogonalization for Noise-Robust Sequential Recommendation (2026) — 순차 추천의 잡음 견고성이라는 같은 문제를 다른 도구로 접근.</li>
+<li><b>#75</b> Transformers4Rec: Bridging the Gap between NLP and Sequential / Session-Based Recommendation (2021) — 이 논문이 인용한 Transformer 순차 추천 실험 라이브러리·벤치마크.</li>
+<li><b>#81</b> Incorporating Time in Sequential Recommendation Models (2023) — 백본으로 쓰인 TiSASRec처럼 시간 정보를 순차 모델에 넣는 방법을 정리.</li>
+<li><b>#359</b> Denoising User-aware Memory Network for Recommendation (2021) — 메모리 네트워크 기반 모델에서 행동 시퀀스 잡음 제거를 다룬 선행 작업.</li>
+</ul>
+</main>
+</body>
+</html>
