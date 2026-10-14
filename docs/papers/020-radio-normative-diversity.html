@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RADio – Rank-Aware Divergence Metrics to Measure Normative Diversity in News Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-15 · #20</span></div>
+<h1>RADio – Rank-Aware Divergence Metrics to Measure Normative Diversity in News Recommendations</h1>
+<p class="meta">Sanne Vrijenhoek*, Gabriel Bénédict* (University of Amsterdam / RTL Nederland), Mateo Gutierrez Granada, Daan Odijk (RTL Nederland), Maarten de Rijke (University of Amsterdam) · *공동 1저자 · RecSys 2022 Papers · Best Paper Runner-up</p>
+<div class="chips"><span>2022</span><span>Best Paper Runner-up</span><span>학계+산업(RTL)</span><span>News recommendation</span><span>Normative diversity</span><span>Jensen–Shannon divergence</span><span>Rank-aware metric</span><span>MIND</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3546780">10.1145/3523227.3546780</a> · arXiv: <a href="https://arxiv.org/abs/2209.13520v2">2209.13520v2</a> · PDF: <a href="https://arxiv.org/pdf/2209.13520v2">arXiv PDF</a> · 코드: <a href="https://github.com/svrijenhoek/RADio">github.com/svrijenhoek/RADio</a> · 읽기 예상 12분</p>
+
+<div class="callout">원문 확보: arXiv v2 PDF 전문을 읽고 작성했다. 그림(바이올린 플롯, 컷오프 민감도 곡선) 속 세부 값은 텍스트로 추출되지 않아 본문에 서술된 경향만 옮겼다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 뉴스 추천의 "다양성"을 아이템 간 거리(ILD)가 아니라 <b>민주주의 이론이 요구하는 규범적 목표</b>로 보고, 이를 "추천 분포와 기준 분포 사이의 순위 가중 Jensen–Shannon 발산"이라는 하나의 틀로 측정하자는 제안이다.</p>
+<p><b>풀려는 문제.</b> 전통적인 다양성 지표는 "비슷하지 않음"만 잴 뿐 언론사의 편집 규범(여러 관점 노출, 소수자 목소리, 공론장 공유 등)을 반영하지 못한다. 선행 연구의 DART 지표는 이 규범을 다섯 개념으로 정리했지만, 지표마다 값의 범위가 달라 비교가 어렵고 순위 위치를 고려하지 않았다.</p>
+<p><b>핵심 아이디어.</b> 모든 지표를 "추천 목록이 만든 분포 \(Q\)"와 "지표가 정한 기준 분포 \(P\)"(읽은 기록, 전체 기사 풀, 다른 사용자의 추천 등)의 f-발산으로 통일한다. 발산으로는 [0,1]로 유계이고 거리 공리를 만족하는 JS 발산(제곱근, 로그 밑 2)을 쓰고, 위쪽 순위 기사에 더 큰 가중을 주는 MRR식 할인 \(1/R_i\)로 분포를 만든다.</p>
+<p><b>주요 결과.</b> MIND 데이터셋에서 LSTUR·NAML·NPA·NRMS와 Most popular·Random을 비교했다. Random이 여섯 지표 모두에서 발산이 가장 컸고(예: Representation 0.2578 vs 신경망 0.12~0.14), 신경망 모델은 읽은 기록에 더 잘 보정(Calibration topic 0.57~0.58 vs Random 0.6636)됐다. KL에 비해 JS가 분포가 덜 치우치고 모델 간 대비가 더 뚜렷했으며, 순위 가중을 넣으면 LSTUR과 Most popular가 구분되었다.</p>
+<p><b>한계와 남는 질문.</b> 범주 간 관계(극좌–좌파가 극좌–극우보다 가깝다)를 무시하고, 연속값은 임의의 구간(bin)으로 잘라야 한다. 감성·개체명 기반 메타데이터 파이프라인의 품질을 검증할 정답이 없고, MIND는 연성 뉴스 비중이 높아 규범 지표가 원래 겨냥하는 경성 뉴스와 거리가 있다. "높은 발산이 좋은가"는 언론사가 고른 민주주의 모델에 따라 달라진다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 추천이 편집자의 자리를 차지할 때</h3>
+<p>예전 독자는 한 신문을 골라 그 편집진이 고른 기사를 읽었다. 지금은 뉴스 추천 시스템이 그 역할을 상당 부분 넘겨받았고, 개인화 피드뿐 아니라 첫 화면 구성이나 "같은 사건 다른 관점" 기사 연결에도 쓰인다. 저자들은 이 때문에 추천 시스템이 사회의 <b>게이트키퍼</b>가 되었고, 클릭률만 최적화하면 선정적 콘텐츠나 허위정보 확산을 부추길 수 있다고 지적한다.</p>
+<p>공영·상업 언론사 모두 편집 규범을 구체적 지표로 바꾸는 데 어려움을 겪는다. 이 논문은 그 번역 작업, 즉 "추천이 다양하다는 게 규범적으로 무엇을 뜻하는가"를 기술자와 편집자가 함께 쓸 수 있는 수치로 바꾸는 데 집중한다. 출발점은 Helberger의 민주주의 모델 이론과 Vrijenhoek 등의 DART 지표다. DART의 약점으로 거리 함수 이론의 부족, 다른 규범으로의 일반화, 하나의 틀로의 통합, 순위 인식 부재를 들고, 이를 해결한 틀을 RADio라 부른다.</p>
+<p>기여는 세 가지다. (i) 어떤 규범 개념이든 두 이산 분포의 발산으로 표현하는 범용성, (ii) 목록 내 위치를 반영하는 순위 인식, (iii) 분포 발산 통계에 기반한 수학적 근거. 그리고 감성 분석·개체명 인식 등을 묶은 메타데이터 보강 파이프라인을 MIND에 적용해 시연한다. 저자들은 RADio가 "다양한 추천"의 합격선을 정하는 도구가 아니라 시스템을 규범 관점에서 점검하는 도구라고 못 박는다.</p>
+
+<h3>2. 관련 연구 — 기술적 다양성과 규범적 다양성의 간극</h3>
+<p><b>기술적(descriptive) 다양성.</b> 정보검색에서 다양성은 대개 "유사성의 반대"로 정의되고, 추천 목록 안 아이템 쌍의 평균 비유사도인 ILD로 측정된다. 거리 함수를 무엇으로 쓰느냐에 따라 관점 다양성도 담을 수는 있지만, 실제로는 bag-of-words나 임베딩의 코사인 거리 같은 기술적 거리로 구현된다. novelty, serendipity, coverage 같은 beyond-accuracy 지표도 있고, 학습 전(프로필 다양성으로 사용자 군집), 학습 중(LTR, CF, 그래프, 밴딧), 재순위화, 사후 지표 등 여러 단계에서 다양성을 다룬다.</p>
+<p><b>규범적(normative) 다양성.</b> Helberger를 따라 규범적으로 다양한 뉴스 추천을 "사용자에게 정보를 주고 민주 사회에서 시민 역할을 하도록 돕는 추천"으로 정의한다. 네 가지 민주주의 모델이 있다.</p>
+<ul>
+<li><b>Liberal</b> — 개인의 자율과 자기계발. 개인 취향에 맞추는 것을 정당하게 본다.</li>
+<li><b>Participatory</b> — 능동적 시민으로서 공적 사안에 참여하도록 돕는다.</li>
+<li><b>Deliberative</b> — 여러 관점을 동등하고 중립적으로 보여 숙의를 촉진한다.</li>
+<li><b>Critical</b> — 현 상태에 도전하고 불의에 맞서도록 자극한다.</li>
+</ul>
+<p>어느 모델을 따를지는 언론사 스스로 정할 문제다. DART는 이 모델들을 Calibration, Fragmentation, Activation, Representation, Alternative Voices 다섯 지표로 구체화했다.</p>
+<p><b>간극.</b> 여러 분야의 미디어 다양성 개념과 측정 사이에 겹치는 부분이 거의 없다는 선행 지적처럼, ILD로 높은 점수를 받은 추천이 편집국 기준으로는 다양하지 않을 수 있다. 이 논문은 그 간극을 메우는 학계–산업 협업(RTL 공동 연구)의 한 사례를 자처한다.</p>
+
+<h3>3. 규범적 다양성의 정식화</h3>
+<p><b>요구 조건.</b> 고전적 거리 공리(동일성, 대칭성, 삼각부등식)에 더해 세 가지를 요구한다. (i) [0,1]로 유계여서 알고리즘 간 비교 가능, (ii) 모든 다양성 측면을 같은 방식으로 다루는 통일성(가중 평균이나 최댓값 조합이 아니라), (iii) 순위가 있는 이산 분포를 다룰 수 있을 것. 원래 DART는 Activation이 [−1,1], Calibration이 [0,∞]처럼 범위가 제각각이라 편집자에게 설명하기 어려웠다.</p>
+<p><b>분포 비교로서의 다양성.</b> 추천 \(Q\)와 그 맥락 \(P\)의 차이를 잰다. \(P\)는 전체 공급 기사, 사용자의 읽기 기록, 다른 사용자가 받은 추천 중 하나다. \(P\)가 같은 사용자 것이면 사용자 내 다양성(필터 버블 방지), 다른 사용자 것이면 사용자 간 다양성(개인화 홈페이지 사이의 관점 차이)을 재는 셈이다.</p>
+<p><b>KL 발산.</b></p>
+<p>\[ D_{KL}(P,Q) = \sum_{x\in\mathcal{X}} P(x)\log_2\frac{P(x)}{Q(x)} = H(P,Q) - H(P) \]</p>
+<p>\(\mathcal{X}\)는 범주(주제, 감성 구간 등)의 집합, \(P(x)\)와 \(Q(x)\)는 범주 \(x\)의 확률이다. \(H(P,Q)\)는 교차 엔트로피, \(H(P)\)는 \(P\)의 엔트로피다. 교차 엔트로피만으로는 \(P=Q\)일 때 0이 되지 않지만 KL은 0이 되므로 동일성 공리를 만족한다. 그러나 대칭성과 삼각부등식은 깨진다.</p>
+<p><b>JS 발산.</b> KL을 대칭화하고 상한을 씌운 형태다. 혼합 분포 \(M=\tfrac{1}{2}(P+Q)\)를 쓰면</p>
+<p>\[ D_{JS}(P,Q) = \tfrac{1}{2}D_{KL}(P\,\|\,M) + \tfrac{1}{2}D_{KL}(Q\,\|\,M) = H(M) - \tfrac{1}{2}\big(H(P)+H(Q)\big) \]</p>
+<p>로그 밑이 2이면 값이 0과 1 사이에 있고, 그 <b>제곱근</b>은 세 공리를 모두 만족하는 진짜 거리(Endres–Schindelin)다. 논문에서 "JS"라고 하면 늘 이 제곱근 버전을 뜻한다.</p>
+<p><b>f-발산으로 통합.</b> 두 발산을 한 식으로 쓰면</p>
+<p>\[ D_f(P,Q) = \sum_x Q(x)\, f\!\left(\frac{P(x)}{Q(x)}\right),\quad f_{KL}(t)=t\log t,\quad f_{JS}(t)=\tfrac{1}{2}\Big[t\log t-(t+1)\log\tfrac{t+1}{2}\Big] \]</p>
+<p>\(t\)는 범주별 확률비 \(P/Q\)이고, 함수 \(f\)만 바꾸면 다른 발산이 된다. 0 확률 문제를 막기 위해 작은 \(\alpha\)로 서로를 섞는다: \(\tilde Q=(1-\alpha)Q+\alpha P\), \(\tilde P=(1-\alpha)P+\alpha Q\). \(\tilde Q\)는 \(Q\)에 없는 범주에서 0으로 나누는 것을, \(\tilde P\)는 \(P\)에 없는 범주를 무시해 발산이 0으로 잘못 떨어지는 것을 막는다. 이는 Steck의 Calibrated Recommendations에서 쓴 처리와 같은 맥락이다.</p>
+
+<h3>3.3 순위 인식 — MRR식 할인</h3>
+<p>사용자는 목록 아래로 갈수록 기사를 볼 가능성이 줄어든다. 그래서 추천 목록 \(R\)의 분포를 순위 가중으로 만든다.</p>
+<p>\[ Q^*(x) = \frac{\sum_i w_{R_i}\,\mathbb{1}_{i\in x}}{\sum_i w_{R_i}} \]</p>
+<p>\(R_i\)는 아이템 \(i\)의 순위, \(\mathbb{1}_{i\in x}\)는 아이템 \(i\)가 범주 \(x\)에 속하면 1이다. 가중 \(w_{R_i}\)는 MRR식이면 \(1/R_i\), NDCG식이면 \(1/\log_2(R_i+1)\), 할인이 없으면 1이다. 저자들은 MRR식을 택한다. 뉴스는 거대한 풀 가운데 극히 일부만 소비되는 희소성 편향이 강해서, 더 가파르게 깎는 할인이 맞다는 이유다. NDCG식은 정보 요구가 뚜렷해 아래까지 스크롤하는 검색 상황에 더 어울린다고 본다.</p>
+<p>\(P\)도 순위 목록이면 같은 방식으로, 읽기 기록이면 최근에 읽은 기사일수록 큰 가중을 준다. 전체 기사 풀처럼 순서가 없는 경우는 할인하지 않는다. 이렇게 얻은 RADio 지표는 \(D_f^*(P,Q)=\sum_x Q^*(x) f\big(P^*(x)/Q^*(x)\big)\)다.</p>
+
+<h3>3.4 다섯 DART 지표의 RADio 버전</h3>
+<p>공통 기호는 \(S\)(추천 가능한 기사 풀, "공급"), \(R\)(추천된 순위 목록), \(H\)(최근순 읽기 기록)다. 각 지표는 \(P\)와 \(Q\)를 무엇으로 두느냐만 다르다.</p>
+<ul>
+<li><b>Calibration</b> — \(P^*(c\mid H)\) vs \(Q^*(c\mid R)\). 추천이 읽은 기록의 주제(또는 글 난이도 구간) 분포와 얼마나 맞는가. 낮을수록 취향에 잘 맞춤.</li>
+<li><b>Fragmentation</b> — 사용자 \(u\)와 \(v\)의 추천에서 뉴스 사건(story chain) 분포 \(P^*(e\mid R_u)\) vs \(Q^*(e\mid R_v)\). 공통의 공론장이 있는지, 각자 거품 속에 있는지. 모든 쌍 비교는 너무 비싸서 사용자 쌍을 무작위 표본으로 뽑는다. KL로 계산할 때는 비대칭이므로 양방향 평균을 쓴다.</li>
+<li><b>Activation</b> — 기사 풀의 감정 강도 구간 분포 \(P(k\mid S)\) vs 추천의 \(Q^*(k\mid R)\). 감정 강도는 감성 점수의 절댓값으로 근사한다.</li>
+<li><b>Representation</b> — 정치 관점(정당·정치인 언급) 분포 \(P(p\mid S)\) vs \(Q^*(p\mid R)\).</li>
+<li><b>Alternative Voices</b> — 소수자/다수자 목소리 \(m\in\{\text{Minority},\text{Majority}\}\) 분포. Representation이 관점의 내용을 본다면 이것은 관점을 내는 사람이 보호 집단에 속하는지를 본다.</li>
+</ul>
+<p>각 민주주의 모델이 기대하는 값의 방향은 다음과 같다(원문 Table 1 재구성, "–"는 해당 없음).</p>
+<table>
+<tr><th>모델</th><th>Cal.(주제)</th><th>Cal.(복잡도)</th><th>Frag.</th><th>Activ.</th><th>Repr.</th><th>Alt. voices</th></tr>
+<tr><td>Liberal</td><td>Low</td><td>Low</td><td>High</td><td>–</td><td>–</td><td>–</td></tr>
+<tr><td>Participatory</td><td>High</td><td>Low</td><td>Low</td><td>Medium</td><td>Reflective</td><td>Medium</td></tr>
+<tr><td>Deliberative</td><td>–</td><td>–</td><td>Low</td><td>Low</td><td>Equal</td><td>–</td></tr>
+<tr><td>Critical</td><td>–</td><td>–</td><td>–</td><td>High</td><td>Inverse</td><td>High</td></tr>
+</table>
+<p>중요한 점은 "값이 높을수록 좋은 것이 아니다"라는 것이다. 같은 0.2라도 Liberal 언론사에는 문제 없고 Critical 언론사에는 부족할 수 있다.</p>
+
+<h3>4. 실험 설정 — MIND와 메타데이터 보강 파이프라인</h3>
+<p><b>데이터.</b> MIND는 MSN News에서 2019년 10월 12일~11월 22일 사이 무작위 표본 100만 사용자의 노출 로그(보여 준 기사, 클릭한 기사, 읽기 기록)를 담는다. 저자들은 URL로 기사 본문을 수집했다.</p>
+<p><b>추천 모델.</b> MIND 공개 시 함께 나온 뉴스 특화 신경망 모델 NPA, NAML, LSTUR, NRMS를 쓰고, 원래 노출 로그의 후보 안에서 무작위로 고르는 Random과 클릭 수로 고르는 Most popular를 기준선으로 둔다.</p>
+<p><b>보강 파이프라인(5단계).</b> (1) Flesch–Kincaid 읽기 쉬움 점수로 복잡도를 매기고 구간화, (2) TF-IDF 코사인 유사도와 3일 이동 창으로 같은 사건 기사를 story chain으로 군집, (3) textBlob 감성 극성의 절댓값으로 감정 강도, (4) spaCy로 사람·조직·장소 개체명 인식, (5) Wikidata 퍼지 매칭으로 정치인·정당 여부 판별. Wikipedia 페이지와 연결되지 않는 인물을 "소수자 목소리"로 간주한다는 점은 상당히 거친 근사다. 저자들도 파이프라인이 불완전한 근사임을 명시한다.</p>
+<p><b>신뢰구간.</b> RADio는 모든 \(\{P,Q\}\) 쌍의 평균이므로 쌍 단위로 신뢰구간을 낸다. 시드나 교차검증 분할에 대한 신뢰구간까지 겹치면 다차원이 되어 생략했다.</p>
+
+<h3>5. 결과</h3>
+<p>기본 설정(순위 인식 JS)의 결과다. 표 캡션에는 @10, 본문에는 기본값이 @N으로 적혀 있어 원문이 다소 불일치한다. 신경망 모델의 NDCG는 MIND 원 논문 값을 옮긴 것이다.</p>
+<table>
+<tr><th>모델</th><th>Cal.(주제)</th><th>Cal.(복잡도)</th><th>Frag.</th><th>Activ.</th><th>Repr.</th><th>Alt.</th><th>NDCG</th></tr>
+<tr><td>LSTUR</td><td>0.5847</td><td>0.3632</td><td>0.9046</td><td>0.1819</td><td>0.1261</td><td>0.0409</td><td>0.4134</td></tr>
+<tr><td>NAML</td><td>0.5709</td><td>0.3593</td><td>0.8836</td><td>0.1842</td><td>0.1230</td><td>0.0384</td><td>0.4091</td></tr>
+<tr><td>NPA</td><td>0.5838</td><td>0.3619</td><td>0.8979</td><td>0.1841</td><td>0.1359</td><td>0.0390</td><td>0.4068</td></tr>
+<tr><td>NRMS</td><td>0.5662</td><td>0.3548</td><td>0.8872</td><td>0.1794</td><td>0.1278</td><td>0.0362</td><td>0.4163</td></tr>
+<tr><td>Most popular</td><td>0.6526</td><td>0.3477</td><td>0.8923</td><td>0.1949</td><td>0.1268</td><td>0.0342</td><td>0.2750</td></tr>
+<tr><td>Random</td><td>0.6636</td><td>0.3981</td><td>0.9439</td><td>0.2715</td><td>0.2578</td><td>0.0698</td><td>0.2949</td></tr>
+</table>
+<p><b>전반적 해석.</b> Random은 모든 지표에서 발산이 가장 크고, 정의상 관련성은 낮다. Most popular와 Random의 NDCG가 비슷한 것은 MIND에서 클릭이 0~1회인 기사가 많아, 후보들의 클릭 수가 비슷하면 인기 기반 추천이 사실상 무작위 선택이 되기 때문이다. 네 신경망 모델은 서로 비슷한 추천을 내 점수도 비슷하다. 신경망이 읽기 기록 주제에 더 잘 보정되지만, 복잡도 보정만은 Most popular가 근소하게 낫다.</p>
+<p><b>5.1 발산 종류.</b> KL은 낮은 쪽으로 쏠린 분포를, JS는 더 가운데 몰린 분포를 보였다. JS는 신경망과 단순 기준선(특히 Random) 사이 대비가 더 컸다. 큰 표본에서 Random은 후보 풀을 반영한 "다양한 추천"의 근사이므로, 이 대비가 뚜렷한 것이 바람직하다. KL은 일부 경우 쌍별 값 분포를 크게 왜곡했다. 이론(진짜 거리)과 실험 모두 JS를 지지한다.</p>
+<p><b>5.2 순위 인식.</b> 할인 없이 Fragmentation을 재면 LSTUR과 Most popular가 비슷하게 분포한다. 순위 할인을 넣으면 LSTUR은 발산이 커지는 쪽으로 이동하고 Most popular는 거의 그대로여서, 두 방식을 구분할 수 있게 된다.</p>
+<p><b>5.3 컷오프 @n.</b> @1, 2, 5, 10, 20, N에서 LSTUR을 보면 컷오프가 커질수록 순위 인식의 효과가 커지고, MRR 할인이 아래 순위를 강하게 깎기 때문에 대략 10개 이후 값이 안정된다. MIND는 후보가 20개를 넘는 경우가 드물어 @20과 @N이 비슷하다. 순위 인식 없이 컷오프도 없으면 Activation·Representation·Alternative Voices는 추천과 기준 분포가 같아져 발산이 나오지 않는다(후보 전체를 다 내놓는 셈이기 때문).</p>
+<p><b>5.4 규범적 평가 예시.</b> Participatory 규범을 따르는 공영 언론사라면 낮은 Fragmentation·Activation을 원하므로 신경망 모델이 적합해 보인다(본문 서술 기준; 표 1은 Participatory의 Activation을 Medium으로 적고 있어 약간 어긋난다). 반대로 "다른 관점" 코너를 Critical 원칙으로 운영하려면 높은 Representation·Alternative Voices 발산이 필요하고, 이 기준으로는 Random이 가장 낫다. 하지만 "무작위 추천이 Critical에 적합하다"는 결론은 무의미하며, 실제로는 목표값 사이 트레이드오프를 조정하거나 이 지표를 직접 최적화해야 한다고 저자들은 말한다.</p>
+
+<h3>6. 논의와 결론</h3>
+<p>f-발산 하나로 통일하면 "0이면 동일, 클수록 다름"이라는 해석이 모든 지표에 공통으로 적용된다. 대가도 있다. 범주 사이 관계(정당 간 이념 거리 등)를 무시하고 범주 순서도 임의적이다. 연속값은 임의 구간으로 잘라야 해서 아주 가까운 값이 다른 구간에 들어갈 수 있다. 주제 Calibration처럼 메타데이터가 단순한 지표는 모델 간 차이가 뚜렷했지만, 복잡한 파이프라인이 필요한 지표(Representation, Alternative Voices, Activation)는 그렇지 않았고 파이프라인 품질을 검증할 정답도 없다. 편집팀을 포함한 사람 평가, 경성 뉴스 위주 데이터셋에서의 재검증이 향후 과제다.</p>
+<p>결론적으로 RADio는 정확도 지표를 대체하는 것이 아니라 beyond-accuracy 지표처럼 <b>보완</b>하는 도구이며, 무엇보다 기술팀과 편집팀이 같은 숫자를 놓고 대화하게 만드는 다리 역할을 목표로 한다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>ILD (Intra-List Diversity)</b> — 추천 목록 안 아이템 쌍 비유사도의 평균. 가장 흔한 다양성 지표지만 "무엇이 다른가"를 거리 함수에 떠넘기고, 순위나 규범 목표를 반영하지 않는다.</li>
+<li><b>KL 발산</b> — 기준 분포 \(P\)를 \(Q\)로 근사할 때의 정보 손실. \(P=Q\)이면 0이지만 비대칭이고 상한이 없으며, \(Q(x)=0\)인 범주에서 발산한다.</li>
+<li><b>Jensen–Shannon 발산</b> — 두 분포의 평균 \(M\)에 대한 KL의 평균. 대칭, 로그 밑 2에서 [0,1] 유계이며, 그 제곱근은 진짜 거리다.</li>
+<li><b>f-발산</b> — \(\sum_x Q(x) f(P(x)/Q(x))\) 형태의 발산 가족. 볼록 함수 \(f\) 선택에 따라 KL, JS, 총변동거리 등이 된다.</li>
+<li><b>Calibrated Recommendations (Steck, 2018)</b> — 추천의 장르 분포가 사용자 이력의 장르 분포와 맞도록 KL로 재순위화하는 방법. RADio의 Calibration과 0확률 처리(\(\alpha\) 혼합)의 직접적 선례다.</li>
+<li><b>MRR vs NDCG 할인</b> — \(1/R\)은 \(1/\log_2(R+1)\)보다 훨씬 가파르게 줄어든다. 2위 가중이 MRR식은 0.5, NDCG식은 약 0.63이다.</li>
+<li><b>DART 지표</b> — Vrijenhoek 등(2021)이 Helberger의 민주주의 모델에서 뽑아낸 다섯 규범 지표(Calibration, Fragmentation, Activation, Representation, Alternative Voices). RADio는 이를 수학적으로 재정식화한 것이다.</li>
+<li><b>MIND 데이터셋</b> — Microsoft가 MSN News 로그로 만든 대규모 뉴스 추천 벤치마크. 노출 로그와 클릭, 읽기 기록을 제공하며 NPA·NAML·LSTUR·NRMS 기준 결과가 함께 공개됐다.</li>
+<li><b>Story chain</b> — 같은 사건을 다룬 기사들의 묶음. 주제(카테고리)보다 세밀하고 개별 기사보다 거친 단위로, Fragmentation 측정에 쓰인다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> RADio가 기본으로 채택한 발산과 순위 할인 방식은 무엇인가?
+<details><summary>정답 보기</summary>로그 밑 2를 쓴 Jensen–Shannon 발산의 제곱근, 그리고 \(w_{R_i}=1/R_i\)인 MRR식 할인. 뉴스는 소비가 극히 일부에 몰리는 희소성 편향이 강해 NDCG식보다 가파른 할인을 택했다.</details></li>
+<li><b>[사실·객관식]</b> 다음 중 Random 추천기가 가장 큰 값을 보이지 <u>않은</u> 지표는? (A) Representation (B) Fragmentation (C) Activation (D) 해당 없음 — 모든 RADio 지표에서 가장 컸다
+<details><summary>정답 보기</summary>(D). Random은 여섯 RADio 지표 모두에서 발산이 가장 컸다(예: Representation 0.2578, Fragmentation 0.9439). NDCG만 신경망보다 낮았다.</details></li>
+<li><b>[사실]</b> 실험에서 "소수자 목소리"는 어떻게 판별했나?
+<details><summary>정답 보기</summary>spaCy 개체명 인식으로 사람으로 식별되었지만 Wikidata/Wikipedia 항목과 연결되지 않는 인물을 소수자 목소리로 보았다. 저자들도 인정하듯 매우 거친 근사다.</details></li>
+<li><b>[원리]</b> KL 대신 JS를 택한 이론적 이유 세 가지는?
+<details><summary>정답 보기</summary>① 대칭성: \(D(P,Q)=D(Q,P)\)라 Fragmentation처럼 누가 기준인지 애매한 경우에도 한 값이 나온다. ② 유계성: 로그 밑 2에서 [0,1]이라 지표·모델 간 비교가 쉽다. ③ 제곱근이 삼각부등식까지 만족하는 진짜 거리다. KL은 동일성만 만족한다.</details></li>
+<li><b>[원리]</b> \(\tilde Q=(1-\alpha)Q+\alpha P\), \(\tilde P=(1-\alpha)P+\alpha Q\)로 섞는 두 처리는 각각 어떤 문제를 막는가?
+<details><summary>정답 보기</summary>\(\tilde Q\)는 \(P\)에는 있고 \(Q\)에는 없는 범주에서 \(P/Q\)의 0 나눗셈을 막는다. \(\tilde P\)는 \(Q\)에는 있고 \(P\)에는 없는 범주가 계산에서 사라져 발산이 인위적으로 0에 가까워지는 것을 막는다. 섞은 뒤 다시 정규화해 합을 1로 유지한다.</details></li>
+<li><b>[원리]</b> 순위 인식도, 컷오프도 없이 Activation을 계산하면 왜 발산이 0이 되는가?
+<details><summary>정답 보기</summary>Activation·Representation·Alternative Voices의 기준 \(P\)는 후보 풀 \(S\)다. 할인과 컷오프가 없으면 추천 목록은 후보 전체를 순서만 바꿔 담게 되어 \(Q\)의 분포가 \(P\)와 똑같아진다. 순서를 반영해야 비로소 "무엇을 위에 놓았는가"가 측정된다.</details></li>
+<li><b>[해석]</b> Most popular와 Random의 NDCG가 비슷한(0.2750 vs 0.2949) 이유를 저자들은 어떻게 설명하나?
+<details><summary>정답 보기</summary>MIND 로그에는 클릭이 0~1회인 기사가 많아, 후보들의 클릭 수가 비슷하면 인기 순 정렬이 사실상 무작위 선택이 된다. 그래서 두 기준선의 성능이 인위적으로 비슷해졌다.</details></li>
+<li><b>[해석·객관식]</b> 신경망 모델의 Calibration(주제)이 Random보다 낮다(약 0.57~0.58 vs 0.6636)는 결과의 올바른 해석은? (A) 신경망이 더 다양하다 (B) 신경망 추천의 주제 분포가 사용자의 읽기 기록에 더 가깝다 (C) 신경망이 더 나쁘다 (D) 신경망이 더 공정하다
+<details><summary>정답 보기</summary>(B). Calibration은 읽기 기록 대비 발산이므로 낮을수록 취향에 맞춘 것이다. 그것이 "좋은지"는 모델에 따라 다르다. Liberal 모델은 낮은 Calibration을, Participatory 모델은 높은 값을 기대한다.</details></li>
+<li><b>[비판]</b> RADio의 f-발산 정식화가 갖는 구조적 한계를 두 가지 이상 들어 보라.
+<details><summary>정답 보기</summary>① 범주를 서로 독립인 칸으로 다루므로 범주 간 거리(좌파–중도 vs 좌파–극우)가 반영되지 않는다. Wasserstein 같은 거리를 쓰면 보완 가능하다. ② 연속값(감정 강도, 난이도)을 임의 구간으로 자르므로 구간 경계에 민감하다. ③ 입력 메타데이터(감성, 개체 연결)의 품질을 검증할 정답이 없어 지표 차이가 모델 탓인지 파이프라인 잡음인지 가르기 어렵다. ④ 목표값을 정해 주지 않으므로 "얼마가 적정한가"는 여전히 언론사 판단에 맡겨진다.</details></li>
+<li><b>[적용]</b> 국내 포털 뉴스 탭에 RADio를 도입한다면 어떤 \(P\)를 쓰고, 어떻게 운영하겠는가?
+<details><summary>정답 보기</summary>예시: 필터 버블 점검은 Calibration(\(P\)=최근 읽기 기록, 최근일수록 가중), 공론장 분절 점검은 무작위 사용자 쌍의 Fragmentation(\(P\)=다른 사용자의 추천, 사건 클러스터 단위), 정치 균형은 Representation(\(P\)=당일 기사 풀의 정당·정치인 언급 분포)으로 둔다. 노출 위치별 클릭률로 할인 함수를 실측해 \(1/R\) 가정을 검증하고, 편집팀과 어느 민주주의 모델(목표 방향)을 따를지 먼저 합의한 뒤, A/B 실험에서 CTR과 함께 대시보드로 감시한다. 한국어 개체 연결·감성 모델의 품질은 별도 사람 평가로 확인한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#341</b> Towards Unified Metrics for Accuracy and Diversity for Recommender Systems (2021) — 정확도와 다양성을 하나의 지표로 통합하려는 시도. RADio의 "통일된 틀" 문제의식과 짝을 이룬다.</li>
+<li><b>#25</b> Going Beyond Local: Global Graph-Enhanced Personalized News Recommendations (2023) — 같은 MIND 계열 뉴스 추천 모델 연구. 이런 모델의 결과를 RADio로 점검해 볼 수 있다.</li>
+<li><b>#16</b> An Audit of Misinformation Filter Bubbles on YouTube (2021) — 추천이 만드는 필터 버블을 실제로 감사한 연구. Fragmentation·Calibration이 재려는 현상의 사례다.</li>
+<li><b>#352</b> Dynamic Graph Construction for Improving Diversity of Recommendation (2021) — 다양성을 학습 단계에서 높이는 방법. RADio가 말한 "지표를 직접 최적화" 방향과 연결된다.</li>
+<li><b>#2</b> Adaptive, Personalized Diversity for Visual Discovery (2016) — 사용자마다 다른 다양성 요구를 다룬 기술적 다양성 연구. 규범적 다양성과 대비해 읽으면 좋다.</li>
+</ul>
+</main>
+</body>
+</html>
