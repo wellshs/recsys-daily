@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modeling Two-Way Selection Preference for Person-Job Fit</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-16 · #21</span></div>
+<h1>Modeling Two-Way Selection Preference for Person-Job Fit</h1>
+<p class="meta">Chen Yang, Yupeng Hou, Ji-Rong Wen, Wayne Xin Zhao (Renmin University of China, Gaoling School of AI) · Yang Song, Tao Zhang (BOSS Zhipin) · RecSys 2022 Papers · Best Student Paper Runner-up</p>
+<div class="chips"><span>2022</span><span>Best Student Paper Runner-up</span><span>학계+산업(BOSS Zhipin)</span><span>Person-Job Fit</span><span>Reciprocal recommendation</span><span>GNN (LightGCN)</span><span>Contrastive learning</span><span>BERT</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3546752">10.1145/3523227.3546752</a> · arXiv: <a href="https://arxiv.org/abs/2208.08612v2">2208.08612v2</a> · PDF: <a href="https://arxiv.org/pdf/2208.08612v2">arXiv PDF</a> · 코드: <a href="https://github.com/RUCAIBox/DPGNN">github.com/RUCAIBox/DPGNN</a> · 읽기 예상 13분</p>
+
+<div class="callout">원문 확보: arXiv v2 PDF 전문을 읽고 작성했다. 그림 2·3(희소도 그룹별, 하이퍼파라미터별 곡선)의 세부 값은 텍스트로 추출되지 않아 본문에 서술된 경향만 옮겼다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 채용 매칭은 "구직자가 회사를 원하고 <i>동시에</i> 회사도 구직자를 원해야" 성사되는 양방향 선택이므로, 각 구직자·공고를 <b>능동(active) 노드와 수동(passive) 노드 두 개</b>로 쪼갠 그래프를 만들어 양쪽 의향을 따로 학습하자는 논문이다. 모델 이름은 DPGNN(Dual-Perspective GNN).</p>
+<p><b>풀려는 문제.</b> 기존 Person-Job Fit(PJF) 연구는 이력서·공고 텍스트를 매칭하거나(전체 적합도), 한쪽 방향(공고 → 적합 후보)만 모델링했다. 하지만 실제 플랫폼에는 "지원했지만 거절됨", "회사가 연락했지만 구직자가 거절함" 같은 <b>한쪽만 만족한 상호작용</b>이 대량으로 있고, 이 방향 정보는 일반 이분 그래프 CF에서 사라진다.</p>
+<p><b>핵심 아이디어.</b> 구직자 \(c\)는 "내가 고르는 취향" \(\mathbf c^a\)와 "남에게 골라지는 매력" \(\mathbf c^p\)를 따로 가진다. 구직자가 지원했는데 탈락하면 \(\mathbf c^a\)–\(\mathbf j^p\) 간선만, 회사가 제안했는데 거절당하면 \(\mathbf j^a\)–\(\mathbf c^p\) 간선만, 매칭이 성사되면 두 간선을 모두 잇는다. 이 그래프에서 LightGCN식 전파를 하고, 최종 점수는 두 방향 의향 \(r_{i\to k}=\mathbf c_i^a\cdot\mathbf j_k^p\), \(s_{k\to i}=\mathbf j_k^a\cdot\mathbf c_i^p\)의 평균이다. 학습은 양쪽에서 동시에 음성을 뽑는 <b>4중항(quadruple) BPR 손실</b>과, 같은 사람의 능동·수동 표현을 가깝게 만드는 <b>InfoNCE 대조 손실</b>로 한다.</p>
+<p><b>주요 결과.</b> BOSS Zhipin의 106일 로그로 만든 Tech·Sales·Design 세 데이터셋에서, CF(BPRMF·NCF·LightGCN·LFRR), 텍스트(PJFNN·BPJFNN·APJFNN), 혼합(LGCN<sub>BERT</sub>·IPJF·PJFFF) 기준선 10개와 비교했다. "구직자에게 공고 추천"과 "공고에 구직자 추천" 두 방향 모두에서 대부분 지표 1위였고, 최강 기준선 대비 평균 상대 개선은 Tech 7.12%, Sales 4.81%, Design 7.73%다. 예컨대 Tech의 공고 방향 NDCG@5는 0.4410으로 LGCN<sub>BERT</sub>의 0.4085보다 높다.</p>
+<p><b>한계와 남는 질문.</b> 평가는 정답 1개당 20개 무작위 음성을 섞은 샘플링 랭킹이라 실제 전체 후보 랭킹 성능과 차이가 있을 수 있다. 연봉·지역·시간 같은 특징은 쓰지 않았고, 데이터는 비공개다. 두 의향 점수를 단순 평균하는 결합이 최선인지(예: 곱이나 min이 "둘 다 만족"을 더 잘 표현하지 않을지), 그리고 양측 이해관계자 균형(공정성) 문제는 미래 과제로 남았다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 채용은 짝사랑으로 끝나는 경우가 많다</h3>
+<p>온라인 채용 플랫폼에서 구직자와 채용 담당자를 자동으로 연결하는 과제를 Person-Job Fit이라 부른다. 이력서와 공고는 대부분 텍스트라서 최근 연구는 CNN·RNN·주의 메커니즘으로 두 문서를 매칭하는 쪽에 집중했고, 이는 내용 기반 상호(reciprocal) 추천으로 볼 수 있다.</p>
+<p>저자들이 문제 삼는 지점은 <b>방향성</b>이다. 매칭이 이뤄지려면 양쪽이 서로의 기대를 충족해야 하는데, 플랫폼에는 한쪽만 만족한 사례가 흔하다. 구직자가 지원했으나 회사가 거절하거나, 회사가 면접을 제안했으나 구직자가 거절하는 경우다. 이런 실패 기록은 "누가 누구를 원했는가"라는 귀중한 신호를 담고 있지만, 상호작용을 무방향 간선으로 뭉뚱그리면 사라진다.</p>
+<p>그래서 각 구직자(공고)마다 노드를 두 개 둔다. 하나는 <b>내가 상대를 고르는 선호</b>, 다른 하나는 <b>상대에게 선택받는 성질</b>을 담는다. 이렇게 하면 성공·실패 매칭을 하나의 그래프로 표현할 수 있다. 기술적 기여는 (1) 능동·수동 표현을 함께 학습하는 혼합 선호 전파, (2) 4중항 손실과 이중 관점 대조 손실이며, 저자들은 이것이 양방향 선택 선호를 명시적으로 모델링한 첫 PJF 연구라고 주장한다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>Person-Job Fit.</b> 초기에는 EM 알고리즘으로 양측 프로필을 활용하거나 사용자·아이템 기반 CF를 적용했다. 이후 주류는 텍스트 매칭으로, CNN(PJFNN), RNN(BPJFNN, APJFNN), 메모리 네트워크가 쓰였고 적대 학습·전이 학습·co-teaching으로 인코더를 강화했다. 다단계 상호작용(지원, 면접 등)을 감독 신호로 쓰는 랭킹 손실(IPJF), 양측 행동 시퀀스 모델, 검색 기록 활용 등도 있었지만 양방향 선택은 명시적으로 다루지 않았다.</p>
+<p><b>추천 시스템과 그래프 CF.</b> MF, NCF, 오토인코더를 거쳐 LightGCN 같은 그래프 CF가 고차 이웃을 활용한다. 다만 이들은 사용자–아이템 이분 그래프를 전제로 하므로 방향 있는 상호작용을 담기 어렵다.</p>
+<p><b>상호 추천(RRS).</b> 데이팅·채용·소셜처럼 사람을 사람에게 추천하는 분야다. 프로필 기반과 행동 기반 CF로 나뉘는데, 기존 RRS도 방향성 행동으로 양방향 선호를 드러내 모델링하지는 않았다는 것이 저자들의 차별점이다.</p>
+
+<h3>3.1 문제 정의</h3>
+<p>구직자 집합 \(\mathcal C=\{c_1,\dots,c_n\}\), 공고(=고용주) 집합 \(\mathcal J=\{j_1,\dots,j_m\}\)이 있고 각각 이력서·공고 텍스트가 붙어 있다. 구직자 \(c_i\)가 먼저 건 상호작용 집합 \(\mathcal A_{c_i}=\{c_i\to j'\}\), 공고 \(j_k\)가 먼저 건 집합 \(\mathcal A_{j_k}=\{j_k\to c'\}\)이 있다. 양측이 합의(오프라인 면접 합의)에 이른 쌍은 매칭 집합 \(\mathcal M\)에 넣고, 이 쌍은 상호작용 집합에서 뺀다. 매칭 하나는 \(c_i\to j_k\)와 \(j_k\to c_i\) 두 방향 기록으로 볼 수도 있다.</p>
+<p>목표는 매칭 함수 \(y=f(c_i,j_k)\)를 학습하는 것이며, 이는 "공고별 후보 순위"와 "후보별 공고 순위"라는 두 랭킹 문제로도 볼 수 있다. 저자들은 여기에 방향별 의향 점수 \(r_{i\to k}\)(구직자가 공고를 원하는 정도)와 \(s_{k\to i}\)(회사가 구직자를 원하는 정도)를 도입한다.</p>
+
+<h3>3.2 이중 관점 상호작용 그래프</h3>
+<p><b>그래프 구성.</b> 구직자는 \(\mathbf c^a,\mathbf c^p\), 공고는 \(\mathbf j^a,\mathbf j^p\) 두 노드를 가진다. 간선 규칙은 세 가지다.</p>
+<ul>
+<li><b>지원했지만 탈락</b>: 공고는 구직자의 기대를 채웠지만 반대는 아니다 → \(\mathbf c^a\)–\(\mathbf j^p\)만 연결.</li>
+<li><b>회사가 연락했지만 거절당함</b>: 대칭적으로 \(\mathbf j^a\)–\(\mathbf c^p\)만 연결.</li>
+<li><b>매칭 성사</b>: \(\mathbf c^a\)–\(\mathbf j^p\), \(\mathbf j^a\)–\(\mathbf c^p\) 두 간선 모두 연결.</li>
+</ul>
+<p>그림 1에 따르면 같은 사람(공고)의 능동·수동 노드 사이에도 간선을 둔다. 핵심은 "누가 먼저 원했는가"가 간선이 붙는 노드 종류로 인코딩된다는 점이다. 직관적으로, 최종 매칭은 능동·수동 양쪽 관점의 의향이 모두 강할 때만 일어난다.</p>
+<p><b>노드 초기화.</b> 각 노드는 무작위 초기화된 ID 임베딩 \(\mathbf e_n\in\mathbb R^{d_E}\)과, 텍스트 앞에 [CLS]를 붙여 BERT에 넣어 얻은 문서 표현 \(\mathbf t_n\in\mathbb R^{d_O}\)을 가진다. 두 정보를 이어 붙여 초기 표현으로 쓴다.</p>
+\[ \mathbf z_n^{(0)} = [\,\mathbf e_n ;\ \mathbf W\mathbf t_n\,] \in \mathbb R^{d},\quad d=d_E+d_T \]
+<p>\(\mathbf W\in\mathbb R^{d_T\times d_O}\)는 BERT 출력(\(d_O\)차원)을 \(d_T\)차원으로 줄이는 학습 가능한 행렬이고, \([\,;\,]\)는 연결(concatenation)이다. 실험에서는 텍스트 부분 32차원, 선호 임베딩 128차원을 썼다. BERT 표현은 오프라인으로 미리 계산할 수 있어 학습 비용에서 제외된다.</p>
+<p><b>혼합 선호 전파.</b> 노드 종류가 아니라 <b>간선 종류</b>가 다르다는 점에 착안해, 모든 노드에 같은 규칙을 적용하되 매칭 간선과 일방향 간선을 다른 가중으로 섞는다.</p>
+\[ \mathbf z_n^{(l)} = \sum_{u\in\mathcal M_n}\frac{1}{\sqrt{|\mathcal N_n||\mathcal N_u|}}\,\mathbf z_u^{(l-1)} \;+\; \omega\sum_{v\in\mathcal A_n}\frac{1}{\sqrt{|\mathcal N_n||\mathcal N_v|}}\,\mathbf z_v^{(l-1)} \]
+<p>\(\mathcal M_n\)은 노드 \(n\)과 매칭 간선으로 이어진 이웃, \(\mathcal A_n\)은 일방향 상호작용 간선으로 이어진 이웃, \(\mathcal N\)은 각 노드의 전체 이웃이다. 분모는 LightGCN과 같은 대칭 정규화이며 비선형 변환이나 가중 행렬은 없다. \(\omega\)는 "성사된 매칭"과 "한쪽만의 관심"이 전달하는 선호의 세기가 다르다는 점을 반영하는 하이퍼파라미터다. 최종 표현은 0층부터 \(L\)층까지 표현의 평균 \(\mathbf z_n=\frac{1}{L+1}\sum_{l=0}^{L}\mathbf z_n^{(l)}\)이다.</p>
+
+<h3>3.3 양방향 의향으로 예측</h3>
+<p>최종 표현으로 두 의향을 내적한다.</p>
+\[ r_{i\to k}=\mathbf c_i^{a}\cdot\mathbf j_k^{p},\qquad s_{k\to i}=\mathbf j_k^{a}\cdot\mathbf c_i^{p},\qquad \hat y=\tfrac12 r_{i\to k}+\tfrac12 s_{k\to i} \]
+<p>\(r\)은 구직자의 "고르는 취향"과 공고의 "골라지는 매력"이 맞는 정도, \(s\)는 그 반대 방향이다. 매칭 점수는 둘의 평균이다. 하나의 표현으로 \(\mathbf c\cdot\mathbf j\)만 계산하는 일반 CF와 달리, 한쪽 점수만 높고 다른 쪽이 낮은 "짝사랑" 상태를 분리해서 볼 수 있다.</p>
+
+<h3>3.4 최적화</h3>
+<p><b>4중항 손실.</b> 절대 점수 회귀는 과적합과 편향을 부르기 쉬워 랭킹 손실을 쓴다. 매칭 쌍 \(\langle c_i,j_k\rangle\)마다 구직자 쪽 음성 공고 \(j_{k'}\)와 공고 쪽 음성 구직자 \(c_{i'}\)를 하나씩 뽑아 4중항 \(\langle i,k,i',k'\rangle\)을 만든다. 바라는 순서는 \(f(c_i,j_k)>f(c_i,j_{k'})\)이면서 \(f(c_i,j_k)>f(c_{i'},j_k)\)이다. BPR을 확장해 다음을 최소화한다.</p>
+\[ \mathcal L_{main} = -\frac{1}{|\mathcal D|}\sum_{(i,k,i',k')\in\mathcal D}\log\sigma\!\Big(\hat y_{i,k}-\tfrac12\hat y_{i,k'}-\tfrac12\hat y_{i',k}\Big) \]
+<p>\(\mathcal D\)는 \((i,k)\in\mathcal M\)이고 \((i,k'),(i',k)\)가 비매칭 집합 \(\mathcal M^-\)에 속하는 4중항 모음, \(\sigma\)는 시그모이드다. 두 음성 점수의 평균과 양성 점수를 비교하므로 한 번의 업데이트에 양쪽 관점이 모두 들어간다. 저자들은 이것이 이중 관점 랭킹을 안정적으로 만든다고 설명한다.</p>
+<p><b>이중 관점 대조 학습.</b> 같은 구직자의 능동·수동 표현은 결국 같은 사람이므로 비슷해야 한다는 자연스러운 제약을 건다. 같은 사람의 \((\mathbf c_i^a,\mathbf c_i^p)\)를 양성 쌍, 다른 구직자와의 조합을 음성 쌍으로 하는 InfoNCE다.</p>
+\[ \mathcal L^{C}_{ssl} = -\sum_{c_i\in\mathcal C}\log\frac{\exp(\mathbf c_i^a\cdot\mathbf c_i^p/\tau)}{\sum_{c_{i'}\in\mathcal C}\big(\exp(\mathbf c_i^a\cdot\mathbf c_{i'}^p/\tau)+\exp(\mathbf c_{i'}^a\cdot\mathbf c_i^p/\tau)\big)} \]
+<p>\(\tau\)는 온도로, 작을수록 어려운 음성에 더 민감해진다. 분모는 "내 능동 vs 남의 수동", "남의 능동 vs 내 수동"을 모두 포함해 양쪽 방향으로 구분력을 요구한다. 공고 쪽도 같은 식 \(\mathcal L^{J}_{ssl}\)을 만들어 \(\mathcal L_{ssl}=\mathcal L^C_{ssl}+\mathcal L^J_{ssl}\)로 합친다. 기존 자기지도 추천이 속성 상관이나 데이터 증강으로 시점을 만들었다면, 여기서는 증강 없이 모델 구조가 이미 제공하는 두 시점을 쓰므로 효율적이라는 것이 저자들의 주장이다.</p>
+<p><b>전체 목적과 복잡도.</b> \(\mathcal L=\mathcal L_{main}+\lambda\mathcal L_{ssl}\)로 다중 과제 학습한다. 에폭당 비용은 GCN 전파 \(O(|\mathcal E|\cdot L\cdot d)\)와 대조 손실 \(O(|\mathcal V|\cdot S\cdot d)\)의 합이다(\(|\mathcal E|\) 간선 수, \(|\mathcal V|\) 노드 수, \(S\)는 사용자당 대조 음성 샘플 수). 실제 구현에서는 미니배치 안의 구직자·공고로 대조 손실을 계산한다(Algorithm 1).</p>
+
+<h3>4.1 실험 설정</h3>
+<p><b>데이터.</b> 중국 채용 플랫폼(저자 소속 BOSS Zhipin)의 106일 실제 로그로 세 직군 데이터셋을 만들었다. 규모는 다음과 같다.</p>
+<table>
+<tr><th>데이터</th><th>구직자</th><th>공고</th><th>구직자→공고</th><th>공고→구직자</th><th>매칭</th></tr>
+<tr><td>Tech</td><td>56,634</td><td>48,090</td><td>3,749,807</td><td>907,087</td><td>925,193</td></tr>
+<tr><td>Sales</td><td>15,854</td><td>12,772</td><td>213,860</td><td>2,077,560</td><td>145,066</td></tr>
+<tr><td>Design</td><td>12,290</td><td>9,143</td><td>1,200,590</td><td>76,287</td><td>166,270</td></tr>
+</table>
+<p>눈여겨볼 점은 방향 비율이 직군마다 크게 다르다는 것이다. Tech·Design은 구직자가 먼저 지원하는 경우가 압도적이고, Sales는 반대로 회사가 먼저 연락하는 경우가 훨씬 많다.</p>
+<p><b>분할과 평가.</b> 시간순으로 마지막 11일을 테스트, 그 앞 11일을 검증, 나머지 84일을 학습에 썼다. 양성 쌍마다 구직자에게는 공고 20개, 공고에게는 구직자 20개를 무작위 음성으로 섞어 순위를 매기고, 두 방향 각각에서 Recall@5, Precision@5, NDCG@5, MRR을 구직자·공고 평균으로 보고한다.</p>
+<p><b>기준선.</b> CF: BPRMF, NCF, LightGCN, LFRR(상호 추천용 잠재 요인 모델). 텍스트: PJFNN(계층 CNN + 코사인), BPJFNN(BiLSTM), APJFNN(계층 주의 RNN). 혼합: LGCN<sub>BERT</sub>(LightGCN 초기 임베딩에 텍스트 결합, DPGNN의 식 (1)과 같은 초기화), IPJF(다중 라벨로 매칭 성향 학습), PJFFF(과거 지원 이력 LSTM으로 명시·암묵 의도 융합). 일방향 상호작용을 쓰지 못하는 기준선에는 그것을 양성으로 넣어 학습했는데, 이것이 대체로 성능을 높였다고 한다. 구현은 RecBole, 최적화는 Adam, 텍스트 인코더는 bert-base-uncased로 초기화했고 학습률은 {1e-2,…,1e-5}에서 탐색, 조기 종료 인내 10에폭.</p>
+
+<h3>4.2 전체 성능 (RQ1)</h3>
+<p>대표 지표만 다시 정리하면 다음과 같다(최강 기준선은 지표마다 다를 수 있어 괄호에 표기).</p>
+<table>
+<tr><th>데이터·방향</th><th>지표</th><th>최강 기준선</th><th>DPGNN</th></tr>
+<tr><td>Tech·구직자</td><td>R@5</td><td>0.2685 (LGCN<sub>BERT</sub>)</td><td>0.2941</td></tr>
+<tr><td>Tech·공고</td><td>NDCG@5</td><td>0.4085 (LGCN<sub>BERT</sub>)</td><td>0.4410</td></tr>
+<tr><td>Sales·구직자</td><td>R@5</td><td>0.2272 (LGCN<sub>BERT</sub>)</td><td>0.2330</td></tr>
+<tr><td>Sales·공고</td><td>R@5</td><td>0.2575 (LightGCN)</td><td>0.2578</td></tr>
+<tr><td>Design·구직자</td><td>NDCG@5</td><td>0.2498 (LGCN<sub>BERT</sub>)</td><td>0.2478</td></tr>
+<tr><td>Design·공고</td><td>NDCG@5</td><td>0.3156 (PJFFF)</td><td>0.3524</td></tr>
+</table>
+<p>저자들의 해석은 이렇다. CF 기준선 중 LightGCN이 가장 좋지만 나머지와 큰 차이는 없다. 텍스트 기준선은 대체로 약한데, 이력서·공고가 잘 구조화되고 완전해야 효과가 나지만 플랫폼 사용자들의 작성 습관이 제각각이기 때문으로 본다. 다만 Tech 문서에는 구체적 기술 요구가 많아 텍스트 모델이 상대적으로 잘 작동한다. APJFNN은 Tech에서 24시간 안에 학습이 끝나지 않아 결과가 없다. IPJF는 상호작용 유형 간 불균형이 심한 Sales에서 부진했고, 과거 이력을 쓰는 PJFFF는 대체로 양호했다. 텍스트와 상호작용을 모두 쓰는 LGCN<sub>BERT</sub>가 기준선 중 대개 최고였다는 사실은 두 정보원을 함께 쓰는 것이 중요함을 보여 준다.</p>
+<p>DPGNN은 세 데이터셋 대부분 지표에서 1위이고 유의수준 0.01의 paired t-test로 유의함을 표시했다. 평균 상대 개선은 Tech 7.12%, Sales 4.81%, Design 7.73%. 예외도 있다. Design의 구직자 방향 NDCG@5·MRR은 LGCN<sub>BERT</sub>가 근소하게 앞선다. Sales 공고 방향 Recall은 LightGCN과 거의 같다. 개선 폭은 공고 방향(회사에게 후보 추천)에서 대체로 더 크게 나타난다.</p>
+
+<h3>4.2 절제 실험 (RQ2)</h3>
+<p>세 변형을 비교했다. w/o DPG는 사람당 표현 하나인 일반 그래프로 대체, w/o QL은 4중항 손실 대신 일반 BPR, w/o SSL은 대조 손실 제거다. 표 4의 DPGNN 값이 Tech 결과와 같아 Tech 데이터로 보인다.</p>
+<table>
+<tr><th>모델</th><th>구직자 R@5</th><th>구직자 NDCG@5</th><th>공고 R@5</th><th>공고 NDCG@5</th></tr>
+<tr><td>DPGNN</td><td>0.2941</td><td>0.3119</td><td>0.3430</td><td>0.4410</td></tr>
+<tr><td>w/o DPG</td><td>0.2770</td><td>0.2899</td><td>0.3360</td><td>0.4257</td></tr>
+<tr><td>w/o QL</td><td>0.2756</td><td>0.2945</td><td>0.3294</td><td>0.4188</td></tr>
+<tr><td>w/o SSL</td><td>0.2897</td><td>0.3125</td><td>0.3346</td><td>0.4286</td></tr>
+</table>
+<p>저자들은 성능 순서를 w/o QL &lt; w/o DPG &lt; w/o SSL &lt; DPGNN으로 요약하고, 특히 이중 관점 그래프와 4중항 손실의 기여가 크다고 결론짓는다. 세부적으로 보면 구직자 방향 NDCG@5·MRR에서는 w/o SSL이 오히려 아주 근소하게 높아, 대조 손실의 효과는 주로 공고 방향에서 드러난다.</p>
+
+<h3>4.2 희소도별 분석 (RQ3)</h3>
+<p>구직자와 공고를 상호작용 수에 따라 다섯 그룹(G1이 가장 희소, 그룹별 총 상호작용 수는 같게)으로 나눠 LGCN<sub>BERT</sub>와 비교했다. 총 10개 그룹 모두에서 DPGNN이 앞섰다. 저자들은 두 이유를 든다. 초기 표현에 텍스트가 섞여 있어 행동 데이터만으로 예측하지 않는다는 점, 그리고 대조 학습이 희소한 데이터에서 효과적이라고 알려져 있다는 점이다. 다만 텍스트는 LGCN<sub>BERT</sub>도 똑같이 쓰므로, 차이를 만든 것은 주로 이중 노드 구조와 손실 쪽이라고 읽는 편이 정확하다.</p>
+
+<h3>4.2 하이퍼파라미터 (RQ4)</h3>
+<p><b>GCN 층 수.</b> 0~4층 중 3층에서 가장 좋았고, 1층 이상이면 비교적 안정적이다. 4층에서는 과평활(over-smoothing)로 보이는 하락이 있다. <b>온도 \(\tau\).</b> 흔히 쓰는 값 전반에서 LGCN<sub>BERT</sub>보다 좋았고 0.2 부근이 최적이었다. <b>대조 손실 가중 \(\lambda\).</b> 0.05 이상에서 더 좋았다. 저자들은 큰 \(\lambda\)가 유리하다는 점을 "같은 사람의 두 선호 표현 간 상관을 모델링하는 것이 중요하다"는 근거로 해석한다. (본문에 적힌 \(\tau\)·\(\lambda\)의 탐색 범위와 그림 3의 축 값이 서로 뒤바뀐 듯 보여, 정확한 범위는 논문 참조.)</p>
+
+<h3>4.3 사례 연구</h3>
+<p>Tech 테스트 셋에서 프런트엔드 개발자 이력서와 프런트엔드 공고 한 쌍을 뽑았다. 두 문서는 기술 키워드(Vue, JavaScript 프레임워크 등)가 많이 겹쳐 텍스트 유사도가 높고, BPJFNN·LightGCN 같은 기준선은 추천하겠다는 쪽의 점수를 냈다. 반면 DPGNN은 구직자→공고 의향은 높지만 공고→구직자 의향은 낮다고 판단했다. 즉 구직자는 이 자리를 원하지만 회사는 더 나은 후보를 고를 가능성이 크다는 것이고, 실제로 회사의 긍정 응답이 없었던 사례다. 텍스트 유사도만으로는 놓치는 "짝사랑"을 양방향 점수가 잡아낸다는 메시지다(그림 속 개별 점수는 논문 참조).</p>
+
+<h3>5. 결론과 향후 과제</h3>
+<p>방향성 있는 상호작용을 이중 관점 그래프로 표현하고, 혼합 선호 전파와 4중항 손실·대조 손실로 학습해 두 방향 모두에서 경쟁 기준선을 앞섰다. 향후에는 타임스탬프, 희망 연봉, 근무지, 시간순 행동 시퀀스 같은 특징을 통합한 틀을 만들고, 구직자와 회사를 두 이해관계자 집단으로 보아 다양성·참신성·공정성 측면의 균형을 다루는 다중 이해관계자 추천으로 확장하겠다고 밝힌다.</p>
+
+<h2>용어·배경 정리</h2>
+<dl>
+<dt><b>Person-Job Fit (PJF)</b></dt><dd>구직자와 채용 공고의 적합도를 예측해 양쪽에 추천하는 과제. 이력서·공고 텍스트 매칭으로 많이 연구되었고, 결과가 사람의 경력에 영향을 주므로 사회적 파급이 크다.</dd>
+<dt><b>상호 추천 (Reciprocal Recommender System)</b></dt><dd>추천 대상도 선택권을 가진 사람인 추천. 데이팅, 채용, 멘토 매칭 등이 해당하며, 한쪽만 만족하면 실패이므로 양쪽 선호를 함께 고려해야 한다.</dd>
+<dt><b>방향성 상호작용</b></dt><dd>누가 먼저 행동했는가(지원 vs 제안)를 담은 기록. 일반 사용자–아이템 그래프에서는 무방향 간선 하나로 표현되어 이 정보가 사라진다.</dd>
+<dt><b>LightGCN</b></dt><dd>그래프 CF에서 비선형 활성화와 가중 행렬을 빼고 정규화된 이웃 평균만 반복하는 단순 GCN. 층별 표현을 평균해 최종 임베딩으로 쓴다. DPGNN의 전파 규칙이 이를 그대로 따른다.</dd>
+<dt><b>BPR 손실</b></dt><dd>"관측된 양성 아이템 점수가 음성보다 높아야 한다"는 쌍 비교를 \(-\log\sigma(\hat y^+-\hat y^-)\)로 최적화하는 랭킹 손실. 이 논문은 이를 양쪽 음성을 함께 쓰는 4중항으로 확장했다.</dd>
+<dt><b>InfoNCE / 대조 학습</b></dt><dd>같은 대상의 두 시점(view) 표현은 가깝게, 다른 대상과는 멀게 만드는 손실. 온도 \(\tau\)가 분포의 날카로움을 조절한다. 보통 데이터 증강으로 시점을 만들지만 여기선 능동·수동 표현이 두 시점이다.</dd>
+<dt><b>과평활 (over-smoothing)</b></dt><dd>GCN 층을 너무 깊게 쌓으면 노드 표현들이 서로 비슷해져 구분력이 떨어지는 현상. DPGNN에서 4층부터 성능이 떨어지는 원인으로 지목된다.</dd>
+<dt><b>샘플링 기반 평가</b></dt><dd>정답 하나에 음성 몇 개(여기서는 20개)만 섞어 순위를 매기는 방식. 계산은 싸지만 전체 후보 랭킹과 순위가 어긋날 수 있다는 비판이 있다.</dd>
+</dl>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> DPGNN에서 구직자가 지원했지만 회사에 거절당한 상호작용은 어떤 노드 쌍을 잇는가? (a) \(\mathbf c^a\)–\(\mathbf j^a\) (b) \(\mathbf c^a\)–\(\mathbf j^p\) (c) \(\mathbf c^p\)–\(\mathbf j^a\) (d) 두 간선 모두
+<details><summary>정답 보기</summary>(b). 구직자의 능동 선호가 공고의 수동 매력과 맞았다는 신호이므로 \(\mathbf c^a\)–\(\mathbf j^p\)만 연결한다. 두 간선 모두 잇는 것은 매칭이 성사된 경우다.</details></li>
+<li><b>[사실]</b> 실험 데이터의 기간과 학습·검증·테스트 분할 방식은?
+<details><summary>정답 보기</summary>106일 로그를 시간순으로 나눠, 마지막 11일은 테스트, 그 앞 11일은 검증, 나머지 84일은 학습에 썼다.</details></li>
+<li><b>[사실]</b> 세 데이터셋 중 회사→구직자 방향 상호작용이 구직자→회사보다 훨씬 많은 것은?
+<details><summary>정답 보기</summary>Sales. 공고→구직자 2,077,560건, 구직자→공고 213,860건이다. Tech·Design은 반대로 구직자 지원이 훨씬 많다.</details></li>
+<li><b>[원리]</b> 예측 점수 \(\hat y\)는 어떻게 계산되며, 하나의 임베딩으로 \(\mathbf c\cdot\mathbf j\)를 계산하는 일반 CF와 무엇이 다른가?
+<details><summary>정답 보기</summary>\(\hat y=\frac12\mathbf c^a\cdot\mathbf j^p+\frac12\mathbf j^a\cdot\mathbf c^p\). 두 방향 의향을 별도 표현으로 계산하므로 "한쪽만 원하는" 상태를 분리해 표현할 수 있다. 일반 CF의 내적은 대칭이라 누가 원했는지 구분하지 못한다.</details></li>
+<li><b>[원리]</b> 4중항 손실이 일반 BPR과 다른 점은 무엇이고, 왜 이 과제에 맞는가?
+<details><summary>정답 보기</summary>매칭 쌍마다 구직자 쪽 음성 공고와 공고 쪽 음성 구직자를 함께 뽑아, 양성 점수를 두 음성 점수의 평균과 비교한다. 매칭은 "구직자 입장에서도, 회사 입장에서도" 상위여야 하므로 두 랭킹 조건을 한 번에 학습하는 것이 과제 정의와 일치한다.</details></li>
+<li><b>[원리]</b> 이중 관점 대조 손실에서 양성 쌍과 음성 쌍은 무엇이며, 이 손실이 없으면 어떤 문제가 생길 수 있는가?
+<details><summary>정답 보기</summary>양성은 같은 구직자(공고)의 능동·수동 표현 쌍, 음성은 다른 구직자(공고)와의 능동·수동 조합이다. 노드를 둘로 나누면 각 노드의 학습 신호가 절반으로 줄어 표현이 따로 놀 수 있는데, 대조 손실이 같은 사람의 두 표현을 묶어 정보를 공유하게 하고 다른 사람과는 구분되게 한다.</details></li>
+<li><b>[결과 해석]</b> 절제 실험에서 가장 큰 하락을 보인 변형은 무엇이고, 저자들의 결론은?
+<details><summary>정답 보기</summary>w/o QL(4중항 손실을 BPR로 교체)이 가장 낮았고 그다음이 w/o DPG다. 저자들은 세 요소 모두 유용하며 특히 이중 관점 그래프와 4중항 손실의 기여가 크다고 결론지었다. 대조 손실 제거(w/o SSL)는 하락 폭이 가장 작고, 구직자 방향 NDCG·MRR에서는 거의 차이가 없었다.</details></li>
+<li><b>[결과 해석]</b> 텍스트 기반 기준선(PJFNN, BPJFNN, APJFNN)이 대체로 부진했던 이유로 저자들이 든 것은? 그럼에도 Tech에서 상대적으로 나았던 이유는?
+<details><summary>정답 보기</summary>텍스트 모델은 이력서·공고가 구조화되고 완전해야 잘 작동하는데, 플랫폼 사용자들의 작성 습관이 제각각이다. Tech 문서는 구체적인 기술 요구가 많아 텍스트 신호가 상대적으로 유용했다.</details></li>
+<li><b>[비판]</b> 최종 점수를 두 의향의 산술 평균으로 결합하는 설계의 약점과 대안을 논하라.
+<details><summary>정답 보기</summary>평균은 한쪽이 매우 높으면 다른 쪽이 낮아도 점수가 높게 나와 "둘 다 만족해야 한다"는 논문의 전제와 완전히 맞지 않는다. 대안으로 시그모이드 확률의 곱(둘 다 원할 확률), min, 조화평균, 혹은 방향별 가중 학습 등을 고려할 수 있다. 예시 답안이며 논문은 이 비교를 하지 않았다.</details></li>
+<li><b>[적용]</b> 데이팅 앱이나 중고거래 플랫폼에 이 아이디어를 적용한다면 어떤 상호작용을 어떤 간선으로 매핑하겠는가? 주의할 점은?
+<details><summary>정답 보기</summary>예: 데이팅에서 A가 좋아요했지만 B가 응답 없음 → A<sup>a</sup>–B<sup>p</sup>, 서로 좋아요(매치) → 양방향 두 간선. 주의점: 무응답은 거절과 "아직 못 봄"이 섞여 있어 부정 신호로 오해하기 쉽고, 인기 사용자에게 수동 간선이 몰리는 쏠림과 양측 공정성(노출 편중) 문제가 생긴다. 시간 정보를 함께 다루는 것도 필요하다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#146</b> Leveraging LLM generated labels to reduce bad matches in job recommendations (2024) — 같은 채용 추천 도메인에서 "나쁜 매칭"을 줄이는 산업 사례. 양측 만족이라는 문제의식이 이어진다.</li>
+<li><b>#349</b> Promoting Two-sided Fairness with Adaptive Weights for Providers and Customers in Recommendation (2024) — 이 논문이 향후 과제로 남긴 양측 이해관계자 균형을 직접 다룬다.</li>
+<li><b>#208</b> SGCL: Unifying Self-Supervised and Supervised Learning for Graph Recommendation (2025) — LightGCN 기반 그래프 추천에 대조 학습을 결합하는 흐름의 후속 연구.</li>
+<li><b>#378</b> MMGCL: Meta Knowledge-Enhanced Multi-view Graph Contrastive Learning for Recommendations (2024) — 그래프 추천에서 여러 시점을 대조하는 방법. DPGNN의 "능동·수동 두 시점" 대조와 비교해 읽기 좋다.</li>
+<li><b>#79</b> Generative Learning Plan Recommendation for Employees (2023) — 인사·커리어 도메인 추천의 다른 측면(직원 학습 계획)을 다룬다.</li>
+</ul>
+</main>
+</body>
+</html>
