@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-18 · #23</span></div>
+<h1>gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling</h1>
+<p class="meta">Aleksandr V. Petrov, Craig Macdonald (University of Glasgow) · RecSys 2023 Long Papers · Best Full Paper</p>
+<div class="chips"><span>2023</span><span>Best Full Paper</span><span>학계</span><span>순차 추천</span><span>Transformer</span><span>Negative sampling</span><span>손실 함수</span><span>Calibration</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608783">10.1145/3604915.3608783</a> · arXiv: <a href="https://arxiv.org/abs/2308.07192">2308.07192</a> (<a href="https://arxiv.org/pdf/2308.07192v1">PDF</a>) · 코드: <a href="https://github.com/asash/gsasrec">github.com/asash/gsasrec</a> · 읽기 예상 15분</p>
+
+<div class="callout">원문 확보: arXiv v1 전문을 읽고 작성했다. 수치는 모두 논문 본문·표에서 옮겼고, "해설자 의견"으로 표시한 부분은 논문 밖의 해석이다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> SASRec이 BERT4Rec보다 못했던 이유는 양방향 어텐션이 없어서가 아니라, 네거티브를 1개만 샘플링해 BCE로 학습하면서 생기는 <b>과신(overconfidence)</b> 때문이다. 이를 고치는 손실 gBCE와, 네거티브 수를 늘리고 gBCE를 쓰는 gSASRec을 제안한다.</p>
+<p><b>풀려는 문제.</b> 아이템이 수십만~수백만 개면 시퀀스의 모든 위치에서 전체 아이템 점수를 계산하는 학습(Softmax)이 GPU 메모리에 들어가지 않는다. 저자 계산으로 배치 64·길이 200·아이템 100만이면 점수만 51GB, 그래디언트까지 100GB 이상이다. 그래서 네거티브 샘플링이 불가피한데, 샘플링은 학습 데이터 속 양성 비율을 부풀려 모델이 상호작용 확률을 과대 추정하게 만든다.</p>
+<p><b>핵심 아이디어.</b> BCE의 양성 항에 쓰이는 sigmoid를 \(\sigma^\beta\)로 바꾼 gBCE를 정의하고, 수렴 시 모델이 학습하는 확률을 닫힌 식으로 구했다. 샘플링 비율이 \(\alpha\)일 때 \(\beta=\alpha\)로 두면 예측 확률이 실제 사전 확률과 일치(보정)한다. 구현은 양성 점수만 변환한 뒤 일반 BCE를 그대로 쓰면 된다.</p>
+<p><b>주요 결과.</b> MovieLens-1M에서 gSASRec은 NDCG@10 0.176으로 BERT4Rec(0.161)보다 높고(초록 기준 +9.47%), 학습 시간은 23분 대 86분이다. Steam에서는 BERT4Rec과 통계적으로 비슷(0.0735 대 0.0746)하면서 58분 대 642분. BERT4Rec을 돌릴 수 없는 127만 아이템의 Gowalla에서는 SASRec 대비 NDCG@10 +47%(0.1097→0.1616)다.</p>
+<p><b>한계와 남는 질문.</b> 데이터셋이 셋이고 그중 MovieLens-1M은 시청 순서가 아닌 평가 순서라는 알려진 한계가 있다. 균등 샘플링만 다루고 인배치·인기도 기반 샘플링은 제외했다. 이론적 최적점에서 BCE의 예측은 사전 확률의 단조 변환이라 순위 자체는 같아야 하는데, 왜 실제 성능 차이가 나는지는 "상위 아이템을 구분하지 못한다"는 직관 수준으로 설명된다(해설자 의견).</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 카탈로그가 크면 Softmax를 못 쓴다</h3>
+<p>순차 추천은 사용자가 상호작용한 아이템 순서를 보고 다음 아이템을 맞히는 문제다. 휴대폰을 산 사람에게 케이스를 추천하는 식이다. 최근에는 언어 모델 구조, 특히 Transformer가 최고 성능을 낸다. 하지만 아이템 카탈로그는 언어 모델의 어휘보다 훨씬 클 수 있다(저자들은 YouTube의 8억 개 이상 영상을 예로 든다).</p>
+<p>게다가 순차 모델은 사용자당 한 번이 아니라 <b>시퀀스의 각 위치마다</b> 점수를 낸다. 길이 \(S\), 카탈로그 \(N\)이면 시퀀스당 \(S\times N\)개 점수가 필요하다. 그래서 실제 시스템은 양성 상호작용은 모두 쓰고 음성은 일부만 뽑는 네거티브 샘플링을 쓴다.</p>
+<p>문제는 샘플링이 학습 분포에서 양성의 비중을 키운다는 점이다. 모델은 다음 상호작용 확률을 실제보다 크게 예측하게 되고, 저자들은 이를 과신이라 부른다. 과신이 나쁜 이유는 두 가지다. 첫째, 상위권 아이템들의 확률이 모두 1 근처로 포화되면 모델이 그들 사이의 미묘한 차이 대신 "상위 vs 하위" 구분에만 신경 쓴다. 둘째, BCE에서 확률이 1에 가까운 아이템이 네거티브로 뽑히면 \(\log(1-\hat p_i)\)가 \(-\infty\)로 가서 수치가 불안정해진다.</p>
+<p>기여는 네 가지로 정리된다. (i) 순차 추천의 확률적 해석으로 과신을 정의, (ii) SASRec이 샘플링 때문에 과신한다는 것을 이론·실험으로 보임, (iii) gBCE 제안과 과신 완화 증명, (iv) gSASRec이 BERT4Rec과 같거나 나은 성능을 더 짧은 학습 시간에 내고 대규모 데이터에도 쓸 수 있음을 보임.</p>
+
+<h3>2. 관련 연구 — 기존 해법이 순차 모델에 안 맞는 이유</h3>
+<p><b>네거티브 샘플링 휴리스틱.</b> BPR은 양성 하나에 음성 하나를 뽑아 상대 순서를 학습한다. 그러나 Rendle이 지적했듯 BPR은 상위 순위에 가중을 두지 않는 AUC를 최적화한다. WARP, LambdaRank, LambdaFM, 적응형 샘플링 같은 후속 기법은 점수가 높게 잘못 매겨진 "어려운" 네거티브를 찾지만, 반복·정렬 기반이라 GPU 병렬 학습과 잘 맞지 않는다. 그래서 Caser·SASRec은 균등 샘플링을, BERT4Rec은 아예 샘플링 없이 학습한다.</p>
+<p>인기도 기반 샘플링은 평가 지표도 인기도로 샘플링할 때만 이득이었고 전체(비샘플링) 지표에서는 아니었다고 저자들은 밝힌다. 샘플링 지표 자체를 쓰지 말자는 연구들을 따라 이 논문은 인기도 샘플링을 피한다. 인배치 샘플링(GRU4Rec 등)도 인기도 샘플링과 같다는 근거로 제외하고, <b>균등 샘플링</b>에 집중한다.</p>
+<p><b>학습 목표와 대조 학습.</b> 다음 아이템 예측, 시퀀스 한 칸 이동(SASRec), 마스킹(BERT4Rec), 최신성 기반 샘플링(SASRec-RSS) 같은 학습 목표는 무엇을 양성으로 삼을지의 문제이고, 어떤 목표든 음성은 필요하다. 그래서 네거티브 샘플링은 목표와 직교한다. 대조 학습(DuoRec, CBiT 등)도 보조 손실일 뿐 주 손실은 여전히 필요하므로 직교한다.</p>
+<p><b>언어 모델의 큰 어휘 문제.</b> NLP는 WordPiece로 어휘를 약 3만 토큰으로 줄인다. 아이템 ID를 하위 단위로 쪼개는 방법은 2단계 학습이 필요하다. 변별력 없는 토큰을 지우는 가지치기는 추천에서는 인기 아이템을 지우는 셈이라 나쁘다. 가장 가까운 기존 해법은 Sampled Softmax지만 이 역시 과신 경향이 알려져 있다.</p>
+
+<h3>3. 배경 — SASRec, BERT4Rec, 그리고 두 손실</h3>
+<p>두 모델의 차이는 네 가지다. 어텐션 방향(단방향 vs 양방향), 학습 목표(시퀀스 이동 vs 마스킹), 손실(BCE vs Softmax), 그리고 <b>샘플링</b>(SASRec은 양성당 음성 1개, BERT4Rec은 샘플링 없음). BERT4Rec 저자들은 우위를 양방향 어텐션 덕으로 돌렸지만, 이 논문은 샘플링이 진짜 원인이라고 주장한다.</p>
+<p><b>확률적 관점.</b> 시퀀스 \(u\) 다음에 아이템 \(i\)가 올 실제 확률을 \(P(i)\)(정확히는 \(P(i\mid u)\))라 하자. 이는 관측할 수 없고, 학습 데이터에는 실제로 고른 양성 \(i^+\)에 대한 \(y(i)=\mathbb{I}[i=i^+]\)만 있다. 모델은 점수 \(s_i\)를 내고, 점수를 확률 \(\hat p_i=f(s_i)\)로 바꾸는 함수가 있으며 그 확률이 \(P\)를 근사하도록 학습될 때 "손실이 확률을 직접 모델링한다"고 정의한다.</p>
+<p><b>BCE.</b> 각 아이템을 독립적인 이진 분류로 본다.</p>
+\[ \hat p_i=\sigma(s_i)=\frac{1}{1+e^{-s_i}},\qquad \mathcal{L}_{BCE}=-\frac{1}{|I_k^-|+1}\Big(\log\sigma(s_{i^+})+\sum_{i\in I_k^-}\log\big(1-\sigma(s_i)\big)\Big) \]
+<p>\(I_k^-\)는 뽑힌 \(k\)개의 네거티브 집합이다. 확률들이 독립이라 합이 1일 필요가 없다는 점이 핵심이다. 샘플링을 해도 손실 형태가 거의 그대로 유지된다는 장점이 있다.</p>
+<p><b>Softmax와 Sampled Softmax.</b> Softmax는 다중 분류로 보고 \(\hat p_i=e^{s_i}/\sum_{j\in I}e^{s_j}\)를 쓴다. 확률 합이 1이라 과신이 덜하지만 분모에 전체 아이템 점수가 필요해 샘플링과 맞지 않는다. Sampled Softmax(SSM)는 분모를 양성과 뽑힌 네거티브만으로 계산한다. 분모가 작아지니 양성의 확률이 실제보다 커지는, 역시 과신의 한 형태다. 논문은 SSM을 균등 샘플링으로 구현해 비교 대상에 넣는다.</p>
+
+<h3>4. 과신의 정의와 증상</h3>
+<p>상위 아이템의 예측 확률이 사전 확률보다 훨씬 클 때, 즉 \(\hat p_i\gg P(i)\)일 때 과신이라 한다. BPR·LambdaRank처럼 점수 차이만 보는 손실에서는 확률의 크기가 의미 없으므로 이 정의가 적용되지 않는다.</p>
+<p>그림 1은 MovieLens-1M의 한 사용자에 대한 순위별 예측 확률이다. SASRec은 1~25위 아이템의 확률이 거의 1이다. 정답은 하나뿐이니 확률 합은 1 근처여야 하는데, SASRec의 합은 338.03, 16 네거티브 SSM으로 학습한 SASRec은 152.3이었다. BERT4Rec은 Softmax라 정확히 1, gSASRec은 1.06이다.</p>
+
+<h3>5. gBCE — 이론의 핵심</h3>
+<p><b>정의.</b> 양성 항의 sigmoid만 \(\beta\) 제곱한다(일반화 로지스틱 함수).</p>
+\[ \mathcal{L}^{\beta}_{gBCE}=-\frac{1}{|I_k^-|+1}\Big(\log\sigma^{\beta}(s_{i^+})+\sum_{i\in I_k^-}\log\big(1-\sigma(s_i)\big)\Big) \]
+<p>\(\beta\ge 0\)이고, \(\beta=1\)이면 BCE와 같다. \(\beta\)가 작을수록 \(\sigma^\beta\)는 1에 가까워져 양성 항을 만족시키기 쉬워지므로, 모델이 양성 점수를 과하게 올릴 유인이 줄어든다.</p>
+<p><b>정리 5.1.</b> 네거티브 \(k\)개를 전체 음성 집합 \(I^-\)에서 균등·복원 추출하고 샘플링 비율을 \(\alpha=k/|I^-|\)라 하자. 충분한 데이터로 수렴하면</p>
+\[ \sigma(s_i)=\frac{\beta P(i)}{\alpha-\alpha P(i)+\beta P(i)} \]
+<p>증명 아이디어는 간단하다. 손실을 아이템별 기여로 나누고 기댓값을 취한다. 아이템 \(i\)가 양성으로 뽑힐 확률은 \(P(i)\), 각 네거티브 슬롯에 뽑힐 확률은 \((1-P(i))/|I^-|\)이므로 \(k\)개 슬롯을 합치면 \(\alpha(1-P(i))\)다. 따라서 기대 기여는 \(-\big(P(i)\log\sigma^\beta+\alpha(1-P(i))\log(1-\sigma)\big)\)이고, \(\sigma\)로 미분해 0으로 두면 위 식이 나온다.</p>
+<p>해설자 의견으로 식을 오즈로 다시 쓰면 의미가 선명하다. \(\frac{\sigma}{1-\sigma}=\frac{\beta}{\alpha}\cdot\frac{P}{1-P}\). 즉 모델의 로짓은 참 로짓에 \(\log(\beta/\alpha)\)만큼 상수 이동한 값이 된다. 네거티브를 \(\alpha\) 비율로 덜 보니 오즈가 \(1/\alpha\)배 부풀고, \(\beta\)가 이를 되돌린다.</p>
+<p><b>따름정리들.</b> (5.1.1) \(\alpha\le 1\)에서 \(\beta=\alpha\)로 두면 \(\sigma(s_i)=P(i)\), 완전 보정이다. (5.1.2) 일반 BCE(\(\beta=1\))는 \(\sigma(s_i)=P/(\alpha-\alpha P+P)\)로 수렴한다. (5.1.3) SASRec은 네거티브 1개이므로 \(\alpha=1/(|I|-1)\)이고</p>
+\[ \sigma(s_i)=\frac{P(i)|I|-P(i)}{P(i)|I|-2P(i)+1} \]
+<p>평균보다 확률이 높은 아이템(\(P(i)\gg 1/|I|\))은 분자·분모를 \(P(i)|I|\)가 지배해 예측이 1에 붙는다. SASRec 과신의 정체다.</p>
+<p><b>정리 5.2 — 구현 트릭.</b> 양성 점수를 \(\gamma(s^+)=\log\frac{1}{\sigma^{-\beta}(s^+)-1}\)로 바꾸면 \(\sigma(\gamma(s^+))=\sigma^\beta(s^+)\)이므로, gBCE는 "변환된 양성 점수 + 원래 네거티브 점수"에 일반 BCE를 적용한 것과 같다. 프레임워크의 수치적으로 안정된 BCE를 그대로 쓸 수 있고, 저자 구현도 이 방식이다.</p>
+<p><b>보정 파라미터 \(t\).</b> 합리적인 \(\beta\)는 \([\alpha,1]\) 구간인데 \(\alpha\)가 데이터셋 크기와 네거티브 수에 따라 바뀌어 다루기 불편하다. 그래서</p>
+\[ \beta=\alpha\Big(t\big(1-\tfrac{1}{\alpha}\big)+\tfrac{1}{\alpha}\Big) \]
+<p>로 둔다. \(t=0\)이면 \(\beta=1\)(BCE), \(t=1\)이면 \(\beta=\alpha\)(완전 보정)이다. <b>gSASRec</b>은 SASRec에 하이퍼파라미터 두 개(네거티브 수 \(k\), 보정 \(t\))를 더한 모델이고, \(k=1,t=0\)이면 원래 SASRec이다.</p>
+
+<h3>6. 실험</h3>
+<p><b>설정.</b> 데이터셋은 MovieLens-1M(사용자 6,040·아이템 3,416·상호작용 약 100만), Steam(281,428·13,044·약 349만), Gowalla(86,168·1,271,638·약 640만). 앞의 둘은 BERT4Rec 저장소의 전처리본을 그대로 쓰고, Gowalla는 상호작용 5개 미만 사용자를 제거했다. 마지막 상호작용을 테스트로 남기는 leave-one-out이고, 무작위 512명의 끝에서 두 번째 상호작용을 검증(튜닝·조기 종료)에 쓴다. 지표는 전체 아이템을 대상으로 한 Recall@1·Recall@10·NDCG@10. Recall@1을 넣은 이유는 과신이 최상위에서 가장 심할 것으로 예상했기 때문이다. 시퀀스 길이 200, 검증 NDCG@10이 200 에폭 동안 개선되지 않으면 멈춘다. 기준선은 인기도, MF-BPR, BERT4Rec, SASRec이다.</p>
+
+<p><b>RQ1 — 성능 차이는 구조인가, 샘플링인가?</b> 두 구조를 각각 "네거티브 1개+BCE"와 "샘플링 없음+Softmax"로 학습한 2×2 실험(NDCG@10)이다.</p>
+<table>
+<tr><th></th><th>1 neg + BCE</th><th>전체 + Softmax</th><th>샘플링 효과</th></tr>
+<tr><td>ML-1M SASRec</td><td>0.131</td><td>0.169</td><td>+29.0%*</td></tr>
+<tr><td>ML-1M BERT4Rec</td><td>0.123</td><td>0.161</td><td>+30.8%*</td></tr>
+<tr><td>Steam SASRec</td><td>0.0581</td><td>0.0721</td><td>+24.1%*</td></tr>
+<tr><td>Steam BERT4Rec</td><td>0.0513</td><td>0.0746</td><td>+45.4%*</td></tr>
+</table>
+<p>샘플링을 없애면 네 경우 모두 크게 오른다. 반면 구조를 BERT4Rec으로 바꾸는 효과는 −6.1%, −4.7%, −11.7%*, +3.4%*로 작고 대체로 음수다. 결론: BERT4Rec의 우위는 양방향 어텐션이 아니라 샘플링 없이 Softmax로 학습한 데서 온다.</p>
+
+<p><b>RQ2 — 확률이 실제로 보정되는가?</b> \(P(i)\)는 모르므로 Precision@K를 "상위 K 아이템이 정답일 확률"의 대리값으로 쓰고, 상위 K의 평균 예측 확률과 비교했다(K=1..100). SASRec은 K&lt;100 전 구간에서 거의 1을 예측했다. gSASRec은 크게 낮아져 MovieLens-1M의 K=1에서 \(t=0.5\) 설정이 평균 0.57, 256 네거티브·\(t=1.0\)이 0.13이었다(본문에서 \(t=0.5\) 설정의 네거티브 수가 64와 128로 엇갈려 적혀 있다). \(t=1\)이면 예측 확률이 Precision과 잘 맞았고, 특히 Steam에서 이론 곡선과 거의 일치했다. 사용자가 적은 MovieLens-1M은 정리의 "충분한 데이터" 조건이 덜 충족돼 약간 어긋났다.</p>
+
+<p><b>RQ3 — 네거티브 수와 \(t\)의 효과.</b> MovieLens-1M에서 네거티브 {1,4,16,64,256} × \(t\) {0,0.25,0.5,0.75,1.0} 격자 탐색을 했다. 둘 다 클수록 좋았다. 네거티브 1개에서 \(t\)를 0→1로 올리면 NDCG@10이 0.126→0.158(+25%)로, 샘플링 없는 BERT4Rec(0.161)과 유의차가 없었다. 네거티브 256개(샘플링 비율 7.49%)에서는 \(t\)와 관계없이 0.170~0.176으로 높았고, 최고는 0.176(\(t=0.75\))이었다. \(t\)를 1에 아주 가깝게 하면 학습이 느려져서, 저자들은 실무 권장값으로 <b>\(t\)=0.75~0.9, 네거티브 128~256</b>을 제시한다.</p>
+
+<p><b>RQ4 — gBCE를 다른 손실과 비교.</b> MovieLens-1M에서 두 구조 × 네거티브 수 × {BCE, gBCE(\(t=1\)), SSM}. 네거티브가 적을 때 gBCE가 가장 좋았다. BERT4Rec·4 네거티브에서 Recall@1은 gBCE 0.059, BCE 0.055, SSM 0.046이고 NDCG@10은 0.154, 0.150, 0.134였다. SASRec·16 네거티브에서는 Recall@1이 0.0769, 0.0673, 0.0635로 격차가 더 컸다. 저자들은 SASRec의 학습 목표(다음 아이템 예측)가 평가 과제와 직접 같아서 손실 변화의 영향이 더 크다고 해석한다. 256 네거티브에서는 세 손실이 NDCG@10 0.166~0.170으로 비슷했다. 음성의 7.5%를 보면 과신 자체가 약해지기 때문이지만, 그만큼 샘플링하는 것은 대규모에서 비현실적이다.</p>
+
+<p><b>RQ5 — 최신 모델과 비교.</b> 검증으로 고른 설정은 Steam·Gowalla에서 128 네거티브·\(t=0.9\), MovieLens-1M에서 256·\(t=0.75\). 핵심 행만 옮기면 다음과 같다(NDCG@10 / 학습 분).</p>
+<table>
+<tr><th>모델</th><th>ML-1M</th><th>Steam</th><th>Gowalla</th></tr>
+<tr><td>BERT4Rec</td><td>0.161 / 86</td><td>0.0746 / 642</td><td>불가(&gt;100GB)</td></tr>
+<tr><td>SASRec-Softmax</td><td>0.169 / 9</td><td>0.0721 / 80</td><td>불가</td></tr>
+<tr><td>SASRec</td><td>0.131 / 13</td><td>0.0581 / 32</td><td>0.1097 / 145</td></tr>
+<tr><td>gSASRec</td><td>0.176 / 23</td><td>0.0735 / 58</td><td>0.1616 / 191</td></tr>
+</table>
+<p>gSASRec은 모든 데이터셋·지표에서 1위 또는 2위였다. Recall@1은 ML-1M 0.082(BERT4Rec 0.058), Gowalla 0.0782(SASRec 0.0505)다. SASRec 대비 NDCG@10은 +34%(ML-1M), +26%(Steam), +47%(Gowalla)로 모두 유의했다. 학습 시간은 BERT4Rec보다 ML-1M에서 73.2%, Steam에서 90.9% 짧다. 다만 SASRec보다는 길다(Steam 58 vs 32분). 확률을 더 정확히 맞추느라 수렴 에폭이 늘었기 때문이다(238 vs 170 에폭). 흥미롭게도 ML-1M에서는 SASRec-Softmax와 gSASRec이 BERT4Rec보다 Recall@1이 유의하게 높아, 단방향 구조가 오히려 유리할 수 있음을 시사한다.</p>
+<p>문헌 수치와의 비교(ML-1M)에서 DuoRec 0.168, ALBERT4Rec 0.165, CBiT 0.169인 반면 gSASRec은 0.176으로 유일하게 0.17을 넘는다(Recall@10은 모두 0.30 근처). 격자 탐색에서 256 네거티브일 때 일관되게 나온 값이라 우연이 아니라고 저자들은 주장한다. 보조 대조 손실 없이도 대조 학습 모델과 맞먹는다는 점이 포인트다.</p>
+<p>참고로 수치의 작은 불일치가 있다. Steam의 BERT4Rec 대비 차이를 서론은 −1.46%, RQ5 본문은 −1.74%로 적었고(표의 값으로 계산하면 약 −1.5%), RQ5 본문은 이 차이를 유의하다고 했지만 서론은 유의하지 않다고 했다(표에는 유의 표시가 없다).</p>
+
+<h3>7. 결론</h3>
+<p>네거티브 샘플링과 BCE의 조합은 점수 분포를 밀어 올리는 과신을 낳고, 이것이 SASRec이 BERT4Rec에 진 유일한 이유라고 저자들은 결론짓는다. gBCE는 이를 이론적으로 교정하며, gSASRec은 샘플링을 유지한 채 대규모 카탈로그에서도 최고 수준 성능을 낸다. BERT4Rec을 샘플링으로 학습할 때도 gBCE가 도움이 된다(4 네거티브에서 BCE 대비 +7.2%, 서론·결론에 보고된 수치). 일반 추천, 검색, NLP로의 확장은 향후 과제로 남겼다.</p>
+<p><b>해설자 의견 — 실무 관점.</b> (1) 정리 5.1의 극한에서는 BCE도 \(P\)의 단조 변환을 학습하므로, 성능 이득은 무한 데이터의 최적점이 아니라 유한 학습에서 포화된 sigmoid가 상위 아이템의 그래디언트를 죽이는 문제를 푸는 데서 온다고 보는 편이 자연스럽다. (2) 구현 비용이 거의 없다. 양성 로짓에 \(\gamma\) 변환 한 줄을 넣고 네거티브 수를 늘리면 된다. (3) 인배치 네거티브와 logQ 보정을 쓰는 2-tower 리트리벌과는 문제 설정이 다르니, 그쪽은 #204를 함께 보는 것이 좋다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>SASRec</b>: Kang &amp; McAuley(2018)의 단방향 self-attention 순차 추천 모델. 입력 시퀀스를 한 칸 왼쪽으로 민 것을 맞히도록 학습하며, 위치마다 양성 1개·음성 1개로 BCE를 쓴다.</li>
+<li><b>BERT4Rec</b>: Sun 등(2019)의 양방향 Transformer 모델. 아이템 일부를 마스킹하고 전체 아이템 Softmax로 복원하도록 학습한다. 카탈로그가 크면 메모리가 폭발한다.</li>
+<li><b>네거티브 샘플링</b>: 관측되지 않은 수많은 (사용자, 아이템) 쌍 중 일부만 음성으로 뽑아 학습하는 기법. 계산은 줄지만 학습 분포가 실제와 달라진다.</li>
+<li><b>샘플링 비율 \(\alpha\)</b>: 뽑은 네거티브 수를 전체 음성 아이템 수로 나눈 값. SASRec은 \(1/(|I|-1)\)로 극히 작다.</li>
+<li><b>보정(calibration)</b>: 예측 확률이 실제 빈도와 맞는 성질. 예측 0.3인 사건이 실제로 30% 일어나면 보정된 것이다.</li>
+<li><b>과신(overconfidence)</b>: 이 논문에서는 상위 아이템의 예측 확률이 사전 확률보다 훨씬 큰 상태. 상위 아이템들이 모두 1 근처로 포화된다.</li>
+<li><b>Sampled Softmax</b>: Softmax 분모를 일부 아이템으로 근사하는 손실. 분모가 작아져 양성 확률이 과대 추정된다. 비균등 샘플링이면 logQ 보정이 흔히 붙는다.</li>
+<li><b>Leave-one-out 분할</b>: 사용자마다 마지막 상호작용을 테스트로 떼는 순차 추천의 표준 분할.</li>
+<li><b>샘플링 지표 vs 전체 지표</b>: 정답과 무작위 음성 100개만 놓고 순위를 매기는 샘플링 평가는 모델 순위를 왜곡할 수 있어(Krichene &amp; Rendle), 이 논문은 전체 아이템 순위로 평가한다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> 저자들이 SASRec이 BERT4Rec보다 못한 주된 원인으로 지목한 것은? (a) 단방향 어텐션 (b) 짧은 시퀀스 길이 (c) 네거티브 샘플링(+BCE)으로 인한 과신 (d) 위치 임베딩 부재
+<details><summary>정답 보기</summary>(c). 2×2 실험에서 샘플링·손실을 BERT4Rec 방식으로 바꾸면 두 구조 모두 24~45% 올랐고, 구조만 바꾸는 효과는 작고 대체로 음수였다.</details></li>
+<li><b>[사실]</b> 그림 1의 사용자에 대해 SASRec이 예측한 전체 아이템 확률의 합은 대략 얼마였나? gSASRec은?
+<details><summary>정답 보기</summary>SASRec 338.03, gSASRec 1.06. (SSM으로 학습한 SASRec은 152.3, BERT4Rec은 Softmax라 정확히 1.)</details></li>
+<li><b>[사실]</b> Gowalla에서 BERT4Rec 결과가 없는 이유는?
+<details><summary>정답 보기</summary>아이템이 약 127만 개라 샘플링 없는 Softmax 학습에 100GB 넘는 GPU 메모리가 필요해 학습이 불가능했기 때문이다. gSASRec은 여기서 SASRec 대비 NDCG@10을 0.1097→0.1616(+47%)로 올렸다.</details></li>
+<li><b>[원리]</b> gBCE는 BCE의 어느 부분을 어떻게 바꾸며, \(\beta=1\)과 \(\beta=\alpha\)는 각각 무엇에 해당하나?
+<details><summary>정답 보기</summary>양성 항의 \(\sigma(s)\)를 \(\sigma^\beta(s)\)로 바꾼다(네거티브 항은 그대로). \(\beta=1\)이면 일반 BCE, \(\beta=\alpha\)(샘플링 비율)이면 수렴 시 \(\sigma(s_i)=P(i)\)로 완전히 보정된다.</details></li>
+<li><b>[원리]</b> 정리 5.1의 식을 오즈 형태로 바꾸고, 네거티브를 적게 뽑을수록 왜 과신이 심해지는지 설명하라.
+<details><summary>정답 보기</summary>\(\sigma/(1-\sigma)=(\beta/\alpha)\cdot P/(1-P)\). 아이템이 네거티브로 등장하는 기대 빈도가 \(\alpha\)배로 줄어 음성 압력이 약해지므로 학습된 오즈가 \(\beta/\alpha\)배 부푼다. BCE(\(\beta=1\))에서 \(\alpha\)가 작을수록 배율 \(1/\alpha\)가 커져 상위 아이템 확률이 1에 붙는다.</details></li>
+<li><b>[원리]</b> gBCE를 직접 구현하지 않고 일반 BCE 라이브러리로 학습하려면 어떻게 하나? 또 파라미터 \(t\)를 도입한 이유는?
+<details><summary>정답 보기</summary>양성 점수만 \(\gamma(s^+)=\log\frac{1}{\sigma^{-\beta}(s^+)-1}\)로 변환한 뒤 BCE에 넣는다(\(\sigma(\gamma(s^+))=\sigma^\beta(s^+)\), 정리 5.2). \(\beta\)의 적정 범위 \([\alpha,1]\)이 데이터 크기·네거티브 수에 따라 바뀌므로, \(t\in[0,1]\)로 재매개화해 \(t=0\)은 BCE, \(t=1\)은 완전 보정이 되도록 데이터와 무관한 설정 공간을 만든 것이다.</details></li>
+<li><b>[해석]</b> MovieLens-1M 격자 탐색에서 네거티브 256개일 때는 \(t\)의 영향이 작았다. 왜 그런가? 그런데도 gBCE가 실무적으로 의미 있는 이유는?
+<details><summary>정답 보기</summary>256개면 음성의 약 7.5%를 보므로 \(\alpha\)가 커서 BCE의 과신 자체가 약하다(네거티브 증가와 \(t\) 증가는 같은 방향의 효과). 그러나 카탈로그가 수백만이면 그런 비율의 샘플링은 메모리·계산상 불가능하므로, 적은 네거티브에서 큰 효과를 내는 gBCE가 유용하다. 네거티브 1개에서도 \(t=1\)이면 0.126→0.158로 BERT4Rec(0.161)과 유의차가 없었다.</details></li>
+<li><b>[해석]</b> gSASRec이 SASRec보다 학습 시간이 긴 이유와, 그럼에도 BERT4Rec보다 훨씬 빠른 이유를 논문 근거로 설명하라.
+<details><summary>정답 보기</summary>확률을 더 정확히 추정하느라 수렴까지 에폭이 늘었다(Steam 238 vs 170 에폭, 58 vs 32분). 그래도 전체 아이템 Softmax를 계산하지 않고 128~256개 네거티브만 쓰므로 BERT4Rec(Steam 642분, ML-1M 86분)보다 각각 90.9%, 73.2% 짧다.</details></li>
+<li><b>[비판]</b> 정리 5.1에 따르면 BCE로 학습해도 극한에서는 \(\sigma(s_i)\)가 \(P(i)\)의 단조 증가 함수다. 그렇다면 순위는 같아야 하지 않나? 실제 성능 차이를 어떻게 설명할 수 있을까?
+<details><summary>정답 보기</summary>이론상 최적점의 순위는 같다. 차이는 유한 데이터·유한 용량·경사하강 동역학에서 온다고 보는 것이 자연스럽다. 상위 아이템의 sigmoid가 1에 포화되면 그들 사이를 구분하는 그래디언트가 거의 사라지고, 확률 높은 아이템이 네거티브로 뽑히면 손실이 폭주해 학습이 불안정해진다. 논문은 이를 "상위 vs 하위만 구분한다"는 직관으로 설명할 뿐 형식적으로 증명하지는 않는다(해설자 의견). 또 MovieLens-1M의 평가 순서 문제, 데이터셋 3개라는 범위도 일반화를 제한한다.</details></li>
+<li><b>[적용]</b> 당신 팀의 SASRec 기반 리트리벌 모델(아이템 500만, 균등 네거티브 1개, BCE)을 개선하려 한다. 논문에 근거해 무엇을 먼저 바꿔 보겠으며, 무엇을 주의해야 하나?
+<details><summary>정답 보기</summary>양성 로짓에 \(\gamma\) 변환을 넣어 gBCE로 바꾸고, 메모리가 허용하는 만큼 네거티브를 늘린다(논문 권장: 128~256개, \(t\)=0.75~0.9). \(\alpha\)는 \(k/(|I|-1)\)로 계산한다. 주의점: 논문은 균등 샘플링만 다뤘으므로 인배치·인기도 샘플링을 쓴다면 샘플링 확률이 아이템마다 달라 정리 5.1이 그대로 성립하지 않는다(logQ 보정 등 별도 고려 필요). 또 \(t\)를 1에 너무 가깝게 하면 학습이 느려지고, 평가는 샘플링 지표가 아닌 전체 순위 지표로 해야 한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#18</b> Denoising Self-Attentive Sequential Recommendation (2022) — 같은 SASRec 계열 Transformer 순차 추천. 어텐션의 노이즈 문제라는 다른 각도의 개선이다.</li>
+<li><b>#97</b> eSASRec: Enhancing Transformer-based Recommendations in a Modular Fashion (2025) — SASRec을 손실·구성요소 단위로 개선하는 후속 흐름. gSASRec의 "구조보다 학습 설정이 중요하다"는 메시지와 이어진다.</li>
+<li><b>#204</b> Correcting the LogQ Correction: Revisiting Sampled Softmax for Large-Scale Retrieval (2025) — 이 논문이 비교한 Sampled Softmax와 샘플링 편향 보정을 대규모 리트리벌 관점에서 다시 본다.</li>
+<li><b>#84</b> Scaling Law of Large Sequential Recommendation Models (2024) — 대규모 순차 모델 학습. 카탈로그·모델이 커질 때 샘플링 손실 설계가 왜 중요한지 맥락을 준다.</li>
+<li><b>#99</b> Do Sequential Recommendation Benchmarks Really Require Higher-Order Sequence Modelling? (2026) — MovieLens-1M 같은 순차 벤치마크가 실제로 순서 정보를 요구하는지 묻는다. 이 논문의 평가 데이터 한계와 연결된다.</li>
+</ul>
+
+</main>
+</body>
+</html>
