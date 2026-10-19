@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Going Beyond Local: Global Graph-Enhanced Personalized News Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-20 · #25</span></div>
+<h1>Going Beyond Local: Global Graph-Enhanced Personalized News Recommendations</h1>
+<p class="meta">Boming Yang (The University of Tokyo), Dairui Liu (University College Dublin), Toyotaro Suzumura (The University of Tokyo), Ruihai Dong (University College Dublin), Irene Li (The University of Tokyo) · RecSys 2023 Long Paper · Best Full Paper Runner-up</p>
+<div class="chips"><span>2023</span><span>Best Full Paper Runner-up</span><span>뉴스 추천</span><span>GNN</span><span>GGNN</span><span>전역 그래프</span><span>MIND</span><span>다양성</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608801">10.1145/3604915.3608801</a> · arXiv: <a href="https://arxiv.org/abs/2307.06576">2307.06576</a> (<a href="https://arxiv.org/pdf/2307.06576v5">PDF</a>) · 코드: <a href="https://github.com/tinyrolls/GLORY">tinyrolls/GLORY</a> · 읽기 예상 14분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 뉴스 추천 모델이 사용자 한 명의 클릭 기록(local)만 보지 말고, 모든 사용자의 클릭 순서를 모은 전역 그래프(global)에서 이웃 뉴스·이웃 엔티티를 끌어와 뉴스 표현을 보강하면 정확도와 다양성이 함께 오른다. 이 모델의 이름이 GLORY(Global-LOcal news Recommendation sYstem)다.</p>
+<p><b>풀려는 문제.</b> NRMS, NAML 같은 최근 뉴스 추천 모델은 제목 텍스트를 잘 인코딩하는 데 집중한다. 그래서 사용자 표현이 "이 사람이 읽은 기사들의 의미"로만 만들어진다. 기록 속 기사와 의미상 비슷한 후보가 없으면 추천이 어려워진다. 다른 사용자들이 "A를 읽고 다음에 B를 읽는다"는 행동 패턴은 텍스트 유사도로는 보이지 않는다.</p>
+<p><b>방법의 핵심.</b> 학습 데이터 전체의 클릭 시퀀스로 두 그래프를 만든다. ① <b>전역 뉴스 그래프</b>: 같은 사용자가 \(v_i\) 바로 다음에 \(v_j\)를 읽었으면 방향 엣지 \(v_i\to v_j\)를 두고, 빈도를 가중치로 쓴다. 사용자 기록 속 기사마다 이 그래프에서 다중 홉 부분그래프를 뽑아 GGNN으로 인코딩하면 기록 기사 표현이 풍부해진다. ② <b>전역 엔티티 그래프</b>: 같은 방식으로 연속해서 읽힌 기사들의 엔티티를 무방향으로 잇는다. 후보 뉴스는 아직 클릭 기록이 없으니 뉴스 그래프 대신, 자기 엔티티의 이웃 엔티티를 가져와 표현을 보강한다. 직관은 "협업 신호(누가 무엇 다음에 무엇을 읽나)를 그래프로 압축해 콘텐츠 기반 인코더에 주입한다"는 것이다.</p>
+<p><b>주요 결과.</b> MIND-small에서 AUC 68.15, MRR 32.97, nDCG@10 42.78로, PLM을 쓰지 않는 베이스라인 중 가장 강한 DIGAT(67.82 / 32.65 / 42.49)와 MINER(AUC 68.07)를 넘었다. MIND-large에서는 AUC 69.54, nDCG@10 44.19였다. 제목만 쓰는 Adressa에서도 AUC 74.31로 NRMS(72.33)보다 높았다. 다양성 지표 ILAD·ILMD도 NRMS보다 모두 높게 나왔다.</p>
+<p><b>한계와 남는 질문.</b> 저자들이 직접 밝힌 한계는 두 가지다. 샘플마다 부분그래프를 뽑고 인코딩하므로 학습 메모리·시간이 늘고, 고정 기간 데이터라 정적 그래프만 검증했다. 새 기사가 계속 쏟아지는 실서비스에서 그래프를 어떻게 갱신할지, 그리고 PLM 기반 텍스트 인코더와 결합하면 이득이 유지되는지는 열린 질문이다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 "local"만으로는 부족한가</h3>
+<p>뉴스는 수명이 짧고 새 기사가 계속 나온다. 그래서 ID 기반 협업 필터링보다 콘텐츠 기반 방법이 강했다. 대표적으로 NRMS는 단어 수준·뉴스 수준 양쪽에 multi-head self-attention을 쓰고, NAML은 제목·본문·카테고리를 여러 "뷰"로 인코딩하며, HieRec은 토픽-서브토픽-전체의 3단 계층으로 사용자 관심을 표현한다.</p>
+<p>저자들의 지적은 이 모델들이 모두 <b>한 사용자의 기록만</b> 보고 사용자 표현을 만든다는 점이다. 논문 그림 1의 예를 말로 옮기면 이렇다. 사용자 U1은 주황색 기사 하나만 읽었고, 후보 중에 주황색과 비슷한 기사가 없다. U1의 기록만 보면 추천할 근거가 없다. 그런데 U2, U3의 클릭을 모은 전역 그래프를 보면 주황 기사가 파랑·초록 기사와 연결돼 있다. 그러면 파랑·초록과 비슷한 후보를 추천할 수 있다.</p>
+<p>기여는 세 가지로 정리된다. 뉴스 추천에서 처음으로 동종(homogeneous) 전역 뉴스/엔티티 그래프를 제안했다. 이를 쓰는 global-aware 기록 뉴스 인코더와 후보 뉴스 인코더를 설계했다. 실제 데이터셋에서 SOTA를 달성했다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>특징 기반.</b> LibFM, DeepFM은 상호작용 데이터에서 특징을 학습하지만, 후보 뉴스는 상호작용이 거의 없어 표현이 약하다.</p>
+<p><b>신경망 기반.</b> NAML, NRMS, HieRec, MINER(32개 관심 벡터를 poly attention으로 뽑음) 등이 텍스트와 사용자 모델링을 정교하게 만들었다.</p>
+<p><b>그래프 기반.</b> GERL은 사용자-뉴스 이분 그래프, GNewsRec은 사용자-뉴스-토픽 이종 그래프, User-as-Graph는 한 사용자의 기록으로 만든 개인 이종 그래프를 쓴다. DIGAT은 의미적으로 관련된 뉴스로 semantic augmentation graph를 만들어 후보를 보강한다. 저자들은 이들이 여전히 "현재 사용자의 맥락"이나 "의미 유사도"에 머무르며, 전체 사용자의 상호작용을 뉴스 간 그래프로 직접 활용하지 않는다고 본다. 이분 그래프 방식은 상호작용이 없는 신규 후보에서 특히 약하다.</p>
+
+<h3>3. 방법</h3>
+<p><b>문제 정의.</b> 사용자 \(u\)의 클릭 기록 \(H_u=[d_1,\dots,d_H]\)가 있고, 각 기사 \(d_i\)는 \(T\)개 단어의 제목 \(T_i\)와 \(E\)개 엔티티 \(E_i\)를 가진다. 목표는 후보 \(d_c\)에 대한 클릭 점수 \(s_{u,c}\)를 예측하고 후보들을 순위화하는 것이다. 최근 \(L_{his}\)개 기록만 쓰고, 제목은 앞 \(L_{title}\) 단어로 자른다.</p>
+
+<p><b>3.2 지역 표현(local representation).</b> 제목 단어를 GloVe로 초기화한 임베딩 \(\mathbf{x}^n\)으로 바꾼 뒤 multi-head self-attention(MSA)을 적용한다.</p>
+\[ \mathrm{Att}(Q,K,V)=\mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V \]
+<p>\(Q,K,V\)는 입력에 헤드별 행렬 \(W_i^Q, W_i^K, W_i^V\)를 곱한 쿼리·키·값이고, \(d_k\)는 키 차원이다. 헤드 출력을 이어 붙여 \(W^O\)로 사상한다. 그다음 additive attention으로 단어들을 하나의 벡터로 모은다.</p>
+\[ \mathbf{h}^{ln}=\sum_{i=1}^{T}\alpha_i^{\omega}\mathbf{x}_i^{\omega},\qquad \alpha_i^{\omega}=\frac{\exp(\mathbf{q}_\omega^\top\tanh(W_\omega X_i^n))}{\sum_{j=1}^{T}\exp(\mathbf{q}_\omega^\top\tanh(W_\omega X_j^n))} \]
+<p>\(\mathbf{q}_\omega\)는 학습되는 쿼리 벡터, \(W_\omega\)는 학습 행렬, \(X_i^n\)은 MSA를 거친 \(i\)번째 단어 표현이다. 즉 "어떤 단어가 이 제목을 대표하는가"를 점수로 매겨 가중합한다. 엔티티도 같은 구조다. WikiData 기반으로 사전 학습된 TransE 엔티티 임베딩을 넣고, self-attention과 attention pooling으로 지역 엔티티 표현 \(\mathbf{h}^{le}\)를 만든다.</p>
+
+<p><b>3.3 전역 인식 기록 뉴스 인코더.</b> 핵심 모듈이다.</p>
+<p><i>전역 뉴스 그래프</i> \(G_n=(V_n,E_n)\)는 학습 데이터의 모든 사용자 기록으로 만든 방향 그래프다. 한 사용자가 \(v_i\)를 읽고 바로 \(v_j\)를 읽었으면 엣지 \((v_i,v_j)\)를 추가하고, 이 전이가 전체 기록에서 몇 번 나왔는지를 가중치로 둔다. 일종의 "다음 읽을 기사" 전이 그래프다.</p>
+<p><i>그래프 인코더.</i> 사용자 기록 속 각 기사에서 출발해 여러 홉의 이웃을 뽑되, 홉마다 가중치 상위 \(M_n\)개만 남겨 사용자별 부분그래프 \(G^u_{sub}\)를 만든다. 노드 초기값은 지역 뉴스 표현이고, GGNN(gated graph neural network)으로 인코딩한다.</p>
+\[ \mathbf{h}^{(0)}=\mathbf{h}^{ln},\quad \mathbf{m}_i^{(l+1)}=\sum_{j\in\mathcal{N}(i)}W_g\,\mathbf{h}_j^{(l)},\quad \mathbf{h}_i^{(l+1)}=\mathrm{GRU}\big(\mathbf{m}_i^{(l+1)},\mathbf{h}_i^{(l)}\big) \]
+<p>\(\mathcal{N}(i)\)는 부분그래프에서 노드 \(i\)의 이웃, \(l\)은 층 번호, \(W_g\)는 학습 행렬이다. 이웃 메시지 합 \(\mathbf{m}\)을 입력으로, 이전 상태 \(\mathbf{h}^{(l)}\)를 은닉 상태로 삼아 GRU가 상태를 갱신한다. GRU의 게이트가 "이웃 정보를 얼마나 받아들일지"를 조절해, 클릭 흐름에 담긴 순차적 행동 정보를 잡는다는 것이 저자들의 설명이다. 출력이 전역 뉴스 표현 \(\mathbf{h}^{gn}\)이다.</p>
+<p><i>기록 뉴스 집계기.</i> 기사 하나당 세 벡터 \(\mathbf{h}^{ln},\mathbf{h}^{le},\mathbf{h}^{gn}\)가 생긴다. 이를 쌓아 앞의 식과 같은 형태의 attention pooling(쿼리 \(\mathbf{q}_h\), 행렬 \(W_h\))으로 합쳐 최종 기록 뉴스 표현 \(\mathbf{n}_k\)를 얻는다. 기사마다 텍스트·엔티티·전역 문맥 중 무엇을 더 믿을지 가중치가 달라진다.</p>
+
+<p><b>3.4 전역 인식 후보 뉴스 인코더.</b> 후보는 막 나온 기사라 뉴스 그래프에 노드가 없거나 엣지가 거의 없다. 그래서 엔티티 수준으로 내려간다.</p>
+<p><i>전역 엔티티 그래프</i> \(G_e=(V_e,E_e)\)는 뉴스 그래프와 같은 원리지만 무방향이다. 연속으로 읽힌 두 기사가 있으면, 앞 기사의 엔티티와 뒤 기사의 엔티티를 잇고, 그런 뉴스 전이가 나타난 횟수를 가중치로 둔다.</p>
+<p><i>전역 엔티티 인코더.</i> 엔티티 수가 뉴스보다 훨씬 적어 노드 평균 차수가 높다. 그래서 부분그래프 GNN 대신 단순하게 1-hop 이웃만 쓴다. 후보 기사의 각 엔티티마다 가중치 상위 \(M_e\)개 이웃 엔티티를 모아 \(E\times M_e\)개 토큰을 만들고, 같은 엔티티 임베딩 → MSA → attention pooling을 거쳐 전역 엔티티 표현 \(\mathbf{h}^{ge}_c\)를 얻는다.</p>
+<p><i>후보 뉴스 집계기.</i> \(\mathbf{h}^{ln}_c,\mathbf{h}^{le}_c,\mathbf{h}^{ge}_c\)를 attention pooling으로 합쳐 \(\mathrm{emb}_{cand}\)를 만든다. 기록 쪽은 "뉴스 그래프", 후보 쪽은 "엔티티 그래프"로 비대칭인 점이 설계의 요점이다.</p>
+
+<p><b>3.5 사용자 인코더와 학습.</b> 사용자 인코더는 NRMS를 그대로 따른다. 기록 뉴스 표현 \(\mathbf{n}_k\)들에 multi-head attention과 attention pooling을 적용해 \(\mathrm{emb}_{user}\)를 만든다. 학습은 표준 뉴스 추천 방식의 negative sampling이다. 노출 세션에서 클릭된 기사 하나를 양성으로, 같은 세션의 비클릭 기사 \(K_{neg}\)개를 음성으로 뽑고, 내적 점수로 \(K_{neg}+1\)지선다 분류를 한다.</p>
+\[ \mathcal{L}_{NCE}=-\sum_{i}\log\frac{\exp(\hat y_i^{+})}{\exp(\hat y_i^{+})+\sum_{j=1}^{K_{neg}}\exp(\hat y_i^{j})} \]
+<p>\(\hat y_i^{+}\)는 양성 기사 점수, \(\hat y_i^{j}\)는 \(j\)번째 음성 기사 점수다. 양성이 음성들 사이에서 1등이 되도록 미는 softmax 교차 엔트로피라고 보면 된다.</p>
+
+<h3>4. 실험 설정</h3>
+<p><b>데이터셋.</b> MIND(Microsoft News, 2019년 10월 12일~11월 22일 6주) small(뉴스 65,238 / 사용자 50,000 / 클릭 347,727)과 large(뉴스 161,013 / 사용자 100만 / 클릭 24,155,470), 그리고 노르웨이 Adresseavisen의 Adressa 1주 light 버전(뉴스 14,732 / 사용자 537,627 / 클릭 2,527,571)이다.</p>
+<p><b>지표.</b> AUC, MRR, nDCG@5, nDCG@10. 노출(impression) 단위로 클릭/비클릭 후보를 순위화해 평가하는 MIND 표준 설정이다.</p>
+<p><b>베이스라인.</b> 특징 기반(LibFM, DeepFM), 신경망 기반(DKN, NPA, NAML, LSTUR, NRMS, FIM, HieRec, MINER w/o PLM), 그래프 기반(GERL, GNewsRec, User-as-Graph, DIGAT w/o PLM). 공정 비교를 위해 PLM 없는 버전을 골랐고, 일부 수치는 기존 논문에서 가져와 빈칸이 있다.</p>
+<p><b>하이퍼파라미터.</b> \(L_{his}=50\), \(L_{title}=30\), 기사당 엔티티 5개, \(M_n=8\), 홉 \(K=2\), \(M_e=10\), GGNN 3층. GloVe 300차원, TransE 100차원, 뉴스 표현 400차원. Adam, 학습률 \(2\times10^{-4}\)(10% warm-up 후 선형 감소), \(K_{neg}=4\). Adressa는 제목만, 단어 임베딩 무작위 초기화, 학습률 \(1\times10^{-5}\).</p>
+
+<h3>5. 결과</h3>
+<p><b>MIND 주요 결과(핵심 행만).</b></p>
+<table>
+<tr><th>모델</th><th>AUC</th><th>MRR</th><th>nDCG@5</th><th>nDCG@10</th></tr>
+<tr><td>NRMS (small)</td><td>65.63</td><td>30.96</td><td>34.13</td><td>40.52</td></tr>
+<tr><td>HieRec (small)</td><td>67.95</td><td>32.87</td><td>36.36</td><td>42.53</td></tr>
+<tr><td>DIGAT w/o PLM (small)</td><td>67.82</td><td>32.65</td><td>36.25</td><td>42.49</td></tr>
+<tr><td><b>GLORY (small)</b></td><td><b>68.15</b></td><td><b>32.97</b></td><td><b>36.47</b></td><td><b>42.78</b></td></tr>
+<tr><td>NRMS (large)</td><td>67.66</td><td>33.25</td><td>36.28</td><td>41.98</td></tr>
+<tr><td><b>GLORY (large)</b></td><td><b>69.54</b></td><td>34.03</td><td><b>37.92</b></td><td><b>44.19</b></td></tr>
+</table>
+<p>MIND-small에서 MINER w/o PLM은 AUC 68.07, MRR 32.93, nDCG@10 42.62로 GLORY에 근접했다. MIND-large에서는 다른 베이스라인이 AUC 69.23까지 올라왔고 MRR은 34.14로 GLORY(34.03)보다 약간 높았다. 표 추출 상태상 어느 모델인지는 논문 표 2 참조. 저자들의 해석은 세 가지다. 신경망 방식이 특징 기반을 항상 이긴다. HieRec·MINER처럼 사용자 인코더를 복잡하게 만든 모델도 결국 local 관점이라 GLORY에 진다(GLORY의 사용자 인코더는 단순한 attention인데도). GERL·GNewsRec 같은 이분 그래프 방식은 상호작용 없는 신규 후보에 약하다.</p>
+<p><b>Adressa.</b> 제목만 쓰므로 엔티티 그래프 없이 뉴스 그래프만 작동한다. GLORY 74.31 / 42.29 / 43.37 / 49.51(AUC/MRR/nDCG@5/nDCG@10)로, NRMS(72.33 / 41.08 / 41.92 / 48.57), LSTUR(AUC 73.17), NAML(73.14), NPA(71.89)를 모두 넘었다. 다른 사용자들의 기록만으로도 의미 너머의 관련성을 찾는다는 근거로 제시된다.</p>
+<p><b>Ablation(MIND-small).</b> 전체 68.15 → 뉴스 그래프 제거 67.53 → 엔티티 그래프 제거 67.77 → 둘 다 제거 67.28(AUC). 뉴스 그래프 쪽 기여가 더 크다. 둘 다 빼면 사실상 NRMS에 엔티티를 더한 구조인데, 그래도 NRMS(65.63)보다 높은 점은 엔티티·집계기 자체의 효과로 읽을 수 있다.</p>
+<p><b>그래프 인코더 비교.</b> GCN, GAT, GraphSAGE와 비교했을 때 GGNN이 가장 좋았다(그림 4, 정확한 수치는 논문 참조). GRU가 클릭의 순차 정보를 담기 때문이라는 설명이다.</p>
+<p><b>하이퍼파라미터.</b> \(M_e=10\), \(M_n=8\), \(K=2\)가 최적이었다. 이웃을 너무 많이 가져오면 약하게 관련된 노이즈가 섞이고, 홉이 1이면 읽기 경로를 다 덮지 못하며, 3홉은 노이즈와 실행 시간이 크게 늘었다.</p>
+<p><b>그래프 구성 방식.</b> 뉴스 그래프는 방향 순차(Dir-Seq, AUC 68.15)가 무방향 순차(67.73), 동시출현(Co-oc, 67.76)보다 좋았다. "바로 다음에 읽었다"는 인접성과 방향이 둘 다 정보라는 뜻이다. 엔티티 그래프는 반대로 기사 간·무방향(68.15)이 가장 좋았고, 같은 기사 안 엔티티끼리 잇는 intra-news 엣지를 더하면 오히려 떨어졌다(67.73~67.86). 같은 기사에 함께 나오는 엔티티는 이미 KG에서 가까워 새 정보가 적고, 무방향이면 연결이 적은 엔티티도 이웃을 더 얻는다는 해석이다.</p>
+<p><b>다양성.</b> 모델 임베딩은 모델끼리 비교가 안 되므로 GloVe 평균 임베딩으로 거리를 쟀다. ILAD@5 0.3189→0.3226, ILMD@5 0.1913→0.2167, ILAD@10 0.3183→0.3329, ILMD@10 0.1486→0.1848(NRMS→GLORY). 특히 최소 거리(ILMD) 개선이 커서, 서로 거의 같은 기사가 목록에 함께 들어가는 일이 줄었다고 볼 수 있다.</p>
+
+<h3>6. 사례 연구</h3>
+<p>MIND-small 테스트에서 뽑은 한 사용자는 텍사스 교통사고, 은퇴 자금 세금, 음악 관련 기사 세 개만 읽었고 실제로 클릭한 후보는 NFL 징계 관련 기사였다. 텍스트 의미만 보는 NRMS는 이 후보를 38위에 놓았다. GLORY는 전역 뉴스 그래프 부분그래프에서 NFL 관련 이웃 기사(Browns 트레이드, Cowboys 선수 체포 등)를 찾았고, 후보의 "NFL" 엔티티가 "Cowboys"와 엔티티 그래프에서 가깝다는 것도 활용해 1위로 올렸다. 그림 1의 직관이 실제 사례로 나타난 셈이다.</p>
+
+<h3>7. 한계와 결론</h3>
+<p>저자들은 학습 효율(샘플마다 전역 정보를 가져와 메모리·시간 증가)과 정적 그래프 문제(짧은 기간의 공개 데이터라 동적 그래프를 검증 못 함)를 한계로 들었다. 향후 과제는 뉴스 신선도와 사용자 행동 변화를 반영하는 동적 전역 그래프로, 실시간 온라인 추천에 맞추는 것이다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>MIND</b>: Microsoft News 로그로 만든 뉴스 추천 벤치마크. 노출(impression) 단위로 클릭/비클릭 후보가 주어지며, 제목·카테고리·엔티티(WikiData 연결) 정보가 포함된다.</li>
+<li><b>NRMS</b>: 단어 수준과 뉴스 수준에 multi-head self-attention을 쓰는 대표 뉴스 추천 모델. GLORY의 텍스트 인코더와 사용자 인코더가 이 구조를 따른다.</li>
+<li><b>Additive attention pooling</b>: \(\mathbf{q}^\top\tanh(W\mathbf{x})\)로 각 원소 점수를 매겨 softmax 가중합하는 방식. 여러 벡터를 하나로 요약할 때 뉴스 추천에서 널리 쓴다.</li>
+<li><b>GGNN</b>: 이웃 메시지를 GRU 입력으로 넣어 노드 상태를 갱신하는 GNN. 게이트 덕분에 깊이 쌓아도 안정적이고, 세션 추천(SR-GNN)에서도 순차 전이를 잡는 데 쓰였다.</li>
+<li><b>TransE</b>: KG의 (head, relation, tail)을 \(\mathbf{h}+\mathbf{r}\approx\mathbf{t}\)로 임베딩하는 방법. MIND가 엔티티 임베딩으로 제공한다.</li>
+<li><b>GloVe</b>: 단어 동시출현 통계로 학습한 정적 단어 임베딩. 여기선 제목 단어 초기화와 다양성 측정용 의미 벡터로 쓰였다.</li>
+<li><b>Negative sampling(뉴스 추천식)</b>: 같은 노출의 비클릭 기사 중 \(K\)개를 음성으로 뽑아 양성과 함께 \(K+1\)지선다 softmax로 학습하는 방식(NPA에서 정착).</li>
+<li><b>ILAD / ILMD</b>: 추천 목록 내 아이템 쌍 거리의 평균 / 최솟값. 클수록 목록이 다양하다.</li>
+<li><b>PLM</b>: BERT 같은 사전 학습 언어 모델. 최근 뉴스 추천은 PLM 텍스트 인코더로 큰 성능 향상을 얻지만, 이 논문은 공정 비교를 위해 PLM 없는 설정에서 비교한다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> 전역 뉴스 그래프에서 엣지 \((v_i,v_j)\)는 무엇을 뜻하고, 가중치는 어떻게 정해지는가?
+<details><summary>정답 보기</summary>같은 사용자가 \(v_i\)를 읽은 직후 \(v_j\)를 읽었다는 뜻의 방향 엣지다. 가중치는 학습 데이터 전체 기록에서 그 전이가 나타난 횟수다.</details></li>
+<li><b>[사실]</b> 후보 뉴스 인코더가 쓰는 전역 그래프는? (a) 전역 뉴스 그래프 (b) 전역 엔티티 그래프 (c) 사용자-뉴스 이분 그래프 (d) 의미 유사도 그래프
+<details><summary>정답 보기</summary>(b). 후보 뉴스는 새 기사라 클릭 기록이 거의 없어 뉴스 그래프에서 이웃을 얻기 어렵기 때문에, 엔티티 수준의 전역 그래프에서 이웃 엔티티를 가져온다.</details></li>
+<li><b>[사실]</b> MIND-small에서 GLORY의 AUC와, 전역 뉴스 그래프를 뺀 ablation의 AUC는?
+<details><summary>정답 보기</summary>68.15와 67.53. 엔티티 그래프를 뺀 경우는 67.77, 둘 다 뺀 경우는 67.28이다.</details></li>
+<li><b>[원리]</b> 그래프 인코더로 GCN 대신 GGNN을 쓴 이유와, 실험에서 확인된 결과를 설명하시오.
+<details><summary>정답 보기</summary>GGNN은 이웃 메시지를 GRU로 받아 상태를 갱신하므로, 클릭 전이에 담긴 순차적 행동 정보를 게이트로 선택적으로 흡수할 수 있다. MIND-small에서 GCN·GAT·GraphSAGE보다 좋은 성능을 보였다.</details></li>
+<li><b>[원리]</b> 엔티티 그래프에서는 부분그래프 GNN 대신 1-hop 인접 엔티티만 쓴 이유는?
+<details><summary>정답 보기</summary>엔티티 수가 뉴스보다 훨씬 적어 노드 평균 차수가 높다. 1-hop만으로도 이웃이 충분하고, 다중 홉을 쓰면 이웃이 폭발해 노이즈와 비용이 커진다. 그래서 상위 \(M_e\)개 이웃을 토큰처럼 모아 MSA + attention pooling으로 처리하는 간단한 방식을 택했다.</details></li>
+<li><b>[원리]</b> 기록 뉴스 집계기는 어떤 세 벡터를 합치며, attention pooling으로 합치는 것의 장점은?
+<details><summary>정답 보기</summary>지역 뉴스 표현 \(\mathbf{h}^{ln}\), 지역 엔티티 표현 \(\mathbf{h}^{le}\), 전역 뉴스 표현 \(\mathbf{h}^{gn}\). 단순 연결·평균과 달리 기사마다 어떤 정보원이 더 믿을 만한지 가중치를 다르게 줄 수 있다(예: 엔티티가 없는 기사는 텍스트·전역 쪽에 무게).</details></li>
+<li><b>[해석]</b> 전역 뉴스 그래프 구성 실험에서 Dir-Seq가 Co-oc보다 좋았다는 결과가 시사하는 바는?
+<details><summary>정답 보기</summary>같은 기록에 함께 있다는 사실보다 "바로 다음에 읽었다"는 인접 전이와 그 방향이 더 유용한 신호라는 뜻이다. 무방향 순차(Undir-Seq)도 Co-oc보다 세 지표에서 나아, 인접성 자체가 중요하고 방향이 추가 이득을 준다.</details></li>
+<li><b>[해석]</b> 다양성 실험에서 ILMD 개선(예: @10에서 0.1486→0.1848)이 ILAD 개선보다 상대적으로 큰 것을 어떻게 해석할 수 있는가? 또 측정에 GloVe 평균 임베딩을 쓴 이유는?
+<details><summary>정답 보기</summary>ILMD는 목록 안에서 가장 가까운 쌍의 거리이므로, 거의 같은 기사가 겹쳐 추천되는 경우가 줄었다는 뜻으로 볼 수 있다. GloVe를 쓴 이유는 각 모델이 학습한 뉴스 임베딩은 공간이 서로 달라 모델 간 거리 비교가 불가능하기 때문이다.</details></li>
+<li><b>[비판]</b> 이 논문의 평가 설정에서 전역 그래프가 실서비스보다 유리하게 작동했을 수 있는 이유를 하나 들고, 검증 방법을 제안하시오.
+<details><summary>정답 보기</summary>예시 답: 고정 기간 데이터에서 학습 기간 전체로 정적 그래프를 만들므로, 실서비스처럼 그래프 갱신 지연이 없다. 또 후보 기사가 학습 기간에 일부라도 등장했다면 엔티티·뉴스 이웃이 이미 풍부하다. 검증은 시간순 분할로 "그래프는 t 시점까지 데이터만으로 구성"하고, 그래프 갱신 주기(1시간/1일)와 기사 나이별로 성능을 쪼개 보는 방식이 있다.</details></li>
+<li><b>[적용]</b> 당신의 서비스(예: 숏폼 영상·커머스 피드)에 GLORY의 아이디어를 적용한다면 무엇을 노드·엣지로 삼고, 신규 아이템은 어떻게 처리하겠는가?
+<details><summary>정답 보기</summary>예시 답: 세션 내 "A 시청 직후 B 시청" 전이를 방향 엣지로 하는 전역 아이템 그래프를 만들어 사용자 기록 아이템 표현을 보강한다. 신규 아이템은 전이 기록이 없으니 태그·크리에이터·카테고리 같은 속성 노드의 전역 공출현 그래프에서 이웃 속성을 가져와 보강한다. 그래프는 일 단위 배치로 재구성하고, 상위 \(M\)개 이웃을 미리 계산해 서빙 시 조회만 하도록 만들어 비용을 줄인다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#20</b> RADio – Rank-Aware Divergence Metrics to Measure Normative Diversity in News Recommendations (2022) — 같은 뉴스 추천 도메인. GLORY가 ILAD/ILMD로 잰 다양성을 규범적 관점의 순위 인지 지표로 더 정교하게 재는 방법이다.</li>
+<li><b>#352</b> Dynamic Graph Construction for Improving Diversity of Recommendation — 그래프 구성 방식으로 다양성을 높인다는 점에서 GLORY의 다양성 결과, 그리고 저자들이 미래 과제로 든 동적 그래프와 직접 연결된다.</li>
+<li><b>#24</b> Pairwise Intent Graph Embedding Learning for Context-Aware Recommendation (2023) — 같은 해 Best Full Paper Runner-up. KG 엔티티와 그래프 전파로 희소성을 메운다는 공통점이 있고, "그래프로 표현을 보강해 기존 모델에 주입"하는 구조를 비교해 볼 만하다.</li>
+<li><b>#263</b> On the Consistency of Average Embeddings for Item Recommendation — 같은 토픽. GLORY처럼 여러 임베딩을 평균·집계해 표현을 만들 때(다양성 측정용 GloVe 평균 포함) 그 평균이 무엇을 보존하는지 따져 보는 데 도움이 된다.</li>
+<li><b>#214</b> LightSAGE: Graph Neural Networks for Large Scale Item Retrieval in Shopee’s Advertisement Recommendation — 아이템-아이템 그래프와 GNN을 대규모 서비스에 올린 산업 사례. GLORY의 효율 한계를 실서비스에서 어떻게 다루는지 감을 준다.</li>
+</ul>
+</main>
+</body>
+</html>
