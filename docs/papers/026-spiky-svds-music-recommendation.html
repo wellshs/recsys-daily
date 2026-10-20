@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Of Spiky SVDs and Music Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-21 · #26</span></div>
+<h1>Of Spiky SVDs and Music Recommendation</h1>
+<p class="meta">Darius Afchar (Deezer Research), Romain Hennequin (Deezer Research), Vincent Guigue (AgroParisTech) · RecSys 2023 Short Paper · Best Short Paper Runner-up</p>
+<div class="chips"><span>2023</span><span>Best Short Paper Runner-up</span><span>Deezer</span><span>음악 추천</span><span>SVD</span><span>임베딩 기하</span><span>DCBM</span><span>커뮤니티</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608850">10.1145/3604915.3608850</a> · arXiv: <a href="https://arxiv.org/abs/2307.01212">2307.01212</a> (<a href="https://arxiv.org/pdf/2307.01212v1">PDF</a>) · 코드: <a href="https://github.com/deezer/spiky_svd">deezer/spiky_svd</a> · 읽기 예상 12분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 추천 데이터에 truncated SVD를 적용하면 아이템 임베딩이 원점을 지나는 직선 위로 모이는 "스파이크(spike)" 모양이 자주 나타난다. 저자들은 스파이크 하나가 아이템 커뮤니티 하나에 해당하고, 스파이크 위에서 원점까지의 거리(노름)가 그 커뮤니티 안에서의 인기도에 해당함을 증명했다.</p>
+<p><b>풀려는 문제.</b> SVD(pureSVD)는 음악 추천에서 여전히 강력하고 널리 쓰이는 베이스라인이다. 그런데 실무 선택에는 이론적 근거가 약하다. \(U\), \(U\Sigma\), \(U\Sigma^p\) 중 무엇을 임베딩으로 쓸지, 코사인과 내적 중 무엇으로 유사도를 잴지 대부분 실험으로만 정한다. 코사인을 쓰면 노름 정보가 사라지기 때문에 스파이크 구조도 잘 눈에 띄지 않았다.</p>
+<p><b>방법의 핵심.</b> ① "스파이크 정도"를 재는 지표 Spk를 정의한다. 노름이 큰 벡터를 봉우리 후보로 놓고, 그와 거의 같은 방향인 점을 묶어 전체의 \(\rho\)를 덮을 때까지 필요한 봉우리 수를 센다. ② 임베딩이 \(K\)개 스파이크를 이루면, 해당 행들로 복원한 행렬 \(\hat M\)의 부분행렬이 Degree-Corrected Stochastic Block Model(DCBM)의 기대값에 비례한다는 정리를 보인다. 직관적으로는 희소한 행렬을 근사할 때 커뮤니티 하나를 rank-1 블록으로 처리하는 편이 오차 대비 효율적이기 때문이다.</p>
+<p><b>주요 결과.</b> 6개 데이터셋 모두에서 스파이크가 관찰되었다. \(f=128\), \(\cos\theta=0.9\), \(\rho=50\%\)에서 Spk는 Deezer 0.04%, Spotify 0.14%로 매우 낮았다. 가우시안 무작위 벡터는 50%였다. 수백만 개 벡터의 절반이 Deezer에서는 361개, Spotify에서는 1,395개 스파이크에 들어간다는 뜻이다. Deezer의 1년치 SVD 12개로 실험한 결과, 내적 기준 top-500 이웃이 노름 상위 구간에서는 1년 가까이 지나도 80% 넘게 유지되었다. 노름 하위 구간은 빠르게 바뀌었다.</p>
+<p><b>한계와 남는 질문.</b> 정리는 "스파이크가 있으면 DCBM"이라는 방향만 보인다. 스파이크에 속하지 않는 점은 노이즈로 취급하고, 커뮤니티 하나에 여러 차원을 쓰는 rank&gt;1 근사는 다루지 않는다. 산업 사례는 안정성 분석까지만 보여 주고, 추천 정확도 지표로 직접 검증하지는 않았다. 저자들도 이 부분을 "opening"으로 표현했다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 아직도 SVD인가</h3>
+<p>음악 추천은 다음 곡 추천, 플레이리스트 이어 붙이기, 비슷한 곡·아티스트 찾기처럼 과제가 다양하다. 이들 대부분은 결국 "아이템 임베딩을 만들고 가까운 아이템을 찾는" 유사 아이템 검색 위에 서 있다. 협업 필터링에서 임베딩을 만드는 대표적 방법이 행렬 분해다. 최근 몇 년간 신경망 모델이 단순한 분해 베이스라인을 확실히 이기지 못했고 재현성 문제도 컸다는 보고가 이어졌다(이 목록의 #9가 그 대표다). 그래서 truncated SVD는 지금도 강한 후보다. 분산 randomized SVD 같은 효율적 구현이 있어 산업 규모에서도 쓸 수 있다.</p>
+<p>하지만 SVD를 임베딩으로 쓸 때 정답이 없는 선택지가 남아 있다. 저자들은 여기서 한 가지 기하학적 현상을 보고한다. 임베딩 벡터들이 원점을 지나는 여러 직선을 따라 늘어선다는 것이다(논문 그림 1). 코사인 유사도는 모든 점을 단위 구 위로 눌러 버리므로 이 구조가 가려진다. 저자들의 주장은 노름을 버리지 말라는 것이다. 스파이크는 커뮤니티를, 노름은 커뮤니티 내부 인기도(intra-popularity)를 나타낸다. 음악은 장르·문화권 같은 커뮤니티 구조가 강해서 이 분석이 특히 잘 맞는다.</p>
+
+<h3>2. 스파이크의 기하</h3>
+<p><b>2.1 SVD 배경.</b> 행렬 \(M\in\mathbb{R}^{n\times m}\)을 \(\hat M=U\Sigma V^*\)로 근사한다. \(U\in\mathbb{R}^{n\times f}\)와 \(V\in\mathbb{R}^{m\times f}\)는 열이 정규직교이고(\(U^*U=V^*V=I_f\)), \(\Sigma\)는 비음수 대각행렬이다. 목표는 \(\|M-\hat M\|_F^2\)를 최소화하는 것이다. Eckart–Young–Mirsky 정리에 따라 가장 큰 특이값 \(f\)개만 남기는 것이 최적해다. \(f\ll\min(n,m)\)이다.</p>
+<p>음악 데이터에서 \(M\)은 트랙×사용자, 아티스트×사용자, 트랙×플레이리스트처럼 크고 희소하며 대개 비음수다. 유사 아이템 검색에는 \(U\)나 \(U\Sigma\)의 행만 쓰고 \(V\)는 잘 안 쓴다. \(U\)는 \(MM^*\)의 상위 고유벡터이므로 \(M\) 대신 대칭 행렬 \(MM^*\)로 분해해도 같은 \(U\)를 얻는다. 이후 논의는 \(M\)을 대칭 행렬로 놓고 진행한다.</p>
+<p><b>2.2 데이터셋과 전처리.</b> 공개 데이터 5개(Spotify Million Playlist, Art of the Mix 2011, Cornell 플레이리스트, LastFM-360K, 영화 데이터인 MovieLens-25M)와 Deezer 내부 데이터(1년에 걸쳐 계산한 SVD 12개)를 쓴다. 모든 데이터에서 같은 절차를 따른다. 대칭 행렬 \(MM^*\)을 만들고, 아이템마다 값이 큰 상위 \(k\)개 상호작용만 남겨 인기 편향과 노이즈를 줄인다. 그다음 PPMI(positive pointwise mutual information)로 정규화한다. PPMI 행렬 분해는 음성 샘플링을 쓰는 skip-gram과 등가로 알려져 있어 음악 임베딩에서 흔히 쓰인다. \(f=128\)로 두고 \(E=U\Sigma\)의 행 \(e_i\)를 아이템 임베딩으로 쓴다. 각주에 따르면 \(U\Sigma^p\)(\(p\in[0,1]\))로 바꿔도 공간의 스케일만 달라질 뿐 스파이크는 그대로 남는다.</p>
+<p>시각화해 보면 스파이크는 특이값이 큰 앞쪽 차원에서 선명하고 뒤쪽 차원으로 갈수록 흐릿한 구름이 된다. 앞쪽 성분이 구조를 복원하고 뒤쪽 성분이 노이즈를 복원한다는 robust SVD 문헌의 설명과 맞는다. Deezer와 Spotify에서 스파이크가 가장 깨끗했다.</p>
+
+<p><b>2.3 Spikiness 지표.</b> 고차원에서 바로 쓸 만한 "스파이크" 정의가 없었다. 저자들은 첨도(kurtosis)도 시도했지만 하이퍼파라미터에 민감하고 다변량 확장이 어려웠다고 한다. 그래서 다음 탐욕 절차를 만들었다.</p>
+<ol>
+<li>노름이 큰 순서로 봉우리 후보 \(e^*\)를 고른다.</li>
+<li>\(\cos(e^*,e)&gt;\cos\theta\)를 만족하는 다른 벡터 \(e\)를 그 스파이크에 넣는다.</li>
+<li>전체 점의 비율 \(\rho\)가 덮일 때까지 반복한다.</li>
+</ol>
+<p>사용한 봉우리 수를 \(n\)으로 나눈 값이 Spk다. \(0&lt;\mathrm{Spk}\le\rho\)이다. 모든 점이 스파이크 하나에 있으면 하한에 가깝고, 어떤 두 점도 같은 방향이 아니면 상한 \(\rho\)가 된다. 이는 NP-완전인 partial set cover 문제의 탐욕 근사이므로, 최적값보다 큰 상한 추정치로 봐야 한다.</p>
+<p>표 1의 핵심 행(\(\cos\theta=0.9\), \(\rho=50\%\))을 재구성하면 다음과 같다.</p>
+<table>
+<tr><th>데이터셋</th><th>Spk@128</th><th>Spk@64</th><th>Spk@16</th></tr>
+<tr><td>Deezer</td><td>0.04%</td><td>150/n (&lt;0.01%)</td><td>23/n</td></tr>
+<tr><td>Spotify</td><td>0.14%</td><td>228/n (&lt;0.03%)</td><td>23/n</td></tr>
+<tr><td>AoTM-2011</td><td>18.1%</td><td>11.4%</td><td>0.93%</td></tr>
+<tr><td>Cornell</td><td>4.55%</td><td>1.59%</td><td>0.09%</td></tr>
+<tr><td>LastFM-360K</td><td>2.42%</td><td>0.49%</td><td>0.06%</td></tr>
+<tr><td>MovieLens-25M</td><td>7.09%</td><td>3.05%</td><td>0.02%</td></tr>
+<tr><td>\(\mathcal N(0,1)\)</td><td>50%</td><td>50%</td><td>49.4%</td></tr>
+</table>
+<p>가우시안 기준선은 고차원 무작위 벡터가 각도 여유를 줘도 거의 공선이 아니라는 점을 보여 준다. 반면 Deezer와 Spotify에서는 128차원 어느 방향이든 될 수 있는 수백만 벡터의 절반이 각각 361개, 1,395개 스파이크에 들어간다. \(f\)가 작을수록 Spk가 낮고, 노이즈 차원이 끼어드는 지점에서 Spk가 갑자기 커진다. 저자들은 적은 수의 스파이크가 트랙 절반을 묶는 모습이 스펙트럴 클러스터링을 떠올리게 하며, 데이터에 구조화된 그룹이 있다는 신호라고 해석한다.</p>
+
+<h3>3. 모델링 — 스파이크와 커뮤니티의 등가성</h3>
+<p><b>3.1 준비.</b> \(M\)이 대칭 비음수 행렬이면 스펙트럴 정리로 \(M=PDP^*\)이다. 고유값을 절댓값 기준 내림차순으로 정렬한다. <i>보조정리 3.1</i>은 SVD를 \(U=P_{1..f}\), \(\Sigma=|D_{1..f}|\), \(V=P_{1..f}\,\mathrm{sign}(D_{1..f})\)로 잡을 수 있다는 것이다. 특이값은 음수가 될 수 없으므로 고유값의 부호를 \(V\) 쪽으로 넘긴다. 즉 \(V\)의 행은 \(U\)의 행에서 일부 좌표 부호만 뒤집은 것이다.</p>
+<p><i>정의 3.2(스파이크).</i> 벡터 집합 \((e_1,\dots,e_k)\)를 단위벡터 \(\vec s\)와 양수 \(\alpha_i\)로 \(e_i=\alpha_i\vec s\)처럼 쓸 수 있으면 스파이크라 부른다. \(\vec s\)는 스파이크 방향이고 \(\alpha_i\)는 원점에서의 거리다.</p>
+<p><i>보조정리 3.3.</i> \(U\)의 행들이 스파이크를 이루면 \(U\Sigma^p\)의 행도, \(V\)의 행도 스파이크를 이룬다. \(\alpha_i\vec s\,\Sigma^p=\alpha_i\vec s{}'\)이고 \(\alpha_i\vec s\,\mathrm{sign}(D)=\alpha_i\vec s{}''\)이다. 방향만 바뀔 뿐 "같은 직선 위"라는 성질은 유지된다. 따라서 임베딩 선택(\(U\), \(U\Sigma\), \(U\Sigma^p\))이 스파이크 존재 여부를 바꾸지 않는다.</p>
+<p><b>커뮤니티 그래프 모델.</b> SBM(Stochastic Block Model)은 노드를 \(K\)개 커뮤니티로 나누는 분할 \(C\)와 확률 행렬 \(B\in[0,1]^{K\times K}\)로 인접행렬을 만든다. \(A_{ij}\sim\mathrm{Bernoulli}(B_{C(i),C(j)})\)이다. 같은 커뮤니티 쌍은 모두 같은 연결 확률을 가진다. 보통 \(B_{ii}&gt;B_{ij}\)(같은 커뮤니티끼리 더 촘촘함)를 요구하며 이를 assortativity라 한다. 음악 데이터는 이 성질이 강하다고 알려져 있다. DCBM은 노드별 파라미터 \(\alpha_i\in[0,1]\)를 더해 연결 확률을 \(\alpha_i\alpha_jB_{C(i),C(j)}\)로 둔다. 같은 커뮤니티 안에서도 차수(인기도)가 다른 노드를 표현할 수 있다. 식별 가능성을 위해 \(B_{ii}=1\)로 정규화할 수 있다.</p>
+
+<p><b>3.2 정리 3.4.</b> \(E=U\Sigma\)의 행 가운데 \(n'\le n\)개가 \(K\)개 스파이크(방향 \(\vec s_1,\dots,\vec s_K\))에 속한다고 하자. 행 \(i\)가 속한 스파이크 번호를 \(C(i)\)라 하고, 스파이크에 속한 행을 앞으로 모은다. 그러면 부분행렬 \(\tilde M=|\hat M_{1..n',1..n'}|\)는 DCBM의 평균값에 비례한다.</p>
+<p>증명은 짧다. 스파이크 위의 점은 \(e_i=\alpha_i\vec s_{C(i)}\)이고, 보조정리 3.3에 의해 \(v_j=\alpha_j\vec s{}'_{C(j)}\)이다. 따라서</p>
+\[ \hat M_{ij}=(EV^*)_{ij}=\alpha_i\alpha_j\,\langle\vec s_{C(i)},\vec s{}'_{C(j)}\rangle \]
+<p>이다. \(\alpha_{\max}=\max_i\alpha_i\)로 나누어 \(\alpha_i/\alpha_{\max}\in[0,1]\)로 만들고, \(B_{kl}=|\langle\vec s_k,\vec s{}'_l\rangle|\)로 두면</p>
+\[ |\hat M_{1..n',1..n'}|=\alpha_{\max}^2\cdot\mathrm{DCBM}\Big(C;\,B;\,\big(\tfrac{\alpha_i}{\alpha_{\max}}\big)_{i=1}^{n'}\Big) \]
+<p>이 된다. 여기서 \(\alpha_i\)는 노드 \(i\)의 차수 보정 파라미터, 곧 커뮤니티 내부 인기도다. \(B_{kl}\)은 두 스파이크 방향의 내적으로, 커뮤니티 \(k\)와 \(l\) 사이 연결 강도다. (원문은 정규화 상수에도 \(K\)라는 기호를 다시 쓰는데, 커뮤니티 수 \(K\)와 헷갈리지 않도록 여기서는 \(\alpha_{\max}\)로 적었다.)</p>
+<p>절댓값이 필요한 이유는 \(\hat M\)에 음수 항이 생길 수 있기 때문이다. 저자들은 실제로는 거의 비음수일 것이라고 본다. \(f=1\)이면 Perron–Frobenius 정리가 비음수를 보장하고, \(f\ge\mathrm{rank}(M)\)이면 원래 행렬과 같다. 그 사이에서 생기는 음수는 \(M\)의 0 항목을 근사할 때 생기는 국소적 오차일 가능성이 크고, 스파이크 방향끼리 내적이 음수인 큰 블록이 생길 가능성은 낮다고 본다.</p>
+<p><b>해석.</b> 기하적으로 DCBM은 "블록마다 상수인 행렬"에 rank-1 행렬 \(\alpha\alpha^\top\)을 원소별로 곱한 것이다. \(M\)이 희소하면 고유벡터 여러 개를 커뮤니티 하나를 정교하게 맞추는 데 쓰기보다, 커뮤니티마다 rank-1 블록으로 최대한 많이 복원하는 편이 프로베니우스 오차를 줄이는 데 유리하다. 그래서 여러 데이터셋에서 스파이크가 저절로 생긴다는 것이 저자들의 설명이다. 논문 그림 2는 \(n=1000\) 중 200개씩 세 스파이크를 가진 합성 행렬로, 세 방향과 \(\hat M\)의 세 블록이 대응함을 보여 준다.</p>
+<p><b>관련 연구와의 차이.</b> 커뮤니티 탐지 문헌(SCORE, 스펙트럴 클러스터링의 일관성 연구 등)은 이미 "DCBM을 대각화하면 스파이크가 생긴다"는 결과를 알고 있었다. 이 논문은 그 역방향(스파이크 ⇒ DCBM)을 보였고, 일부 행만 스파이크에 속하고 나머지는 노이즈인(\(n'&lt;n\)) 더 일반적인 경우를 다룬다. 또 기존 문헌은 이 현상을 없애야 할 노이즈로 보지만, 저자들은 \(\hat M\)에 대한 정보를 얻는 데 활용한다.</p>
+
+<h3>3.3 실무 조언</h3>
+<p><b>빠른 차수 추정.</b> DCBM의 \(\alpha_i\)는 스파이크 위 임베딩의 노름 \(\|e_i\|_2\)로 바로 읽을 수 있다. 그래프를 따로 만들지 않고도 노이즈가 제거된 \(\hat M\)에서 노드 차수를 얻는 셈이다. 차수 분포로 그래프 성격(scale-free 여부 등)을 가늠할 수 있다. 차수 중심성은 음악의 인기 편향과도 연결되고, 그래프 변화에 대한 노드의 강건성을 예측하는 지표로도 알려져 있다.</p>
+<p><b>코사인이냐 내적이냐.</b> 커뮤니티 탐지에서는 DCBM의 차수 이질성을 없애려고 고유벡터를 구 위로 정규화하는 방법(spherical clustering)을 흔히 쓴다. 이것이 추천에서 코사인 유사도를 쓰는 것과 같다. 코사인은 \(\alpha_i\)를 지워 DCBM을 단순 SBM으로 바꾼다. 그러면 같은 커뮤니티의 아이템이 인기와 관계없이 같은 관련도를 받는다. 커버리지나 세렌디피티 같은 발견 지표에는 도움이 되지만, 한 커뮤니티 안에 갇히므로 필터 버블을 구조적으로 키울 수 있다.</p>
+<p>반대로 내적은 각 커뮤니티의 대표(노름이 가장 큰) 아이템을 항상 상위에 올린다. 근처 커뮤니티의 인기 아이템도 함께 섞인다. 여러 커뮤니티를 넓게 훑는 "파놉티콘" 같은 시야를 주어 비슷한 아티스트 찾기나 콜드스타트에 더 맞지만, 인기 편향 때문에 롱테일 아이템에 닿기 어려워진다. 결론은 과제와 목표 지표에 따라 고르라는 것이다. 다만 이제는 각 선택이 무엇을 하는지 이론적으로 설명할 수 있다.</p>
+<p><b>\(f\) 튜닝.</b> Spk는 차원을 늘려도 성능이 포화되는 지점을 찾는 오프라인 지표가 될 수 있다. 정리 3.4에 비추면 Spk는 \(\hat n'=\rho n\)개 점이 DCBM으로 설명된다고 가정했을 때의 \(K\) 추정치다. 노름이 작은 점이 노이즈라는 경험적 가정도 함께 깔려 있다. 가정이 무너지면 노이즈가 섞이면서 스파이크 수가 점 수에 비례해 늘어난다. 가우시안 기준선과 같은 현상이다. 표 1에서 Deezer와 Spotify의 Spk는 작은 \(f\)에서 비례 관계를 유지하다가 \(f=128\)에서 Spotify만 크게 뛰었다. 이를 근거로 저자들은 Spotify는 \(f=64\), Deezer는 \(f=128\)이 깨끗한 커뮤니티를 담는 적절한 선택이라고 결론 낸다. 이 지표는 스파이크가 아닌 점을 정보 없는 노이즈로 보기 때문에, rank&gt;1 근사가 담을 수 있는 정보는 놓칠 수 있다.</p>
+
+<h3>4. 산업 사례 — 임베딩의 시간 안정성</h3>
+<p>대규모 서비스에서는 복잡한 모델을 도입하기 어려운 경우가 많다. 그래서 파이프라인을 바꾸지 않고 SVD 같은 단순 모델을 더 잘 튜닝하고 평가하는 통찰이 쓸모 있다. Deezer는 2022년 5월부터 2023년 5월까지 계산한 트랙 임베딩 SVD 12개를 제공했다. 공통 트랙은 150만 개이고 \(f=128\)이며, 2.2절과 같은 방식으로 계산했다.</p>
+<p>음악 트렌드는 계속 바뀐다. lo-fi나 phonk처럼 새 장르가 뜨고, emo나 jumpstyle처럼 사라지기도 하며, 드라마 OST 덕분에 Kate Bush 팬층이 되살아나기도 한다. 그렇다면 특정 날짜에 계산한 임베딩이 몇 달 뒤에도 유효할까? 3.3절에서 차수가 강건성을 예측한다고 했으니, 노름이 큰 임베딩이 더 안정적일 것이라는 가설을 세운다.</p>
+<p><b>실험 설계.</b> 2022년 5월 SVD를 기준으로 임베딩을 노름 기준 5개 구간으로 같은 크기로 나눈다. 구간마다 1,000개를 샘플링하고, 각 SVD에서 같은 구간의 약 30만 후보 중 top-500 유사 아이템을 코사인과 내적으로 각각 구한다. 기준 시점과 이후 시점(약 5주 간격 11개)의 top-500 집합 사이 평균 Jaccard 지수(IoU)를 잰다.</p>
+<p><b>결과.</b> 노름 구간별로 나눠 보면 평균 하나로는 보이지 않던 전혀 다른 동역학이 드러난다(그림 3, 95% 신뢰구간 포함). 내적에서 차이가 가장 컸다. 노름이 작은 임베딩은 이웃이 빠르게 바뀌어 금방 쓸모없어졌고, 노름이 큰 임베딩은 1년 가까이 지나도 80% 넘게 겹쳤다. 구간별 정확한 곡선 값은 논문 그림 참조. 저자들은 변화가 반드시 나쁘다는 뜻은 아니라고 덧붙인다. 다만 재즈처럼 자리 잡은 장르는 안정적이기를 기대할 수 있으므로, 이런 조건부 분석으로 임베딩의 동역학을 구분해 추천기를 더 잘 평가하자고 제안한다.</p>
+
+<h3>5. 결론</h3>
+<p>음악 추천의 임베딩은 대개 블랙박스처럼 쓰이고 경험칙에 의존한다. 이 논문은 SVD 임베딩의 스파이크가 차수가 다양한 커뮤니티 그래프 구조에서 나온다는 것을 증명했다. 커뮤니티 탐지 모델을 추천 관점에서 다시 읽어 코사인 대 내적, 차원 선택, 시간 안정성에 대한 실무 통찰을 얻었다. 향후 과제는 rank&gt;1 근사가 임베딩에 미치는 효과를 분석하는 것이다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>Truncated SVD / pureSVD</b> — 행렬을 상위 \(f\)개 특이값·특이벡터로 근사하는 방법이다. Eckart–Young–Mirsky 정리에 따라 프로베니우스 노름 기준 최적의 rank-\(f\) 근사다. 추천 분야에서는 Cremonesi 등의 pureSVD로 알려진 강한 베이스라인이다.</li>
+<li><b>PPMI</b> — 두 아이템이 함께 나타날 확률을 각자 독립일 때의 확률과 비교한 로그 비율(PMI)에서 음수를 0으로 자른 값이다. 인기 아이템이 모든 것과 높게 엮이는 효과를 줄인다. Levy &amp; Goldberg는 PPMI 행렬 분해가 SGNS(word2vec)와 밀접하다는 것을 보였다.</li>
+<li><b>스펙트럴 정리</b> — 실대칭 행렬은 정규직교 고유벡터 행렬 \(P\)와 실수 대각행렬 \(D\)로 \(PDP^\top\) 분해된다. 대칭 행렬의 SVD는 고유분해에서 고유값 부호만 따로 처리하면 얻을 수 있다.</li>
+<li><b>SBM</b> — 노드가 속한 커뮤니티 쌍에 따라서만 연결 확률이 정해지는 랜덤 그래프 모델이다. 커뮤니티 탐지 이론의 표준 모델이다.</li>
+<li><b>DCBM</b> — SBM에 노드별 차수 파라미터 \(\alpha_i\)를 곱해, 같은 커뮤니티 안에서도 허브와 주변 노드를 구분하는 모델이다. 실제 네트워크의 긴 꼬리 차수 분포를 표현하는 데 필요하다.</li>
+<li><b>Assortativity</b> — 같은 커뮤니티끼리 더 많이 연결되는 성질이다(\(B_{ii}&gt;B_{ij}\)). 음악 아티스트 네트워크는 장르·문화권 때문에 이 성질이 강하다.</li>
+<li><b>Spherical clustering</b> — 임베딩을 단위 구로 정규화한 뒤 군집화하는 방법이다. DCBM에서 차수 이질성의 영향을 없애려고 쓴다. 추천에서 코사인 유사도를 쓰는 것과 같은 효과다.</li>
+<li><b>Perron–Frobenius 정리</b> — 비음수 행렬(기약 조건 하에서)의 최대 고유값에 대응하는 고유벡터는 모든 원소를 비음수로 잡을 수 있다는 정리다. \(f=1\) 근사가 비음수라는 근거가 된다.</li>
+<li><b>Jaccard 지수(IoU)</b> — 두 집합의 교집합 크기를 합집합 크기로 나눈 값이다. 여기서는 두 시점의 top-500 이웃 목록이 얼마나 겹치는지를 잰다.</li>
+<li><b>Partial set cover</b> — 전체 원소의 일정 비율 이상을 덮는 최소 부분집합 모음을 찾는 문제로, NP-난해다. Spk 계산은 이를 탐욕적으로 근사한다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> 이 논문이 말하는 "스파이크"의 정의는? (a) 노름이 매우 큰 이상치 벡터 하나 (b) 같은 단위 방향벡터의 양수배로 쓸 수 있는 벡터 집합 (c) 특이값이 급격히 커지는 차원 (d) 첨도가 높은 1차원 분포
+<details><summary>정답 보기</summary>(b). \(e_i=\alpha_i\vec s\), \(\alpha_i&gt;0\)으로 쓸 수 있으면 스파이크다. 기하적으로는 원점을 지나는 반직선 위에 점들이 늘어선 모양이다.</details></li>
+<li><b>[사실]</b> \(f=128\), \(\cos\theta=0.9\), \(\rho=50\%\)에서 Deezer, Spotify, 가우시안 기준선의 Spk 값은?
+<details><summary>정답 보기</summary>Deezer 0.04%, Spotify 0.14%, \(\mathcal N(0,1)\) 50%. 수백만 벡터의 절반이 Deezer에서는 361개, Spotify에서는 1,395개 스파이크로 덮인다.</details></li>
+<li><b>[사실]</b> Deezer 산업 사례에서 사용한 SVD 개수, 기간, 공통 트랙 수, 비교에 쓴 지표는?
+<details><summary>정답 보기</summary>2022년 5월~2023년 5월에 계산한 SVD 12개, 공통 트랙 150만 개, \(f=128\). 노름 5분위별로 1,000개를 샘플링해 top-500 이웃의 평균 Jaccard 지수(IoU)를 비교했다.</details></li>
+<li><b>[원리]</b> 왜 \(M\) 대신 \(MM^*\)로 SVD를 계산해도 아이템 임베딩 \(U\)가 같은가? 그리고 이 사실이 이론 전개에서 어떤 가정을 가능하게 하는가?
+<details><summary>정답 보기</summary>\(U\)는 \(MM^*\)의 상위 고유벡터이므로 어느 쪽으로 계산해도 같다. 덕분에 \(M\)을 대칭 비음수 행렬로 놓고 스펙트럴 정리(\(M=PDP^*\))를 쓸 수 있다. 그 결과 \(V\)가 \(U\)의 부호만 바꾼 형태(보조정리 3.1)가 되어 증명이 간단해진다.</details></li>
+<li><b>[원리]</b> 정리 3.4에서 \(\hat M_{ij}=\alpha_i\alpha_j\langle\vec s_{C(i)},\vec s{}'_{C(j)}\rangle\)의 각 항이 DCBM의 어떤 파라미터에 대응하는가?
+<details><summary>정답 보기</summary>\(\alpha_i,\alpha_j\)(정규화하면 \(\alpha_i/\alpha_{\max}\))는 노드별 차수 보정 파라미터, 즉 커뮤니티 내부 인기도다. \(C(i)\)는 커뮤니티 할당이다. \(|\langle\vec s_k,\vec s{}'_l\rangle|\)는 커뮤니티 간 연결 확률 행렬 \(B_{kl}\)이다.</details></li>
+<li><b>[원리]</b> 코사인 유사도를 쓰면 DCBM 관점에서 무엇이 일어나며, 추천 결과에는 어떤 영향이 있는가?
+<details><summary>정답 보기</summary>정규화가 \(\alpha_i\)를 지워 DCBM이 SBM으로 바뀐다. 같은 커뮤니티 아이템은 인기와 상관없이 같은 관련도를 받는다. 롱테일 발견(커버리지·세렌디피티)에는 유리하지만 한 커뮤니티에 머무르게 되어 필터 버블을 강화할 수 있다. 내적은 반대로 커뮤니티의 대표 인기 아이템과 인근 커뮤니티의 인기 아이템을 올린다.</details></li>
+<li><b>[해석]</b> Spotify의 Spk가 \(f=64\)에서 \(f=128\)로 갈 때 크게 뛴 반면 Deezer는 그렇지 않았다. 저자들은 이를 어떻게 해석했는가?
+<details><summary>정답 보기</summary>Spk가 갑자기 커지는 것은 노이즈 차원이 섞이기 시작해 스파이크 수가 점 수에 비례해 늘어나는 신호로 본다. 그래서 Spotify는 \(f=64\), Deezer는 \(f=128\)이 깨끗한 커뮤니티를 담기에 적절한 차원이라고 결론 내렸다.</details></li>
+<li><b>[해석]</b> 안정성 실험에서 내적 기준 노름 상위 구간은 1년 가까이 지나도 80% 넘게 겹쳤고 하위 구간은 빠르게 바뀌었다. 이 결과는 이론의 어느 부분과 연결되는가?
+<details><summary>정답 보기</summary>노름 ≈ DCBM 차수 \(\alpha_i\)이고, 그래프 문헌에서 차수가 높은 노드는 데이터 변화에 강건하다고 알려져 있다(3.3.1). 즉 커뮤니티 안에서 중심적인(인기 있는) 트랙의 이웃은 데이터가 쌓여도 잘 바뀌지 않고, 주변 트랙은 쉽게 바뀐다는 예측과 맞는다.</details></li>
+<li><b>[비판]</b> 이 논문의 이론과 실험에서 약한 고리를 두 가지 지적하시오.
+<details><summary>정답 보기</summary>예시 답: ① 정리는 "스파이크 ⇒ DCBM"만 보이고, 스파이크 소속은 \(\theta\) 임계값으로 근사적으로 정한다. 실제 데이터의 근사 공선성에서 생기는 오차가 결론에 얼마나 영향을 주는지 정량화하지 않았다. ② 비스파이크 점과 rank&gt;1 커뮤니티를 노이즈로 취급한다. ③ 코사인 대 내적, \(f\) 선택에 대한 조언을 Recall·NDCG 같은 추천 성능으로 검증하지 않았다. ④ 안정성 결과는 노름과 인기도의 상관을 통제하지 않았으므로, 단순히 "상호작용이 많은 트랙이 안정적"이라는 효과와 구분하기 어렵다.</details></li>
+<li><b>[적용]</b> 당신의 서비스에서 SVD나 MF 임베딩으로 유사 아이템 검색을 운영한다면 이 논문의 통찰을 어떻게 쓰겠는가?
+<details><summary>정답 보기</summary>예시 답: 임베딩 노름 분포와 Spk를 \(f\)별로 계산해 차원 선택의 오프라인 기준으로 쓴다. 노름을 커뮤니티 내 대표성 지표로 보고, "비슷한 아티스트"나 콜드스타트 진입면은 내적으로, 디스커버리 면은 코사인으로 분리 운영한다. 또 재학습 때 노름 구간별 top-k 이웃 Jaccard를 모니터링해, 저노름 아이템의 이웃 변동이 큰지 확인하고 그 구간의 갱신 주기나 캐시 정책을 따로 정한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#9</b> Are We Really Making Much Progress? A Worrying Analysis of Recent Neural Recommendation Approaches (2019) — 이 논문이 "SVD 같은 단순 분해가 여전히 강하다"는 근거로 인용하는 재현성 연구다.</li>
+<li><b>#263</b> On the Consistency of Average Embeddings for Item Recommendation (2023) — 같은 음악·미디어 토픽에서 같은 해 나온 Deezer 연구로, 임베딩 공간의 기하(평균 임베딩이 무엇을 보존하는가)를 이론적으로 따진다는 점이 닮았다.</li>
+<li><b>#1</b> Local Item-Item Models for Top-N Recommendation (2016) — 전역 저랭크 모델 하나 대신 사용자 부분집합마다 로컬 모델을 둔다. "커뮤니티별 저랭크 구조"라는 이 논문의 해석과 비교해 보기 좋다.</li>
+<li><b>#313</b> Orthogonal Low Rank Embedding Stabilization (2025) — 재학습할 때 저랭크 임베딩이 흔들리는 문제를 직접 다룬다. 4절의 시간 안정성 분석과 바로 이어진다.</li>
+<li><b>#265</b> Do Recommender Systems Promote Local Music? A Reproducibility Study Using Music Streaming Data (2024) — 같은 토픽. 음악의 문화권 커뮤니티와 인기 편향이 추천에서 어떻게 드러나는지 다루므로 코사인 대 내적 논의와 연결된다.</li>
+</ul>
+
+</main>
+</body>
+</html>
