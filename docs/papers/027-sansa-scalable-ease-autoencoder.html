@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scalable Approximate NonSymmetric Autoencoder for Collaborative Filtering</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-22 · #27</span></div>
+<h1>Scalable Approximate NonSymmetric Autoencoder for Collaborative Filtering</h1>
+<p class="meta">Martin Spišák (GLAMI, Charles University), Radek Bartyzal (GLAMI), Antonín Hoskovec (GLAMI, CTU Prague), Ladislav Peška, Miroslav Tůma (Charles University) · RecSys 2023 Short Paper · Best Short Paper Runner-up</p>
+<div class="chips"><span>2023</span><span>Best Short Paper Runner-up</span><span>GLAMI</span><span>EASE</span><span>선형 오토인코더</span><span>희소 근사 역행렬</span><span>Cholesky</span><span>확장성</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608827">10.1145/3604915.3608827</a> · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3604915.3608827">ACM (Open Access, CC-BY)</a> · 코드: <a href="https://github.com/glami/sansa">glami/sansa</a> · <a href="https://github.com/glami/sansa/blob/main/assets/poster.pdf">포스터</a> · 읽기 예상 13분</p>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM PDF는 네트워크 정책으로 접근이 막혔다(403). 대신 저자 공식 포스터(GitHub), 공식 저장소 README, 그리고 이 논문의 바탕이 된 제1저자 석사논문(Charles University, 2023)을 참고해 구성했다. 8쪽 논문의 절 구성과 일부 수치는 실제 논문과 다를 수 있으며, 확인하지 못한 값은 "논문 참조"로 표시했다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> EASE의 닫힌 해에 필요한 거대한 역행렬 \((X^\top X+\lambda I)^{-1}\)를 통째로 구하지 않는다. 수치선형대수의 "인수분해형 희소 근사 역행렬" 기법으로 이를 희소한 두 행렬의 곱으로 근사한다. 그 결과 EASE를 수백만 아이템 규모로 확장할 수 있다.</p>
+<p><b>풀려는 문제.</b> EASE는 은닉층 없는 선형 오토인코더로, 단순한데도 많은 딥러닝 모델과 대등하거나 더 낫다. 그러나 학습 시 아이템×아이템 역행렬을 계산해야 해 시간은 대략 \(O(n^{2.37})\)~\(O(n^3)\)이 든다. 결과 가중치는 입력이 희소해도 꽉 찬 밀집 행렬이 된다. 아이템이 100만 개면 float32 가중치만 약 4TB여서 추론용 메모리에도 올라가지 않는다.</p>
+<p><b>방법의 핵심.</b> 그램 행렬 \(A=X^\top X+\lambda I\)를 희소 \(LDL^\top\)로 (근사) 분해한다. 이어 하삼각 인수 \(L\)의 역행렬을 희소하게 근사해 \(A^{-1}\approx K^\top D^{-1}K\)를 얻는다. 이 인수들로 인코더 \(W^\top\)와 디코더 \(Z\)를 만들면 2층 희소 선형 모델이 된다. 밀도(0이 아닌 비율)를 하이퍼파라미터로 직접 정한다. 학습 전 과정이 희소 연산이라 학습 메모리도 작다. 직관적으로는 사용자 피드백이 충분하면 \(A\)가 대각 우세에 가까워, 그 Cholesky 인수와 역인수에서 큰 값이 소수에 몰리기 때문에 통한다.</p>
+<p><b>주요 결과.</b> 포스터에 실린 Amazon Books(사용자 52,643 · 아이템 91,599 · 상호작용 약 298만, 밀도 0.062%) 결과에서 SANSA(ICF)는 recall@20 0.077, nDCG@20 0.064를 기록했다. 같은 표에서 EASE(0.071/0.057), SLIM(0.075/0.060), ItemCF(0.074/0.061), UltraGCN(0.068/0.056), MRF(0.069~0.071/0.055~0.058)보다 높다. 학습은 vCPU 2개로 49초, 피크 메모리 9.18GB였다. MRF는 vCPU 16개로 약 170초, 피크 약 96GB였고, EASE·SLIM은 수 시간이 걸렸다.</p>
+<p><b>한계와 남는 질문.</b> 밀집한 아이템-아이템 그래프에서는 불완전 분해(ICF)가 정보를 잃어 정확도가 떨어질 수 있다. 하이퍼파라미터(정규화, 밀도, 반복 수)와 ICF 붕괴 방지용 대각 이동을 조정해야 한다. 대규모 비교의 일부 기준선 수치는 BARS 벤치마크에서 가져온 값이다. 또 EASE 계열 모델의 근본 한계인 순서·맥락 정보의 부재는 그대로 남는다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<h3>1. 서론 — 왜 EASE를 키우고 싶은가</h3>
+<p>최근 재현성 연구들은 얕은(shallow) 모델이 암묵 피드백 협업 필터링에서 복잡한 딥러닝 모델과 맞먹거나 더 낫다는 결과를 반복해서 보고했다. 그 대표가 Steck(2019)의 EASE<sup>R</sup>(Embarrassingly Shallow Autoencoder)다. 은닉층·편향·활성 함수 없이 아이템×아이템 가중치 행렬 \(B\) 하나만 학습한다. 사용자 상호작용 벡터 \(u\)에 \(B\)를 곱한 \(uB\)가 곧 점수다.</p>
+<p>저자들은 EASE의 장점을 세 가지로 정리한다. ① 저랭크 모델과 달리 풀랭크라 표현력이 크다. ② 사용자 한 명의 피드백이 적어도 사용자 수가 많으면 문제없다. ③ "A를 본 사람이 B를 보고, B를 본 사람이 C를 본다" 같은 긴 상호작용 사슬까지 아이템 유사도에 반영한다. 학습도 경사하강 없이 닫힌 해로 끝난다.</p>
+<p>문제는 그 닫힌 해가 \(n\times n\) 역행렬이라는 점이다(\(n\)은 아이템 수). 계산 비용이 크고, 입력 \(X\)가 아무리 희소해도 역행렬은 일반적으로 밀집이다. 수백만 아이템을 다루는 이커머스(저자들의 회사 GLAMI는 패션 검색·추천 플랫폼이다)에서는 학습은커녕 모델을 메모리에 올리는 것부터 불가능하다. 이 논문의 목표는 EASE의 성질(풀랭크, 대칭 양의 정부호인 \(A^{-1}\)의 구조)을 최대한 보존하면서, 사용자가 정한 밀도로 임의로 압축할 수 있는 희소 모델을 만드는 것이다.</p>
+
+<h3>2. 배경과 관련 연구 — EASE와 기존 확장법</h3>
+<p>EASE는 다음 볼록 최적화 문제를 푼다.</p>
+\[ \min_B \; \|X - XB\|_F^2 + \lambda\|B\|_F^2 \quad \text{s.t.}\quad \mathrm{diag}(B)=\vec 0 \]
+<p>\(X\in\{0,1\}^{m\times n}\)은 사용자×아이템 상호작용 행렬이고, \(\|\cdot\|_F\)는 프로베니우스 노름, \(\lambda\)는 L2 정규화 강도다. 대각 제약은 "아이템이 자기 자신을 예측하는" 자명한 해(\(B=I\))를 막는다. 라그랑주 승수로 풀면 \(P=A^{-1}=(X^\top X+\lambda I)^{-1}\)에 대해</p>
+\[ \hat B_{ij} = -\,\frac{P_{ij}}{P_{jj}} \;(i\neq j), \qquad \hat B_{jj}=0 \]
+<p>이다. 즉 \(A^{-1}\)의 \(j\)번째 열을 \(-P_{jj}\)로 나눈 것이 가중치의 \(j\)번째 열이다. 석사논문은 이를 \(\hat B=\hat B_{\text{diag}}+I\)로 쓴다. \(\hat B_{\text{diag}}=-P\,\mathrm{diag}(P)^{-1}\)이고(대각 원소는 \(-1\)), \(+I\)가 대각을 0으로 되돌리는 "잔차 연결" 역할을 한다. 결국 EASE의 본체는 \(A^{-1}\)이고, 이 역행렬을 어떻게 싸게 근사하느냐가 확장의 핵심이다.</p>
+<p>기존 확장법은 두 갈래다. <b>ELSA</b>(RecSys 2022)는 \(A^{-1}\)를 저랭크로 근사한다. 메모리는 줄지만 EASE의 강점인 풀랭크를 포기한다. <b>MRF</b>(Steck, NeurIPS 2019)는 희소 패턴을 먼저 정하고 아이템 클러스터 단위의 국소 역행렬로 풀랭크 희소 근사를 만든다. 밀집 블록 연산에 기대므로 큰 데이터에서는 메모리와 마스킹 비용이 커진다. SANSA는 세 번째 길로, 희소 선형 시스템의 전처리기(preconditioner)를 만들 때 쓰는 희소 근사 역행렬(SAI) 기법을 들여온다. 공저자 Tůma는 이 분야의 대표 연구자다(Benzi &amp; Tůma, 1999).</p>
+
+<h3>3. 방법 — 인수분해형 희소 근사 역행렬</h3>
+<p><b>3.1 두 단계로 쪼개기.</b> \(A^{-1}\)를 직접 희소 근사하는 대신 두 개의 쉬운 문제로 나눈다.</p>
+<ol>
+<li>희소한 (근사) square-root-free Cholesky 분해: \(PAP^\top \approx LDL^\top\). \(L\)은 대각이 1인 하삼각, \(D\)는 대각, \(P\)는 순열 행렬이다.</li>
+<li>희소한 \(K\approx L^{-1}\) 찾기. 목표는 \(\|I-LK\|_F\)를 작게 만드는 것이다.</li>
+</ol>
+<p>그러면 \(A^{-1}\approx P^\top K^\top D^{-1} K P\)가 된다. 대각 인수 \(D\)는 원소별 역수로 정확하게 뒤집을 수 있다. 근사가 들어가는 곳은 \(L\)과 \(K\)뿐이다. 허용 밀도를 높이고 반복을 충분히 하면 근사는 정확한 \(A^{-1}\)로 수렴한다.</p>
+<p><b>3.2 순열이 왜 중요한가.</b> 희소 Cholesky 분해는 소거 과정에서 원래 0이던 자리에 새 값이 생기는 fill-in을 만든다. 행·열 순서를 바꾸면 fill-in의 양과 병렬성이 크게 달라진다. 그래서 먼저 근사 최소 차수(AMD) 계열 휴리스틱(구현은 COLAMD)으로 fill-in을 줄이는 순열 \(P\)를 찾는다. 포스터도 "fill-in을 줄이는 순열의 선택이 정확도와 효율에 결정적"이라고 강조한다. fill-in이 적을수록 불완전 분해에서 버려지는 정보도 줄어든다.</p>
+<p><b>3.3 두 가지 분해 변형.</b> 메모리 사정에 따라 고른다.</p>
+<ul>
+<li><b>SANSA (CHOLMOD)</b> — 정확한 희소 Cholesky를 끝까지 계산한 뒤 절댓값이 작은 원소를 버려 목표 밀도로 맞춘다. 정해진 nnz 개수에서 가장 큰 원소만 남기는 것은 프로베니우스 오차 기준 최적이므로 더 정확하다. 대신 분해 도중 fill-in이 크면 메모리를 많이 쓴다. 작고 밀집한 문제에 권장된다.</li>
+<li><b>SANSA (ICF)</b> — 불완전 Cholesky 분해(Lin &amp; Moré, 1999)로 분해하는 동안 바로 희소화한다. 메모리를 거의 임의로 작게 잡을 수 있다. 다만 분해가 붕괴(breakdown)할 수 있어 대각에 작은 이동을 더해 가며 재시도한다. 크고 희소한 문제에 권장된다.</li>
+</ul>
+<p><b>3.4 공짜 초기값.</b> 역행렬을 찾는 Schulz 반복 \(X_{k+1}=X_k(2I-AX_k)\)을 \(X_0=I\)에서 한 번 돌리면 \(X_1=2I-A\)가 된다. 이를 \(L\)에 적용하면 \(K^{(0)}=2I-L\)이다. 대각이 1인 하삼각 \(L\)의 대각 아래 원소 부호만 뒤집으면 되므로 계산이 사실상 공짜다. \(L\)이 매우 희소하고 소거 트리가 넓고 얕으면(재귀적 의존이 짧으면) 이 초기값이 이미 \(L^{-1}\)에 매우 가깝다는 것이 저자들의 관찰이다. 포스터는 이를 "free initial approximation of the inverse factor"라고 부른다.</p>
+<p><b>3.5 선택적 정제: 프로베니우스 노름 최소화.</b> 초기값이 부족하면 잔차 \(R=I-LK\)의 프로베니우스 노름을 줄이도록 \(K\)의 열을 반복 갱신한다(Minimal Residual 계열). 석사논문과 공식 구현에서는 이를 UMR(Uniform Minimal Residual)이라 부른다. 특징은 세 가지다. ① 열 묶음 단위로 벡터화해 갱신한다. ② 열별이 아닌 행렬 전체 기준으로 큰 원소만 남기는 전역 희소화를 해서 열마다 다른 밀도 패턴을 허용한다. ③ 전체 스캔 뒤에는 잔차가 가장 큰 열만 골라 다듬는 finetune 단계로 열별 근사 품질을 고르게 맞춘다. \(\frac{1}{n}\|R\|_F^2\)는 상대 잔차 제곱과 같아 학습 손실이자 종료 기준으로 쓰인다.</p>
+<p><b>3.6 인코더·디코더 만들기(알고리즘 1).</b> 포스터의 알고리즘을 풀어 쓰면 다음과 같다.</p>
+<ol>
+<li>희소 \(LDL^\top \approx P(X^\top X+\lambda I)P^\top\)를 계산한다.</li>
+<li>희소 \(K\approx L^{-1}\)를 계산한다.</li>
+<li>\(W\leftarrow KP\) (순열을 되돌림)</li>
+<li>\(Z_0\leftarrow D^{-1}W\)</li>
+<li>\(\vec r\leftarrow \mathrm{diag}(W^\top Z_0)\) — 근사한 \(A^{-1}\)의 대각, 즉 EASE 공식의 \(P_{jj}\)에 해당한다.</li>
+<li>\(Z\leftarrow Z_0\)의 각 열을 \(-1/\vec r\)로 스케일</li>
+<li>\(W^\top, Z\)를 반환한다.</li>
+</ol>
+<p>\(W^\top D^{-1}W\approx A^{-1}\)이므로 \(W^\top Z\approx -A^{-1}\mathrm{diag}(A^{-1})^{-1}=\hat B_{\text{diag}}\)이다. EASE의 열 스케일링을 디코더 쪽에만 적용했기 때문에 인코더와 디코더가 서로 다른 "비대칭(NonSymmetric)" 오토인코더가 된다. 이름의 유래다. \(Z_0\)와 \(W\)는 희소 패턴이 같아서 대각 \(\vec r\)은 원소별 곱 후 열 합으로 싸게 구한다.</p>
+<p><b>3.7 추론.</b> 사용자 벡터 \(u\)에 대해 점수는 \(r^\top=(u^\top W^\top)Z\)로, 희소 행렬-벡터 곱 두 번이다. 입력 아이템을 다시 추천하지 않으려면 \(+u^\top\) 잔차 연결을 더하거나 그 위치를 마스킹하면 된다. 같은 파라미터 수라도 1층 희소 모델(MRF)보다 2층 희소 모델이 훨씬 밀집한 예측 벡터를 만든다. 그래서 상호작용이 적은 사용자에게도 더 많은 후보를 낼 수 있다는 실용적 장점이 있다. 학습·추론 메모리가 \(X^\top X\)의 nnz와 지정 밀도에 비례한다는 점도 핵심이다.</p>
+
+<h3>4. 실험</h3>
+<p><b>데이터셋.</b> 공식 저장소의 재현 브랜치에는 Goodbooks-10k, MovieLens 20M, Million Song Dataset(MSD), Netflix Prize, Amazon Books 다섯 개가 있다. 앞의 넷은 아이템 수가 1만~4만 개로 작다. 상호작용 밀도는 낮지만 \(X^\top X\)는 수십 % 수준으로 밀집해 희소 근사에 불리한 조건이다. Amazon Books는 아이템 91,599개, 상호작용 밀도 0.062%, 아이템-아이템 밀도 3.937%로 "크고 희소한" 실제 이커머스 시나리오에 가장 가깝다. 평가는 기존 프로토콜(Liang et al. 2018의 strong generalization, Amazon Books는 BARS/LightGCN 분할)을 따른다.</p>
+<p><b>베이스라인과 지표.</b> 핵심 비교 대상은 원본 EASE와 유일한 풀랭크 희소 확장인 MRF다. Amazon Books에서는 SLIM, ItemCF, UltraGCN을 BARS 벤치마크 결과에서 가져와 함께 비교한다. 지표는 recall@k, nDCG@k와 학습 시간·메모리다.</p>
+<p><b>(1) 작고 밀집한 데이터에서의 강건성.</b> 저자들의 석사논문 기준으로, SANSA(CHOLMOD)는 EASE보다 수십~수백 배 희소한 가중치로도 EASE와 거의 같은 정확도를 낸다. MRF와는 밀도에 따라 엎치락뒤치락하는 수준이다. MSD처럼 아이템-아이템 행렬이 밀집한 경우 ICF 변형은 정보 손실로 CHOLMOD 변형보다 정확도가 떨어진다. 데이터셋별 정확한 수치는 논문 참조.</p>
+<p><b>(2) 크고 희소한 데이터(Amazon Books).</b> 포스터의 표를 핵심만 재구성하면 다음과 같다(MRF·SANSA 외 수치는 BARS에서 인용).</p>
+<table>
+<tr><th>모델</th><th>recall@20</th><th>nDCG@20</th><th>vCPU</th><th>피크 메모리</th><th>학습 시간</th></tr>
+<tr><td>SANSA (ICF)</td><td><b>0.077</b></td><td><b>0.064</b></td><td>2</td><td>9.18 GB</td><td>49 s</td></tr>
+<tr><td>MRF (r=0)</td><td>0.071</td><td>0.058</td><td>16</td><td>96.45 GB</td><td>172 s</td></tr>
+<tr><td>MRF (r=0.5)</td><td>0.069</td><td>0.055</td><td>16</td><td>96.58 GB</td><td>167 s</td></tr>
+<tr><td>EASE</td><td>0.071</td><td>0.057</td><td>28</td><td>미측정</td><td>222 min</td></tr>
+<tr><td>SLIM</td><td>0.075</td><td>0.060</td><td>28</td><td>미측정</td><td>316 min</td></tr>
+<tr><td>ItemCF</td><td>0.074</td><td>0.061</td><td>28</td><td>미측정</td><td>57 min</td></tr>
+<tr><td>UltraGCN</td><td>0.068</td><td>0.056</td><td>20 + GPU</td><td>미측정</td><td>45 min</td></tr>
+</table>
+<p>정확도 측정의 표준오차는 약 0.0005다. 저자들의 해석은 세 가지다. ① vCPU 2개 SANSA가 vCPU 16개 MRF보다 약 3배 빠르고, 메모리는 약 10배 적다. ② 밀집 모델(EASE, SLIM)보다 학습이 몇 자릿수 빠르고 싸다. ③ 이 데이터셋에서 당시 최고 정확도를 기록했다. 근사 모델이 원본 EASE보다 정확도가 높게 나온 것은 흥미로운데, 희소화가 일종의 정규화로 작용했을 가능성을 생각해 볼 수 있다(저자들의 설명이 아니라 해설자의 추측). 포스터의 메모리 사용 곡선에서는 SANSA의 메모리가 학습 내내 낮게 유지되고, 마지막 평탄 구간이 평가 단계에 해당한다.</p>
+<p><b>(3) 수백만 아이템으로의 확장.</b> 초록과 저장소는 SANSA가 "수백만 아이템 이상"으로 쉽게 확장된다고 주장한다. 이를 보이는 확장성 실험의 구체적 설정과 수치는 논문 참조.</p>
+
+<h3>5. 결론</h3>
+<p>EASE가 강한 이유인 긴 거리의 상호작용 사슬 활용은 큰 카탈로그에서 학습·추론 비용을 폭발시키는 원인이기도 하다. 저자들은 밀집 블록 연산으로 정면 돌파하던 기존 방법과 달리, 상호작용 데이터 고유의 희소성을 끝까지 활용하는 수치선형대수 기법으로 이 비용을 크게 낮췄다. SANSA는 자원이 제한된 연구자에게는 강력하면서도 손에 닿는 베이스라인이 되고, 수백만 아이템을 가진 산업 환경에는 실용적 대안이 된다는 것이 결론이다. 구현은 <code>pip install sansa</code>로 공개되어 있다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>EASE<sup>R</sup></b> — Steck(2019)의 선형 아이템-아이템 오토인코더다. 대각이 0인 가중치 \(B\)를 L2 정규화된 최소제곱으로 닫힌 해로 구한다. 단순하지만 암묵 피드백 top-N 추천에서 매우 강한 베이스라인이다.</li>
+<li><b>그램(Gram) 행렬 \(X^\top X\)</b> — 아이템 쌍의 공동 등장 횟수를 담은 \(n\times n\) 행렬이다. \(X\)가 매우 희소해도 \(X^\top X\)는 훨씬 밀집하며, 그 역행렬은 거의 항상 완전 밀집이다.</li>
+<li><b>대칭 양의 정부호(SPD)</b> — 모든 0이 아닌 벡터 \(v\)에 대해 \(v^\top Av&gt;0\)인 대칭 행렬이다. \(X^\top X+\lambda I\)(\(\lambda&gt;0\))는 SPD라서 Cholesky 분해가 항상 존재하고 수치적으로 안정하다.</li>
+<li><b>Cholesky / \(LDL^\top\) 분해</b> — SPD 행렬을 하삼각 \(L\)과 대각 \(D\)로 \(A=LDL^\top\)처럼 나눈다. square-root-free 형태는 \(L\)의 대각을 1로 두고 크기 정보를 \(D\)로 뺀다.</li>
+<li><b>Fill-in과 재정렬</b> — 희소 행렬 분해 중 0이던 자리에 새로 생기는 값이다. 행·열 순서(순열)에 크게 좌우되며, AMD/COLAMD 같은 휴리스틱으로 줄인다. 최적 순서를 찾는 문제는 NP-완전이다.</li>
+<li><b>불완전 Cholesky 분해(ICF)</b> — 분해 도중 정해진 개수 이상의 원소를 버려 인수를 희소하게 유지하는 근사 분해다. 메모리를 통제할 수 있지만 붕괴할 수 있어 대각 이동(shift)으로 안정화한다.</li>
+<li><b>희소 근사 역행렬(SAI)</b> — 원래 반복 해법의 전처리기를 만들려고 개발된 기법이다. \(\|I-AM\|_F\)를 작게 하는 희소 \(M\)을 찾는다. 인수분해형(factorized)은 \(A^{-1}\)를 희소 인수의 곱으로 표현한다.</li>
+<li><b>Schulz 반복</b> — \(X_{k+1}=X_k(2I-AX_k)\)로 역행렬을 뉴턴 방식으로 근사한다. 항등행렬에서 시작한 첫 단계가 \(2I-A\)이고, SANSA의 공짜 초기값이 이것이다.</li>
+<li><b>MRF (Steck 2019)</b> — 마르코프 랜덤 필드 관점에서 EASE를 희소화한 모델이다. 희소 패턴을 미리 정하고 아이템 클러스터별 역행렬로 가중치를 구한다. SANSA 이전의 풀랭크 희소 EASE 최강자다.</li>
+<li><b>ELSA</b> — EASE의 역행렬을 저랭크 인수로 근사하는 선형 오토인코더(RecSys 2022)다. 확장성은 좋지만 풀랭크 표현력을 포기한다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li><b>[사실]</b> EASE의 최적화 문제에서 \(\mathrm{diag}(B)=\vec 0\) 제약의 역할은? (a) 학습 속도 향상 (b) 가중치 희소화 (c) 아이템이 자기 자신을 예측하는 자명해 방지 (d) 음수 가중치 제거
+<details><summary>정답 보기</summary>(c). 제약이 없으면 \(B=I\)가 재구성 오차 0인 자명해가 된다. 대각을 0으로 막아 다른 아이템에서 예측하도록 강제한다.</details></li>
+<li><b>[사실]</b> 아이템 100만 개에서 EASE 가중치를 float32 밀집 행렬로 저장하면 대략 얼마가 필요한가?
+<details><summary>정답 보기</summary>약 4TB. \(10^6\times10^6\times4\)바이트 \(=4\times10^{12}\)바이트다. 포스터가 직접 제시하는 동기 수치다.</details></li>
+<li><b>[사실]</b> Amazon Books 실험에서 SANSA(ICF)의 학습 자원은? 학습 시간, vCPU 수, 피크 메모리를 답하라.
+<details><summary>정답 보기</summary>vCPU 2개, 약 49초, 피크 메모리 9.18GB. 비교 대상 MRF는 vCPU 16개로 약 170초, 피크 약 96GB를 썼다.</details></li>
+<li><b>[원리]</b> SANSA는 \((X^\top X+\lambda I)^{-1}\)를 어떤 형태로 근사하는가? 각 인수의 의미를 설명하라.
+<details><summary>정답 보기</summary>\(A^{-1}\approx P^\top K^\top D^{-1}KP\). \(P\)는 fill-in을 줄이는 순열, \(L\)·\(D\)는 \(PAP^\top\)의 (근사) \(LDL^\top\) 분해의 단위 하삼각·대각 인수, \(K\)는 \(L^{-1}\)의 희소 근사다. \(D\)는 정확히 뒤집고, 근사는 \(L\)과 \(K\)에만 들어간다.</details></li>
+<li><b>[원리]</b> 초기값 \(K^{(0)}=2I-L\)이 "공짜"인 이유와, 좋은 근사가 되는 조건은?
+<details><summary>정답 보기</summary>Schulz 반복의 첫 단계에 해당하며, 대각이 1인 \(L\)의 대각 아래 원소 부호만 뒤집으면 되므로 추가 연산이 거의 없다. \(L\)이 매우 희소하고 소거 트리가 넓고 얕아 곱해서 생기는 고차 항이 작을 때 \(L^{-1}\)에 가깝다. 정확히는 \(L=I+N\)(\(N\)은 엄격 하삼각)이면 \(L^{-1}=I-N+N^2-\cdots\)이므로 \(N^2\) 이상이 작을수록 좋다.</details></li>
+<li><b>[원리]</b> 왜 "비대칭(NonSymmetric)" 오토인코더라 부르는가?
+<details><summary>정답 보기</summary>\(A^{-1}\approx W^\top D^{-1}W\) 자체는 대칭 구조지만, EASE 공식은 각 열을 \(-1/P_{jj}\)로 스케일한다. 이 스케일과 \(D^{-1}\)을 디코더 \(Z\)에만 흡수하므로 인코더 \(W^\top\)와 디코더 \(Z\)가 서로 전치 관계가 아닌 다른 행렬이 된다.</details></li>
+<li><b>[해석]</b> Amazon Books에서 근사 모델인 SANSA가 원본 EASE보다 recall@20이 높았다(0.077 대 0.071). 이 결과를 어떻게 해석해야 하며, 어떤 점을 주의해야 하나?
+<details><summary>정답 보기</summary>희소화가 작은 노이즈 상관을 잘라 정규화처럼 작용했을 가능성, 그리고 SANSA(ICF)가 다른 정규화·스케일링을 쓴 효과일 가능성이 있다. 주의할 점: EASE 등 일부 수치는 BARS 벤치마크에서 가져온 값이라 하이퍼파라미터 탐색 조건이 완전히 같지 않을 수 있고, 데이터셋 하나의 결과다. "근사가 항상 원본보다 낫다"고 일반화할 근거는 아니다.</details></li>
+<li><b>[해석]</b> 아이템-아이템 행렬이 밀집한 데이터(예: MSD)에서 ICF 변형이 CHOLMOD 변형보다 불리한 이유는?
+<details><summary>정답 보기</summary>ICF는 분해 도중 원소를 버리므로, 밀집한 행렬에서는 이후 소거에 필요한 정보가 일찍 사라져 오차가 누적된다. 붕괴를 막기 위한 더 강한 대각 이동도 정확도를 깎는다. CHOLMOD는 정확한 인수를 먼저 구한 뒤 큰 원소만 남기므로(프로베니우스 최적) 메모리만 허락하면 더 정확하다.</details></li>
+<li><b>[비판]</b> SANSA를 실서비스 후보 생성기로 쓴다고 할 때 남는 한계 두 가지를 들라.
+<details><summary>정답 보기</summary>예: ① 순서·시점·맥락을 쓰지 않는 bag-of-items 모델이라 세션·순차 신호를 반영하지 못한다. ② 새 아이템은 \(X^\top X\)에 행·열이 없어 재학습 전까지 추천되지 않는다(콜드스타트·신선도). ③ 정규화·밀도·ICF 이동 등 수치 하이퍼파라미터 튜닝이 필요하다. ④ 인기 편향 보정(MRF의 정규화 같은)이 기본 포함되어 있지 않다.</details></li>
+<li><b>[적용]</b> 아이템 500만 개 쇼핑몰에서 하루 단위로 SANSA를 재학습하려 한다. 어떤 변형과 설정을 먼저 시도하고, 무엇을 모니터링하겠는가?
+<details><summary>정답 보기</summary>모범 답안 예: 크고 희소하므로 ICF 변형부터 쓰고, 메모리 예산에 맞춰 가중치 밀도를 정한다(예: 아이템당 평균 수십~수백 개 nnz). UMR 스캔·finetune 수는 학습 손실 \(\|I-LK\|_F^2/n\) 곡선을 보고 정한다. ICF 붕괴 시 대각 이동 재시도 횟수, 학습 시간·피크 메모리, 오프라인 recall/nDCG, 그리고 예측 벡터 밀도(추천 가능한 후보 수)를 모니터링한다. 신규 아이템은 별도 콘텐츠 기반 경로로 보완한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#9</b> Are We Really Making Much Progress? A Worrying Analysis of Recent Neural Recommendation Approaches (2019) — "얕은 모델이 여전히 강하다"는 SANSA의 출발점이 된 재현성 연구다.</li>
+<li><b>#1</b> Local Item-Item Models for Top-N Recommendation (2016) — SLIM 계열 아이템-아이템 선형 모델의 확장이다. EASE와 같은 계보에서 비교해 보기 좋다.</li>
+<li><b>#22</b> RecPack: An(other) Experimentation Toolkit for Top-N Recommendation using Implicit Feedback Data (2022) — EASE 같은 선형 베이스라인을 표준 프로토콜로 비교하는 도구다. SANSA를 실험에 넣을 때 참고할 만하다.</li>
+<li><b>#26</b> Of Spiky SVDs and Music Recommendation (2023) — 같은 해 Best Short Paper Runner-up. 저랭크 SVD의 기하를 다루므로 풀랭크 희소 근사인 SANSA와 대비된다.</li>
+<li><b>#330</b> Space Efficient Item Embeddings for Large Recommender Systems — 같은 07-infra-serving-scale 토픽. 대규모 아이템 집합에서 모델 메모리를 줄이는 다른 접근이다.</li>
+</ul>
+
+</main>
+</body>
+</html>
