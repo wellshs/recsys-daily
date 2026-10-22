@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interpretable User Retention Modeling in Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-23 · #28</span></div>
+<h1>Interpretable User Retention Modeling in Recommendation</h1>
+<p class="meta">Rui Ding (Northeastern University), Ruobing Xie, Xiaobo Hao (WeChat, Tencent), Xiaochun Yang (Northeastern University), Kaikai Ge, Xu Zhang, Jie Zhou, Leyu Lin (WeChat, Tencent) · RecSys 2023 Short Paper · Best Short Paper</p>
+<div class="chips"><span>2023</span><span>Best Short Paper</span><span>Tencent</span><span>사용자 리텐션</span><span>Multi-Instance Learning</span><span>대조 학습</span><span>해석 가능성</span><span>aha item</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608818">10.1145/3604915.3608818</a> · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3604915.3608818">ACM</a> (arXiv 판 없음) · 코드: <a href="https://github.com/dinry/IURO">dinry/IURO</a> · 읽기 예상 14분</p>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM PDF는 네트워크 정책으로 막혔고(403) arXiv 판은 찾지 못했다. 대신 Semantic Scholar의 초록과 저자 공식 코드(dinry/IURO, TensorFlow 구현)를 읽고 구성했다. 방법의 수식은 <b>코드에서 역으로 정리한 것</b>이라 논문 표기와 다를 수 있고, 실험 수치·설문 결과는 확인하지 못해 "논문 참조"로 두었다. README에 따르면 공개 코드는 온라인 서빙에 맞게 원 IURO를 일부 수정한 판이다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 사용자가 내일 다시 돌아오는 이유는 과거 행동 전체가 아니라 몇 개의 "aha item"(유난히 만족스러웠던 콘텐츠)에 있다고 보고, 리텐션 예측을 multi-instance learning(MIL) 문제로 바꿔 어떤 아이템이 리텐션을 이끌었는지 드러내는 IURO 프레임워크를 제안한다.</p>
+<p><b>풀려는 문제.</b> 추천 모델은 보통 CTR 같은 즉각 지표로 학습되지만, 서비스가 정말 원하는 것은 "오늘 사용자가 며칠 안에 다시 오느냐"인 리텐션이다. 리텐션은 신호가 늦고 희소하며, 어떤 행동이 원인인지 알 수 없어 모델링도 해석도 어렵다.</p>
+<p><b>핵심 아이디어.</b> 사용자의 최근 클릭 묶음을 하나의 bag, 각 아이템을 instance로 보고, bag 라벨(향후 복귀 일수)만으로 instance별 기여도를 학습한다. attention 상위 아이템만 남긴 bag은 원래 예측과 가깝게, 하위 아이템만 남긴 bag은 멀게 만드는 대조 손실로 "소수 아이템이 리텐션을 결정한다"는 가정을 강제한다. 실제로 돌아온 사용자에게는 미래 클릭과 닮은 과거 아이템을 근거(rationale)로 뽑아 추가 감독 신호를 준다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 실제 추천 시스템에서 오프라인·온라인 평가 모두 리텐션 모델링이 효과적이었고, 사용자 설문과 명시적 부정 피드백의 정량 분석으로 리텐션의 해석 가능한 요인을 제시했다. 구체적인 AUC, 온라인 리텐션 상승폭, 비교 대상은 논문 참조.</p>
+<p><b>한계와 질문.</b> "aha item이 복귀 원인"이라는 가정은 상관을 잡을 뿐 인과를 보장하지 않는다. 또 리텐션은 앱 외부 요인(시간, 습관, 푸시)에 크게 흔들리는데, 아이템 수준 기여만으로 얼마나 설명되는지는 남는 질문이다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 왜 리텐션인가</h3>
+<p>논문은 리텐션율을 "오늘의 사용자 중 앞으로 며칠 안에 시스템에 돌아오는 비율"로 정의하고, 이것이 장기 만족도의 가장 직관적이고 정확한 반영이라고 본다. 그런데 대부분의 추천 시스템은 리텐션을 직접 목표로 두지 않는다. 클릭은 노출 직후에 관측되지만 복귀는 하루 이상 늦게 관측되고, 한 사용자에게 하루 한 번의 이진(또는 소수의 정수) 신호만 생기며, 그 사이에 본 수십~수백 개 아이템 중 무엇이 영향을 줬는지 알 방법이 없다.</p>
+<p>저자들은 제품 분야의 "Aha Moment" 개념을 빌려온다. 사용자를 붙잡는 것은 평균적인 만족이 아니라 드물고 놀라운, 기분 좋은 경험이라는 것이다. 이를 추천에 옮기면 "과거 행동 중 몇 개의 고품질 aha item이 복귀를 지배하는 이유"라는 가설이 되고, 이 가설이 곧 모델 구조의 출발점이다. 기여는 크게 세 가지로 정리된다: (1) 리텐션의 근거를 찾는 rationale contrastive MIL 프레임워크, (2) 실제 시스템에서의 오프라인·온라인 검증, (3) 설문과 부정 피드백 분석으로 본 리텐션의 실제 요인.</p>
+
+<h3>2. 관련 연구</h3>
+<p>리텐션·장기 가치 최적화는 주로 강화학습 계열(세션 간 보상, 복귀 시간 예측)로 다뤄졌다. 이런 방법은 정책 전체를 최적화하지만 "왜" 돌아왔는지는 설명하지 못한다. 한편 MIL은 bag 라벨만 있고 instance 라벨이 없는 상황(의료 영상, 약지도 분류)에서 attention pooling으로 핵심 instance를 찾는 기법으로 발전해 왔다. IURO는 이 두 흐름을 이어, 리텐션 예측을 bag 수준 지도학습으로 놓고 attention을 해석 도구로 쓴다. (세부 인용 목록은 논문 참조.)</p>
+
+<h3>3. 문제 정의</h3>
+<p>사용자 \(u\)의 과거 클릭 시퀀스를 \(H_u\), 그중 최근 구간(short-term)을 \(S_u=\{i_1,\dots,i_n\}\)이라 하자. 공개 코드에서는 최근 50개 클릭이 short-term이고 나머지가 long-term이다. 예측 대상은 관측 시점 이후 \(D\)일(코드에서는 3일) 동안 사용자가 접속한 날의 수</p>
+\[ y_u = \sum_{d=1}^{D} \mathbb{1}[\text{사용자 } u \text{가 } d\text{일째에 노출을 받음}] \in \{0,1,\dots,D\} \]
+<p>이다. 즉 이진 "돌아왔나"보다 한 단계 세밀한 복귀 일수를 회귀로 맞춘다. 여기에 보조 정보로 미래 기간의 클릭 수 \(c_u\)와 비클릭 노출 수 \(m_u\)를 각각 \(\log(1+\cdot)\)로 변환해 둔다. 이 값들은 라벨이 아니라 "이 사용자의 미래 활동량이 얼마나 컸나"를 나타내는 가중치로 쓰인다.</p>
+
+<h3>4. 방법: IURO</h3>
+<p><b>(1) Instance scorer.</b> 각 short-term 아이템 \(i_k\)가 리텐션에 얼마나 기여할지 점수 \(s_k\)를 매긴다. 입력은 사용자 프로필 임베딩(ID, 성별, 지역), 전체 히스토리 아이템·토픽 임베딩의 평균, 그리고 대상 아이템 \(i_k\)와 그 토픽 임베딩이다. 이것을 이어 붙여 MLP에 넣고 아이템 bias를 더한다.</p>
+\[ s_k = b_{i_k} + \mathrm{MLP}\big([\,\mathbf{p}_u;\ \bar{\mathbf{h}}_u;\ \bar{\mathbf{t}}_u;\ \mathbf{e}_{i_k};\ \mathbf{e}_{\mathrm{topic}(i_k)}\,]\big) \]
+<p>\(\mathbf{p}_u\)는 사용자 프로필, \(\bar{\mathbf{h}}_u,\bar{\mathbf{t}}_u\)는 히스토리 아이템·토픽의 평균 표현, \(\mathbf{e}\)는 임베딩, \(b\)는 아이템 bias다. 구조는 평범한 CTR 타워와 닮았지만, 학습 신호가 클릭이 아니라 bag 단위 리텐션이라는 점이 다르다.</p>
+<p><b>(2) Attention MIL pooling.</b> 사용자 쪽 query \(\mathbf{q}_u\)(프로필 + 히스토리 요약을 두 층 MLP로 변환)와 아이템 쪽 key \(\mathbf{k}_k\)(아이템 + 토픽 임베딩을 MLP로 변환)의 scaled dot-product로 attention을 만들고, instance 점수를 가중합해 bag 예측을 낸다.</p>
+\[ \alpha_k = \frac{\exp(\mathbf{q}_u^\top \mathbf{k}_k/\sqrt{d})}{\sum_{j}\exp(\mathbf{q}_u^\top \mathbf{k}_j/\sqrt{d})},\qquad \hat{y}_u = \sum_{k=1}^{n} \alpha_k\, s_k \]
+<p>\(\alpha_k\)가 해석의 핵심이다. 큰 \(\alpha_k\)를 받은 아이템이 "이 사용자의 복귀를 설명하는 aha item 후보"가 된다. 기본 손실은 복귀 일수에 대한 가중 MSE이며, 미래 활동량이 큰 사용자일수록 가중치가 커진다(코드 기준 \(w_u = 1 + 0.3\,\log(1+c_u) + 1.6\,\log(1+m_u)\)).</p>
+\[ \mathcal{L}_{\mathrm{mse}} = w_u\,(y_u - \hat{y}_u)^2 \]
+
+<p><b>(3) Behavior-wise contrastive 학습.</b> attention만으로는 가중치가 고르게 퍼질 수 있다. "소수가 지배한다"는 가설을 강제하려고 bag을 둘로 쪼갠다. attention 상위 30% 아이템만 남기고 attention을 다시 정규화한 bag의 예측을 \(\hat{y}^{+}_u\)(augmented view), 나머지 70%로 만든 bag의 예측을 \(\hat{y}^{-}_u\)(negative view)라 하면, margin 기반 triplet 손실을 건다.</p>
+\[ \mathcal{L}_{\mathrm{cl}} = \max\big(0,\ |\hat{y}_u - \hat{y}^{+}_u| - |\hat{y}_u - \hat{y}^{-}_u| + m\big) \]
+<p>\(m\)은 margin(코드에서 2.5)이다. 직관은 이렇다. 정말 핵심 아이템이 리텐션을 결정한다면 상위 몇 개만 봐도 전체 예측과 비슷해야 하고, 그것을 뺀 나머지로는 예측이 크게 달라져야 한다. 이 손실은 고/저 attention 아이템 사이의 간극을 넓히고, attention 분포를 뾰족하게 만들어 해석을 쉽게 한다.</p>
+
+<p><b>(4) Rationale 감독(돌아온 사용자만).</b> 미래 기간에 실제로 클릭한 사용자에 대해서는 "미래에 무엇을 클릭했는가"라는 추가 단서가 있다. 미래 클릭 아이템들의 평균 표현으로 query를 만들고, short-term 아이템 중 이 query와 가장 비슷한 상위 5개를 rationale로 고른다. 이 5개만으로 다시 bag 예측 \(\hat{y}^{r}_u\)를 만들어 라벨에 맞추고, 원래 예측과 rationale 예측의 분포를 대칭 KL로 맞춘다.</p>
+\[ \mathcal{L}_{\mathrm{pos}} = \mathcal{L}_{\mathrm{mse}} + w'_u (y_u-\hat{y}^{r}_u)^2 + \mathcal{L}_{\mathrm{cl}} + \lambda\,\big[\mathrm{KL}(P\Vert P^{r}) + \mathrm{KL}(P^{r}\Vert P)\big] \]
+<p>\(P, P^{r}\)는 미니배치 안에서 두 예측을 softmax로 정규화한 분포, \(\lambda\)는 KL 가중치(코드에서 100)다. 미래 관심과 이어지는 과거 아이템이 리텐션의 근거라는 가정을 사용자 행동으로 약하게 감독하는 셈이다. 돌아오지 않은 사용자(미래 클릭 없음)에게는 \(\mathcal{L}_{\mathrm{mse}}+\mathcal{L}_{\mathrm{cl}}\)만 적용하고, 두 집단을 번갈아 학습한다.</p>
+<p><b>(5) 서빙.</b> 학습된 instance scorer는 "이 아이템을 보여주면 리텐션 기여가 얼마나 될까"를 매기는 함수로 재사용된다. README는 후보 아이템 풀에서 고품질 aha item을 골라 기존 CTR 모델과 함께 추천하는 방식을 설명한다. 즉 IURO는 CTR 모델을 대체하는 것이 아니라 리텐션 관점의 보조 점수를 더한다.</p>
+
+<h3>5. 실험</h3>
+<p><b>데이터셋.</b> 공개 코드는 THUIR가 공개한 ZhihuRec(Q&amp;A 플랫폼 Zhihu의 노출·클릭 로그, 1M 규모 부분집합)을 쓰며, 시간 순으로 앞 7일을 학습 입력, 뒤 3일을 리텐션 라벨 기간으로 나눈다. 논문은 여기에 더해 WeChat 계열 실서비스 데이터로 오프라인 평가를 했다고 초록에서 밝힌다. 데이터 규모 통계는 논문 참조.</p>
+<p><b>지표와 베이스라인.</b> 오프라인 평가는 "미래에 클릭하며 돌아온 사용자인가"를 양성으로 한 AUC로 측정한다(코드 기준). 비교 대상은 일반 리텐션 예측 모델과 MIL 변형 등으로 추정되나, 정확한 베이스라인 목록과 수치는 논문 참조.</p>
+<p><b>온라인 A/B.</b> 실제 추천 시스템에 배포해 리텐션 지표가 개선되었다고 보고한다. 상승폭과 실험 기간은 논문 참조.</p>
+<p><b>해석 분석.</b> 이 논문의 독특한 부분이다. 사용자 설문으로 "왜 다시 오는가"를 직접 묻고, 싫어요·관심 없음 같은 명시적 부정 피드백이 리텐션과 어떻게 연결되는지 정량 분석해, 모델이 찾은 aha item 패턴과 실제 사용자 진술을 대조했다. 이 분석이 향후 리텐션 모델 설계의 근거가 된다는 것이 저자의 주장이다. 구체적 설문 항목·비율은 논문 참조.</p>
+
+<h3>6. 결론</h3>
+<p>저자들은 이 작업을 리텐션의 이유를 찾고 활용하려는 "예비 탐색"으로 위치시킨다. 핵심 메시지는 리텐션을 블랙박스 보상으로 두지 말고, bag-instance 구조로 쪼개면 해석 가능성과 성능을 함께 얻을 수 있다는 것이다. 이후 저자들은 heterogeneous graph로 미래 감독 신호를 뽑는 IURO+ 등 후속 연구("Rethinking User Retention Modeling in Recommendation")로 확장했다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>User retention(리텐션).</b> 특정 기간 사용자가 서비스에 다시 돌아오는 비율. next-day retention, 7-day retention처럼 기간을 붙여 쓰며, DAU 성장과 장기 만족의 대표 지표다.</p>
+<p><b>Multi-Instance Learning(MIL).</b> 라벨이 instance 묶음(bag)에만 붙고 개별 instance 라벨은 없는 약지도 학습. 이 논문에서는 사용자 하루치 행동이 bag, 개별 아이템이 instance다.</p>
+<p><b>Attention-based MIL pooling.</b> instance 표현을 attention 가중합해 bag 예측을 만드는 방식(Ilse et al., 2018). 가중치가 곧 "어떤 instance가 bag 라벨을 만들었나"에 대한 설명이 된다.</p>
+<p><b>Aha Moment.</b> 제품 성장 분야 용어로, 사용자가 제품 가치를 처음 강하게 체감하는 순간. 논문은 이를 드물고 놀랍고 즐거운 경험을 주는 aha item으로 옮겼다.</p>
+<p><b>Rationale.</b> 예측을 정당화하는 입력의 부분집합. NLP의 rationale extraction처럼, 여기서는 리텐션을 설명하는 소수 아이템을 뜻한다.</p>
+<p><b>Triplet / margin 손실.</b> anchor가 positive와는 가깝고 negative와는 최소 margin만큼 멀어지도록 하는 손실. 여기서는 anchor가 전체 bag 예측, positive가 상위 attention bag, negative가 하위 attention bag이다.</p>
+<p><b>대칭 KL.</b> \(\mathrm{KL}(P\Vert Q)+\mathrm{KL}(Q\Vert P)\). 두 분포를 서로 쪽으로 끌어당기는 정합 손실로, 지식 증류·R-Drop 등에서도 쓰인다.</p>
+<p><b>명시적 부정 피드백.</b> "관심 없음", 싫어요, 신고처럼 사용자가 직접 표현한 불만. 암묵적 비클릭보다 강하고 드문 신호로, 이탈과의 관련성이 커서 리텐션 분석에 유용하다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실, 객관식) 이 논문의 리텐션 정의에 가장 가까운 것은? ① 노출 대비 클릭 비율 ② 오늘 사용자 중 향후 며칠 안에 시스템에 돌아오는 비율 ③ 세션당 평균 체류 시간 ④ 구독 해지율
+<details><summary>정답 보기</summary>②. 초록은 리텐션율을 오늘의 사용자 중 다음 며칠 안에 돌아오는 비율로 정의하고, 장기 만족의 가장 직관적인 반영으로 본다.</details></li>
+<li>(사실) 논문이 빌려온 제품 분야 개념과, 그것을 추천에 옮긴 가설은 무엇인가?
+<details><summary>정답 보기</summary>"Aha Moment". 과거 행동 중 소수의 고품질 aha item이 사용자 복귀를 지배하는 이유라는 가설로 옮겼다.</details></li>
+<li>(사실, 객관식) 공개 코드에서 리텐션 라벨 \(y_u\)는 어떻게 만들어지는가? ① 다음 날 접속 여부(0/1) ② 이후 3일 중 노출을 받은 날의 수(0~3) ③ 이후 3일 클릭 수 ④ 이후 3일 체류 시간
+<details><summary>정답 보기</summary>②. 일별 노출 존재 여부를 더해 0~3의 복귀 일수를 만들고 MSE로 회귀한다. 클릭 수와 노출 수는 log(1+x)로 바꿔 손실 가중치로만 쓴다. (논문 본문 정의와 다를 수 있음.)</details></li>
+<li>(원리) 리텐션 예측을 MIL로 바꾸면 무엇을 얻는가? CTR 모델로 아이템별 점수를 바로 학습하는 것과 비교해 설명하라.
+<details><summary>정답 보기</summary>리텐션 라벨은 사용자(bag) 단위로만 존재해 아이템별 정답이 없다. MIL은 bag 라벨만으로 instance 점수와 attention을 함께 학습해, 어느 아이템이 복귀에 기여했는지 추정하게 해 준다. CTR 모델은 아이템별 클릭 라벨로 학습되므로 "클릭은 했지만 복귀와 무관한" 아이템과 aha item을 구분하지 못한다.</details></li>
+<li>(원리) 대조 손실에서 상위 30% bag과 하위 70% bag은 각각 어떤 역할이고, 왜 이 손실이 해석 가능성을 높이는가?
+<details><summary>정답 보기</summary>상위 bag은 원래 예측과 가까워야 하는 positive, 하위 bag은 멀어야 하는 negative다. 소수 아이템만으로 예측이 재현되고 나머지로는 재현되지 않도록 강제하므로 attention이 소수 아이템에 몰리고, 그 아이템들을 "근거"로 읽을 수 있게 된다.</details></li>
+<li>(원리) rationale 감독은 왜 돌아온 사용자에게만 적용되는가? 무엇을 query로 쓰는가?
+<details><summary>정답 보기</summary>미래 클릭 아이템이 있어야 그것과 닮은 과거 아이템을 rationale로 고를 수 있기 때문이다. query는 미래 클릭 아이템(과 토픽)의 평균 표현이며, short-term 아이템 중 유사도 상위 5개를 rationale로 쓴다. 돌아오지 않은 사용자는 MSE와 대조 손실만 받는다.</details></li>
+<li>(결과 해석) 오프라인 AUC가 개선되었다는 것만으로 "모델이 찾은 aha item이 진짜 복귀 원인"이라고 말할 수 있는가?
+<details><summary>정답 보기</summary>아니다. AUC는 예측력을 말할 뿐 attention이 인과적 원인임을 보장하지 않는다. 그래서 논문은 사용자 설문과 명시적 부정 피드백 분석이라는 별도 증거로 해석을 뒷받침하려 했고, 온라인 A/B에서 aha item을 실제로 더 보여줬을 때 리텐션이 오르는지가 가장 강한 증거다.</details></li>
+<li>(결과 해석) 명시적 부정 피드백 분석이 리텐션 연구에 주는 정보는 무엇일까?
+<details><summary>정답 보기</summary>aha item이 사용자를 붙잡는 쪽이라면, 부정 피드백은 사용자를 떠나게 하는 쪽의 신호다. 부정 경험이 리텐션 하락과 얼마나 연결되는지 정량화하면, 좋은 아이템을 늘리는 것과 나쁜 경험을 줄이는 것 중 무엇이 복귀에 중요한지 판단할 근거가 된다. (구체 수치는 논문 참조.)</details></li>
+<li>(비판) 리텐션을 아이템 수준 기여의 가중합으로 모델링하는 가정의 약점을 두 가지 들어라.
+<details><summary>정답 보기</summary>예: (1) 요일·푸시 알림·외부 일정처럼 아이템과 무관한 요인이 복귀를 크게 좌우하는데 이를 설명할 항이 약하다. (2) 아이템 간 상호작용(다양성, 연속 시청 흐름)이나 노출 순서 효과는 가중합으로 잘 표현되지 않는다. 또 attention이 인기·편향 아이템에 몰리는 혼동 문제도 있다.</details></li>
+<li>(적용) 당신의 서비스에 IURO 아이디어를 도입한다면 instance scorer 출력을 랭킹에 어떻게 쓰겠는가? 위험 요소도 함께 쓰라.
+<details><summary>정답 보기</summary>예: 기존 CTR·체류 예측 점수와 리텐션 기여 점수를 가중 결합하거나, 슬롯 일부를 aha 후보에 할당한다. 가중치는 온라인 A/B의 리텐션·DAU로 튜닝한다. 위험: 리텐션 효과는 늦게 관측돼 실험이 길어지고, 단기 CTR이 떨어질 수 있으며, 학습 데이터의 노출 편향 때문에 이미 많이 노출된 아이템이 aha로 과대평가될 수 있다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#348</b> Learned Ranking Function: From Short-term Behavior Predictions to Long-term User Satisfaction (2024) — 단기 예측을 장기 만족 목표로 묶는 랭킹 설계.</li>
+<li><b>#355</b> Reward innovation for long-term member satisfaction (2023) — Netflix의 장기 만족용 보상 설계. 리텐션을 학습 신호로 바꾸는 다른 접근.</li>
+<li><b>#357</b> Leveraging Explicit Negative Feedback in Large-Scale Recommendation Systems: A Case Study (2025) — 이 논문의 부정 피드백 분석과 직접 이어지는 주제.</li>
+<li><b>#100</b> Long-term User Engagement Optimization through Model-agnostic Downstream Rewards Learning (2026) — 장기 참여를 하위 보상으로 학습.</li>
+<li><b>#282</b> Not All Impressions Are Created Equal: Psychology-Informed Retention Optimization for Short-Form Video Recommendation (2025) — "모든 노출이 같지 않다"는 점에서 aha item 가설과 닮은 리텐션 최적화.</li>
+</ul>
+</main>
+</body>
+</html>
