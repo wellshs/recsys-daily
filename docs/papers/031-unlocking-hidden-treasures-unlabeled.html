@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unlocking the Hidden Treasures: Enhancing Recommendations with Unlabeled Data</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-28 · #31</span></div>
+<h1>Unlocking the Hidden Treasures: Enhancing Recommendations with Unlabeled Data</h1>
+<p class="meta">Yuhan Zhao, Rui Chen, Qilong Han, Hongtao Song (Harbin Engineering University), Li Chen (Hong Kong Baptist University) · RecSys 2024 Long Paper · Best Student Paper</p>
+<div class="chips"><span>2024</span><span>Best Student Paper</span><span>암묵적 피드백 CF</span><span>네거티브 샘플링</span><span>PNN 손실</span><span>OPAUC</span><span>준지도 학습</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3640457.3688149">10.1145/3640457.3688149</a> · arXiv: <a href="https://arxiv.org/abs/2412.18170">2412.18170</a> (<a href="https://arxiv.org/pdf/2412.18170v1">PDF</a>) · 코드: <a href="https://github.com/Asa9aoTK/PNN-RecBole">PNN-RecBole</a> · 읽기 예상 13분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 암묵적 피드백 CF에서 "상호작용 없는 아이템 = 네거티브"라는 이분법을 버리고, 미관측 아이템을 <b>중립(neutral)</b>과 <b>네거티브</b>로 나눠 "포지티브 &gt; 중립 &gt; 네거티브"의 3단 집합 랭킹으로 학습하면(PNN), 어떤 CF 백본이든 성능이 오른다.</p>
+<p><b>풀려는 문제.</b> 기존 연구(하드 네거티브 샘플링, SRNS 같은 false negative 필터링 등)는 미관측 데이터에서 "진짜 네거티브에 가까운 일부"만 골라 쓰고 나머지는 버린다. 그런데 버려지는 대다수 아이템 중에는 사용자가 좋아할 수도, 애매하게 느낄 수도 있는 아이템이 섞여 있다. 이 정보를 버리지 않고 선호 학습에 넣을 방법이 없을까?</p>
+<p><b>핵심 아이디어.</b> (1) 처음엔 BPR로 "포지티브 vs 나머지" 지식을 쌓고, 사용자별 어텐션으로 계산한 가중치 \(\lambda\)가 커지면 PNN 손실로 점점 넘어간다. (2) 사용자와 유사도가 가장 낮은 \(N_u\)개(=포지티브 수)만 네거티브로, 나머지 미관측은 전부 중립으로 둔다. (3) 각 클래스를 중심(centroid)으로 요약해 BPR 꼴의 두 쌍(pos&gt;neu, neu&gt;neg)을 학습하고, 중립 클래스를 "클램프"로 조여 클래스 간 마진을 만든다. 이론적으로는 이 3단 랭킹이 one-way partial AUC(OPAUC)를 최적화하는 것과 연결된다.</p>
+<p><b>주요 결과.</b> ML-1M·Gowalla·Yelp·Foursquare에서 BPR-MF, NGCF, LightGCN, SGL에 PNN을 붙이면 지표 평균 기준 약 2.9%~30.1% 향상(최대: Yelp의 NGCF 30.07%). ML-1M에서 BPR-MF+PNN의 Recall@10은 0.1840으로, PNN 없는 LightGCN(0.1730)보다 높다. SRNS·MixGCF·UIB·SimpleX·ANS 대비로도 거의 모든 지표에서 최고다.</p>
+<p><b>한계와 남는 질문.</b> 네거티브 수를 \(N_u\)로 고정한 휴리스틱, 클래스 경계가 "모델 자신의 점수"에 의존한다는 자기확증 위험, 공개 학술 데이터셋 4종과 무작위 8:1:1 분할에 한정된 평가가 걸린다. 중립 클래스가 실제로 "잠재 선호 아이템"을 담는지는 시뮬레이션된 false negative 실험으로만 간접 확인된다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 미관측 데이터는 네거티브가 아니다</h3>
+<p>클릭·구매 같은 암묵적 피드백에서는 사용자가 상호작용한 아이템만 포지티브로 확실하고, 나머지 압도적 다수는 라벨이 없다. 고전적 접근(BPR, ENMF 등)은 이 라벨 없는 아이템을 곧장 네거티브 신호로 쓴다. 하지만 그 안에는 "아직 못 봤을 뿐 좋아할 아이템"이나 "확신이 없는 아이템"이 섞여 있다는 지적이 누적되어 왔다.</p>
+<p>그래서 최근 연구는 미관측 데이터에서 진짜 네거티브에 가까운 부분집합만 고르는 쪽으로 갔다 — 네거티브 샘플링, 데이터 필터링, 가중치 조정 등. 저자들의 불만은 그 과정에서 <b>선택되지 않은 나머지</b>가 학습에 전혀 기여하지 않는다는 점이다.</p>
+<p>그럼 "네거티브만 걸러내고 나머지는 포지티브로 취급"하면 될까? 저자들은 반대한다. 추천은 이진 분류가 아니라 랭킹 문제이고, 남은 아이템이 모두 포지티브라는 보장이 없으며, 특히 하드 네거티브를 포지티브로 잘못 올리면 피해가 크다. 그래서 제3의 클래스 "중립"을 도입하고, 사용자 \(u\)에 대해 \(\Sigma^u_{pos} &gt;_u \Sigma^u_{neu} &gt;_u \Sigma^u_{neg}\)라는 <b>집합 단위 부분 랭킹</b>을 목표로 삼는다.</p>
+<p>구현상의 두 난관도 명시한다. ① 감독 신호가 희소해 미관측 데이터를 중립/네거티브로 나눌 근거가 부족하다. ② 기존 손실은 전부 포지티브/네거티브 2분법이라 3단 집합 랭킹을 표현할 손실이 없다. ①에는 의사 라벨링에서 영감을 받은 준지도 학습 + 사용자 인지 어텐션, ②에는 2단계 중심 랭킹(centroid → clamp)으로 답한다.</p>
+
+<h3>2. PNN과 OPAUC의 연결</h3>
+<p>기존 손실은 대략 다음 형태다.</p>
+<p>\[ \min_\Theta \sum_{u\in U}\sum_{i\in I_u^+} \mathbb{E}_{j\sim P_{ns}(j\mid\Theta)}\big[\mathcal{L}(r(u,i\mid\Theta), r(u,j\mid\Theta))\big] \]</p>
+<p>\(I_u^+\)는 사용자 \(u\)의 관측 아이템, \(P_{ns}\)는 네거티브 샘플링 분포, \(r\)은 모델 점수, \(\mathcal{L}\)은 BPR 같은 쌍별 손실이다. PNN은 이를 "모든 사용자에 대해 \(\Sigma_{pos} &gt; \Sigma_{neu} &gt; \Sigma_{neg}\)를 최대한 만족"시키는 목표로 바꾼다.</p>
+<p>왜 이게 좋은가를 보이려고 저자들은 OPAUC를 끌어온다. OPAUC는 ROC 곡선에서 거짓 양성률(FPR)이 \([\gamma,\delta]\) 구간일 때의 면적만 본다. \(\gamma=0\)이면 "가장 높게 랭크된 상위 \(\delta\) 비율의 네거티브"와 포지티브를 비교하는 것과 같아, top-K 지표와 상관이 높다는 선행 연구가 있다. 추정량은</p>
+<p>\[ \widehat{OPAUC}(\delta)=\frac{1}{|U|}\sum_{u}\frac{1}{|I_u^+|\,|I_u^-|\delta}\sum_{i\in I_u^+}\sum_{j\in S_{I_u^-}}\mathbb{I}(r_{ui}&gt;r_{uj}) \]</p>
+<p>여기서 \(S_{I_u^-}\)는 진짜 네거티브 중 점수 상위 \(\delta\) 비율의 부분집합이다. 문제는 진짜 네거티브 \(I_u^-\)를 모른다는 것. 그래서 미관측 집합에서 아이템 \(i^n\)을 뽑고 "그것이 상위 네거티브인가"를 지시함수 \(\mathbb{I}(i^n\in S_{I_u^-})\)로 거른 뒤, 그런 아이템이라면 \(r_{ui}&gt;r_{ui^n}&gt;r_{uj}\)가 성립해야 한다는 식으로 다시 쓴다. 이 3항 부등식을 집합 표기로 옮기면 바로 PNN 목표가 된다 — 즉 "포지티브 &gt; (점수가 높은 애매한 미관측) &gt; 나머지"를 맞추면 OPAUC를 올리는 셈이라는 논리다.</p>
+<p>동시에 이 식이 구현 과제를 드러낸다: 지시함수 부분은 중립/네거티브 구분기를, 3항 부등식 부분은 2분법을 넘는 손실을 요구한다.</p>
+
+<h3>3.1 준지도 학습 — BPR로 예열하고 어텐션으로 전환 시점 판단</h3>
+<p>사용자별 손실은 BPR과 PNN의 볼록 결합이다.</p>
+<p>\[ \mathcal{L}_u=(1-\lambda)\mathcal{L}_{BPR}+\lambda\,\mathcal{L}_{PNN},\qquad \mathcal{L}_{BPR}=-\ln\sigma\big(s(\mathbf{e}_u,\mathbf{e}_i)-s(\mathbf{e}_u,\mathbf{e}_j)\big) \]</p>
+<p>\(s\)는 내적 같은 점수 함수, \(\sigma\)는 시그모이드, \(i\)는 상호작용 아이템, \(j\)는 미관측에서 고른 네거티브다. 초반에는 \(\lambda\)가 작아 BPR이 주도하며 "선호의 대략적 지형"을 학습한다.</p>
+<p>네거티브는 빨리 지식을 쌓기 위해 하드 네거티브를 쓴다. DNS(점수 비례 샘플링)는 전체 아이템 점수를 계산해야 해서 비싸므로, <b>배치 안에서</b> 현재 포지티브를 제외하고 점수가 가장 높은 아이템을 고른다: \(\mathbf{e}_j=\arg\max_{n\in batch\setminus i}s(\mathbf{e}_u,\mathbf{e}_n)\).</p>
+<p>\(\lambda\)를 하이퍼파라미터나 에폭 함수로 두는 대신, "모델이 분류할 준비가 됐는가"를 반영하도록 설계한다. 근거는 사용자의 포지티브 집합을 모델이 잘 알아보면 BPR로 충분히 배웠다는 직관이다.</p>
+<p>\[ \lambda=\sigma\Big[\mathbf{W}_1\Big(\sum_{i\in\Sigma^u_{pos}}\alpha^{attr}_i\mathbf{e}_i\Big)\Big],\quad \alpha^{attr}_i=\frac{\exp\beta^{attr}_i}{\sum_{j\in\Sigma^u_{pos}}\exp\beta^{attr}_j},\quad \beta^{attr}_i=\mathbf{e}_u^\top\tanh(\mathbf{W}_2\mathbf{e}_i+\mathbf{b}) \]</p>
+<p>사용자 임베딩 \(\mathbf{e}_u\)가 쿼리, 포지티브 아이템들이 키/값이다. \(\mathbf{W}_1\in\mathbb{R}^{1\times d_+}\), \(\mathbf{W}_2\), \(\mathbf{b}\)는 학습 파라미터. 포지티브가 사용자와 잘 정렬될수록 어텐션 가중이 커지고 \(\lambda\)도 커져 PNN 손실 비중이 올라간다. 즉 사용자마다 다른 속도로 PNN 단계로 넘어간다.</p>
+
+<h3>3.2 PNN 손실 — 분류 과제</h3>
+<p>포지티브는 관례대로 상호작용한 전체 아이템이고 그 수를 \(N_u\)라 하자. 네거티브는 <b>탐욕적으로</b> 고른다: 미관측 집합 \(E_u\)에서 사용자와의 점수가 가장 낮은 아이템을 하나 빼서 \(\Sigma_{neg}\)에 넣는 것을 \(N_u\)번 반복. 지식이 불완전하므로 "확실히 싫은 것만" 네거티브에 넣고 크기를 \(N_u\)로 제한해 false negative 위험을 줄인다. 나머지 미관측 \(E_u-\Sigma_{neg}\)는 모두 중립이다 — 그러니 중립 클래스가 압도적으로 크다.</p>
+<p>문제는 BPR이 "포지티브 vs 나머지"만 떼어 놓기 때문에 미관측 아이템들이 비슷한 점수로 뭉칠 수 있다는 점이다. 두 아이템이 똑같이 2점이면 어느 쪽이 더 네거티브인지 가를 수 없다. 그래서 미관측 임베딩끼리 서로 밀어내는 균일성 손실을 더한다.</p>
+<p>\[ \mathcal{L}_{uniform}=\log\ \mathbb{E}_{i,i'\in E_u}\, e^{-2\|\mathbf{e}_i-\mathbf{e}_{i'}\|^2} \]</p>
+<p>대조학습 문헌(Wang &amp; Isola의 alignment/uniformity)에서 온 형태로, 쌍 거리가 클수록 값이 작아진다. 임베딩이 고르게 퍼지면 점수 하위 아이템을 더 믿을 만하게 고를 수 있다.</p>
+
+<h3>3.2 PNN 손실 — 랭킹 과제(2단계 중심 랭킹)</h3>
+<p>선호는 이행성이 깨질 수 있으므로(돈 펌프 논의 인용), 3단 관계를 pos&gt;neg, pos&gt;neu, neu&gt;neg 세 쌍으로 분해한다. pos&gt;neg는 BPR이 이미 담당하니 PNN 손실은 나머지 두 쌍만 맡는다.</p>
+<p><b>1단계: 중심.</b> 집합-집합 비교를 아이템-아이템 비교로 바꾸려고 각 클래스를 평균 임베딩 \(\mathbf{e}_{i^+},\mathbf{e}_{i^{neu}},\mathbf{e}_{i^-}\)로 요약한다. 거대한 중립 클래스가 손실을 지배하는 클래스 불균형도 자연히 완화된다. 그 위에 BPR 꼴 손실을 둔다.</p>
+<p>\[ \mathcal{L}_{rank}=-\ln\sigma\big(s(\mathbf{e}_u,\mathbf{e}_{i^+})-s(\mathbf{e}_u,\mathbf{e}_{i^{neu}})\big)-\ln\sigma\big(s(\mathbf{e}_u,\mathbf{e}_{i^{neu}})-s(\mathbf{e}_u,\mathbf{e}_{i^-})\big) \]</p>
+<p>BPR과 같은 꼴로 만든 이유는 두 손실의 크기가 비슷해 어느 한쪽이 학습을 독점하지 않게 하려는 것이다.</p>
+<p><b>2단계: 클램프.</b> 중심끼리 순서가 맞아도 개별 아이템은 겹칠 수 있다(어떤 중립 아이템이 어떤 포지티브보다 높을 수 있음). 고정 마진을 두면 되지만 적정 마진을 알 수 없고 귀납 편향이 생긴다. 그래서 중립 중심 양옆에 "클램프 임베딩" 두 개를 만들고 둘 사이 거리를 줄여 중립 클래스를 꽉 조인다. 중립이 가운데서 압축되면 양쪽 클래스와의 간격이 적응적으로 벌어진다는 직관이다.</p>
+<p>\[ \Delta_{pos}=\bar\Delta_{pos}\odot\frac{\mathbf{e}_{i^+}}{\|\mathbf{e}_{i^+}\|},\ \ \bar\Delta_{pos}\sim U(0,0.1)^d,\qquad \mathbf{e}^{pos}_{clamp}=\mathbf{e}_{i^{neu}}+\Delta_{pos} \]</p>
+<p>즉 중립 중심에서 포지티브 방향으로 크기 0~0.1의 균일 난수만큼 이동한 점이 포지티브 쪽 클램프이고, 네거티브 쪽도 같은 방식이다. 난수는 견고성에도 도움이 된다고 본다. 그리고</p>
+<p>\[ \mathcal{L}_{constrain}=\mathbb{E}\,\|\mathbf{e}^{pos}_{clamp}-\mathbf{e}^{neg}_{clamp}\|^2,\qquad \mathcal{L}_{PNN}=\alpha\,\mathcal{L}_{constrain}+\beta\,\mathcal{L}_{uniform}+\mathcal{L}_{rank} \]</p>
+<p>\(\alpha,\beta\)는 각 항의 가중치다. 저자들도 식 16이 더 단순하게 정리될 수 있다고 언급하지만 이해를 위해 원형을 유지했다고 밝힌다(두 클램프 차이는 결국 중심 방향 단위벡터들의 노이즈 가중 차이다).</p>
+
+<h3>3.3 미니배치 학습 — 어떤 CF 모델에도 꽂기</h3>
+<p>이상적으로는 사용자의 모든 관측·미관측 아이템을 매 에폭 써야 하지만, 실제 CF는 (u, i) 쌍 미니배치로 학습한다. 그래서 목표를 \(i &gt;_u \tilde\Sigma_{neu} &gt;_u \tilde\Sigma_{neg}\)로 완화한다. 물결표는 배치 안에서 구성한 작은 중립/네거티브 집합이다. 모델이 미관측 샘플을 제공하지 않으면, 대조학습의 in-batch 네거티브처럼 <b>같은 배치에서 다른 사용자가 상호작용한 아이템</b>을 미관측으로 쓴다. \(i\)가 포지티브 전체를 돌면 이 확률들의 곱이 원래 집합 랭킹 확률을 근사한다는 논리로, 결과적으로 기존 쌍별 손실을 \(\sum_{(u,i)\in D}\mathcal{L}_u\)로 교체하기만 하면 된다.</p>
+
+<h3>4. 실험</h3>
+<p><b>설정.</b> 데이터셋은 ML-1M(6,041명·3,707편·약 100만 상호작용), Yelp(2018년 이후, 31,669명·38,049개·약 156만), Gowalla(29,859명·40,982개·약 103만), Foursquare(NYC·도쿄 약 10개월, 1,084명·38,334개·91,024). 8:1:1 분할. RecBole v1.1.1, 임베딩 64, Adam lr 0.001, 배치 2048, L2 1e-4, \(\alpha,\beta\in[0,1]\) 탐색. 지표는 Recall/HR/NDCG@10·20과 MRR@10, 5회 평균, 최선 베이스라인 대비 양측 t-검정 p&lt;0.05.</p>
+<p><b>RQ1-a: 백본 + PNN.</b> BPR-MF·NGCF·LightGCN·SGL 모두 PNN을 붙이면 거의 모든 경우 유의하게 오른다. 지표 평균 향상률은 대략 2.9%~30.1% 범위이며 최대는 Yelp에서 NGCF(30.07%). ML-1M Recall@10으로 보면:</p>
+<table>
+<tr><th>백본 (ML-1M)</th><th>w/o PNN</th><th>w/ PNN</th></tr>
+<tr><td>BPR-MF</td><td>0.1635</td><td>0.1840</td></tr>
+<tr><td>LightGCN</td><td>0.1730</td><td>0.1971</td></tr>
+<tr><td>NGCF</td><td>0.1614</td><td>0.1880</td></tr>
+<tr><td>SGL</td><td>0.1769</td><td>0.1942</td></tr>
+</table>
+<p>단순 MF에 PNN을 붙인 것(0.1840)이 PNN 없는 GNN들(0.1614~0.1769)을 넘는다는 점이 저자들이 강조하는 포인트다.</p>
+<p><b>RQ1-b: 최신 기법 대비.</b> BPR-MF를 공통 백본으로 SRNS(분산 기반 false negative 필터), MixGCF(그래프 이웃·포지티브 정보로 하드 네거티브 합성), UIB(사용자별 관심 경계), SimpleX(대량 네거티브 + 코사인 대조 손실), ANS(세분 요인 기반 네거티브 생성)와 비교한다. ML-1M Recall@10은 ANS 0.1759, SRNS 0.1746, PNN 0.1840, NDCG@10은 MixGCF 0.2657 대 PNN 0.2835. Gowalla Recall@20은 ANS 0.1756 대 PNN 0.1787. 저자들은 "모든 지표에서 최고"라 쓰지만 표를 보면 Yelp HR@20에서는 ANS(0.2798)가 PNN(0.2770)보다 약간 높다. SRNS가 일부 데이터셋에서 선전하는 것은 "미관측 ≠ 네거티브"라는 동기를 뒷받침하지만, 걸러낸 아이템을 활용하지 않아 PNN에 못 미친다고 해석한다.</p>
+<p><b>RQ2: 중립 클래스의 역할.</b> Yelp·Foursquare에서 상호작용 10%를 무작위로 네거티브로 돌려 인위적 false negative를 만든 뒤 비교했다. 그림상 SimpleX가 가장 나쁘고(많은 네거티브에 의존해 노이즈에 취약), SRNS는 걸러내긴 해도 활용을 못해 중간, PNN이 가장 견고하다. 정확한 수치는 그림이라 논문 참조.</p>
+<p><b>RQ3: 절제 실험.</b> Yelp와 Gowalla에서 다섯 변형을 비교(Hit@20 / Recall@20 / NDCG@20).</p>
+<table>
+<tr><th>변형</th><th>Yelp</th><th>Gowalla</th></tr>
+<tr><td>PNN (전체)</td><td>.2770 / .0472 / .0405</td><td>.3366 / .1787 / .1052</td></tr>
+<tr><td>w/o rank</td><td>.0960 / .0152 / .0115</td><td>.0406 / .0150 / .0079</td></tr>
+<tr><td>w/o sem</td><td>.1967 / .0319 / .0262</td><td>.1439 / .0620 / .0361</td></tr>
+<tr><td>w/o constrain</td><td>.2705 / .0454 / .0389</td><td>.3078 / .1562 / .0908</td></tr>
+<tr><td>w/o uniform</td><td>.2705 / .0451 / .0380</td><td>.3140 / .1651 / .0951</td></tr>
+<tr><td>w/o ada (\(\lambda\))</td><td>.2761 / .0463 / .0399</td><td>.3008 / .1558 / .0894</td></tr>
+</table>
+<p>랭킹 손실을 빼면 성능이 붕괴 수준이고, 준지도 예열(BPR 단계)을 빼도 크게 떨어진다 — 분류할 근거가 없는 상태에서 중립/네거티브를 나누면 위험하다는 뜻이다. 클램프·균일성·적응 가중은 상대적으로 작지만 일관된 기여를 한다(특히 Gowalla).</p>
+<p><b>RQ4: 하이퍼파라미터.</b> 본문은 Foursquare와 Yelp라고 쓰지만 그림 캡션은 Foursquare·Gowalla다. \(\alpha\)가 너무 작으면 클래스가 겹치고, 너무 크면 마진이 과해 클래스 내부가 뭉친다. \(\beta\)도 양극단이 나쁘다. 다만 비교적 넓은 범위에서 안정적이라고 결론낸다.</p>
+<p><b>RQ5: 효율.</b> 에폭당 학습 시간/수렴 에폭: Yelp에서 BPR-MF 2.40s/82, SimpleX 431.92s/36, ANS 258.26s/16, PNN 250.46s/15. Gowalla에서 BPR-MF 4.29s/47, SimpleX 342.33s/29, ANS 194.63s/20, PNN 45.66s/27. BPR-MF 다음으로 효율적이라고 저자들은 정리한다. 다만 순수 BPR-MF보다는 에폭당 수십~백 배 느리다는 점도 같은 표에서 읽힌다.</p>
+
+<h3>5. 관련 연구와 6. 결론</h3>
+<p>관련 연구는 "미관측을 네거티브로" 쓰는 계열(BPR, ENMF)과 "네거티브에 가까운 부분집합을 고르는" 계열(SimpleX, UIB, DNS, GDNS, SRNS, MixGCF, DENS, ANS)로 정리되고, PNN은 후자가 버리는 나머지를 활용한다는 점에서 차별화된다. 결론은 중립 클래스 + 집합 랭킹이라는 패러다임, 준지도 분류와 2단계 중심 랭킹이라는 구현, 다양한 CF 백본에서의 일관된 향상을 기여로 정리한다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>암묵적 피드백과 PU 문제.</b> 클릭·구매처럼 "했다"만 기록되고 "싫다"는 기록되지 않는 데이터. 포지티브와 라벨 없는(Unlabeled) 데이터만 있는 PU learning 상황과 같다.</li>
+<li><b>BPR.</b> 관측 아이템 점수가 미관측 아이템보다 높을 확률 \(\sigma(s_{ui}-s_{uj})\)를 최대화하는 쌍별 랭킹 손실. 이 논문의 예열 단계이자 \(\mathcal{L}_{rank}\)의 형식적 원형이다.</li>
+<li><b>하드 네거티브 샘플링(DNS).</b> 사용자 점수가 높은(헷갈리는) 미관측 아이템을 네거티브로 뽑아 기울기를 키우는 기법. 단, 점수가 높을수록 false negative일 위험도 커진다.</li>
+<li><b>False negative.</b> 사실은 좋아하지만 아직 노출·소비되지 않아 미관측인 아이템. 이를 네거티브로 밀어내면 선호 학습이 왜곡된다. PNN에서는 이런 아이템이 중립에 들어가길 기대한다.</li>
+<li><b>AUC와 OPAUC.</b> AUC는 무작위 포지티브가 무작위 네거티브보다 높게 랭크될 확률. OPAUC는 FPR이 작은 구간(즉 상위권 네거티브와의 경쟁)만 보므로 top-K 지표와 더 맞닿아 있다.</li>
+<li><b>의사 라벨링(pseudo-labelling).</b> 모델 자신의 예측으로 라벨 없는 데이터에 임시 라벨을 붙여 학습에 쓰는 준지도 기법. 초기 예측이 나쁘면 오류가 증폭되므로 예열·신뢰도 판단이 중요하다.</li>
+<li><b>균일성(uniformity) 손실.</b> 임베딩이 초구면 위에 고르게 퍼지도록 쌍 거리의 가우시안 퍼텐셜을 최소화하는 항. 대조학습 분석에서 유래했다.</li>
+<li><b>In-batch 네거티브.</b> 같은 미니배치의 다른 샘플(다른 사용자의 포지티브)을 네거티브로 재활용하는 기법. 계산이 싸지만 인기 아이템이 과도하게 네거티브로 쓰이는 편향이 있다.</li>
+<li><b>LightGCN·NGCF·SGL.</b> 사용자-아이템 이분 그래프 위에서 메시지 전달로 임베딩을 정제하는 GNN 기반 CF. SGL은 여기에 그래프 증강 대조학습을 더했다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실) PNN에서 사용자 \(u\)의 네거티브 클래스 크기는 어떻게 정해지는가? ① 고정 하이퍼파라미터 ② 미관측 아이템의 10% ③ 사용자의 포지티브 수 \(N_u\) ④ 배치 크기
+<details><summary>정답 보기</summary>③. 점수가 가장 낮은 미관측 아이템을 하나씩 탐욕적으로 골라 \(N_u\)개만 네거티브로 둔다. 확실한 것만 네거티브에 넣어 false negative 위험을 줄이려는 의도이고, 나머지 미관측은 전부 중립이 된다.</details></li>
+<li>(사실) PNN을 결합한 백본 CF 모델 네 가지와, 평균 향상률이 가장 컸던 조합은?
+<details><summary>정답 보기</summary>BPR-MF, NGCF, LightGCN, SGL. 가장 큰 향상은 Yelp에서 NGCF(30.07%).</details></li>
+<li>(사실) 배치 단위 하드 네거티브 선택은 DNS와 무엇이 다른가?
+<details><summary>정답 보기</summary>DNS는 전체 아이템 점수를 계산해 점수에 비례해 확률적으로 샘플링한다. 이 논문은 비용을 줄이려고 현재 배치 안에서(현재 포지티브 제외) 점수가 최대인 아이템을 결정적으로 고른다.</details></li>
+<li>(원리) 혼합 가중치 \(\lambda\)를 에폭 함수가 아니라 포지티브 집합에 대한 사용자 어텐션으로 계산하는 이유를 설명하라.
+<details><summary>정답 보기</summary>PNN 단계로 넘어가도 되는 시점은 "모델이 미관측을 분류할 만큼 선호를 배웠는가"에 달려 있고, 이는 사용자마다 다르다. 포지티브 아이템이 사용자 쿼리와 잘 정렬되면(어텐션 점수 상승) 학습이 충분하다는 간접 신호로 보고 \(\lambda\)를 키운다. 에폭 스케줄은 이런 사용자별 준비 상태를 반영하지 못한다.</details></li>
+<li>(원리) \(\mathcal{L}_{rank}\)가 pos&gt;neg 항을 포함하지 않는 이유는?
+<details><summary>정답 보기</summary>3단 관계를 세 쌍으로 분해했을 때 pos&gt;neg는 함께 학습되는 BPR 손실이 이미 강제하기 때문이다. PNN 손실은 BPR이 다루지 못하는 pos&gt;neu, neu&gt;neg만 맡는다.</details></li>
+<li>(원리) 중심(centroid) 랭킹만으로 부족해 클램프 메커니즘이 필요한 이유와, 클램프가 마진을 만드는 원리는?
+<details><summary>정답 보기</summary>중심끼리 순서가 맞아도 개별 아이템은 클래스 간에 겹칠 수 있어 "모든 pos가 모든 neu보다 위"라는 집합 랭킹 성질을 보장하지 못한다. 고정 마진은 적정값을 모른다. 클램프는 중립 중심에서 포지티브/네거티브 방향으로 약간 이동한 두 점 사이 거리를 줄여 중립 클래스를 압축하고, 그 결과 양쪽 클래스와의 간격이 적응적으로 벌어진다.</details></li>
+<li>(해석) 절제 실험에서 "w/o rank"와 "w/o sem"의 하락 폭이 다른 변형보다 훨씬 큰 것은 무엇을 의미하는가?
+<details><summary>정답 보기</summary>w/o rank는 3단 랭킹 신호 자체가 사라져 top-K 성능의 직접 동력이 없어진다(Gowalla Recall@20 0.1787→0.0150). w/o sem은 BPR 예열 없이 분류를 시작해 중립/네거티브 구분이 엉터리가 되므로, 감독 신호가 부족한 상황에서 준지도 예열이 필수임을 보여 준다.</details></li>
+<li>(해석) 표 3에서 "PNN이 모든 지표에서 최고"라는 서술이 엄밀히 맞는지, 그리고 SRNS의 선전을 저자들은 어떻게 해석하는지 설명하라.
+<details><summary>정답 보기</summary>Yelp HR@20에서 ANS(0.2798)가 PNN(0.2770)보다 약간 높아 엄밀하게는 예외가 있다. SRNS는 사용자가 좋아할 법한 아이템을 걸러내 일부 데이터셋에서 좋은 성능을 보이는데, 저자들은 이를 "미관측 ≠ 네거티브" 주장의 방증으로 보되 걸러낸 아이템을 학습에 쓰지 않아 PNN에 뒤진다고 해석한다.</details></li>
+<li>(비판) 중립/네거티브 구분이 모델 자신의 점수에 의존한다는 점의 위험과 완화책을 논하라.
+<details><summary>정답 보기</summary>예시 답: 모델이 초기에 특정 아이템(예: 비인기 아이템)을 낮게 보면 계속 네거티브로 분류되어 더 낮게 밀리는 자기확증 루프가 생길 수 있다. 논문은 BPR 예열과 \(\lambda\), 네거티브 수 제한, 균일성 손실로 완화한다. 추가로 노출 로그(본 적 있는데 안 누른 아이템)를 네거티브 근거로 쓰거나, 다중 시점·앙상블 점수로 분류를 안정화하는 방법을 생각해 볼 수 있다.</details></li>
+<li>(적용) 수천만 아이템 규모의 산업 2단계(후보 생성→랭킹) 시스템에 PNN을 넣는다면 무엇이 걸림돌이고 어떻게 바꾸겠는가?
+<details><summary>정답 보기</summary>예시 답: 사용자별 전체 미관측에서 점수 최하위 \(N_u\)개를 찾는 것과 미관측 쌍별 균일성 손실은 그대로는 불가능하다. 논문의 미니배치 근사(in-batch 아이템으로 중립/네거티브 구성)를 쓰되, in-batch는 인기 편향이 있으므로 logQ 보정이나 무작위 아이템 혼합이 필요하다. 또 노출 후 미클릭은 네거티브, 미노출은 중립으로 두는 식으로 실제 로그의 구조를 활용하면 분류 신뢰도를 높일 수 있다. 오프라인 효과는 무작위 분할이 아닌 시간 분할로 검증해야 한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#23</b> gSASRec: Reducing Overconfidence in Sequential Recommendation Trained with Negative Sampling (2023) — 네거티브 샘플링이 만드는 편향(과신)을 손실 설계로 바로잡는다는 같은 문제의식.</li>
+<li><b>#8</b> HOP-rec: High-order Proximity for Implicit Recommendation (2018) — 미관측 아이템에 그래프 고차 근접성으로 "등급"을 매겨 랭킹을 세분화한다는 점에서 중립 클래스와 통한다.</li>
+<li><b>#203</b> Utilizing Non-click Samples via Semi-supervised Learning for Conversion Rate Prediction — 라벨 없는 샘플을 준지도 학습으로 살리는 CVR 쪽 사례.</li>
+<li><b>#244</b> Exploring False Hard Negative Sample in Cross-Domain Recommendation — 하드 네거티브 중 false negative 문제를 다른 설정에서 다룬다.</li>
+<li><b>#204</b> Correcting the LogQ Correction: Revisiting Sampled Softmax for Large-Scale Retrieval — in-batch 네거티브를 대규모로 쓸 때의 샘플링 편향 보정.</li>
+</ul>
+
+</main>
+</body>
+</html>
