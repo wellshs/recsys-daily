@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beyond Top-1: Addressing Inconsistencies in Evaluating Counterfactual Explanations for Recommender Systems</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-29 · #32</span></div>
+<h1>Beyond Top-1: Addressing Inconsistencies in Evaluating Counterfactual Explanations for Recommender Systems</h1>
+<p class="meta">Amir Reza Mohammadi, Andreas Peintner, Michael M. Müller, Eva Zangerle (University of Innsbruck) · RecSys 2025 Short Paper · Best Short Paper</p>
+<div class="chips"><span>2025</span><span>Best Short Paper</span><span>설명가능 추천</span><span>반사실적 설명</span><span>평가 방법론</span><span>일관성</span><span>Top-k 평가</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3705328.3748028">10.1145/3705328.3748028</a> (RecSys '25, pp. 515–520, CC BY) · 확장 초록: <a href="https://www.ijcai.org/proceedings/2026/0926.pdf">IJCAI-26 Sister Conferences Best Papers Track (PDF)</a> · 코드: <a href="https://github.com/dbis-uibk/CE4RS-Eval">dbis-uibk/CE4RS-Eval</a> · 읽기 예상 11분</p>
+
+<div class="callout">출처 메모: ACM DL 원문 PDF는 이 실행 환경에서 내려받지 못했습니다. 같은 저자들이 이 논문을 IJCAI-26 "Sister Conferences Best Papers" 트랙에 요약·재수록한 확장 초록(위 링크)을 원문으로 삼아 썼습니다. 내용 구조(문제 설정, 지표, 데이터셋, 설명기, 결과)는 동일하지만, 그림 속 구체적인 수치는 본문에 없어서 "논문 참조"로 남겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 추천 모델의 반사실적 설명(CE) 기법을 평가할 때 "top-1 아이템이 바뀌었나"만 보면, 추천 모델이 조금만 달라져도 설명 기법들의 순위가 뒤집힌다. top-k 아이템까지 함께 보면 이 순위가 훨씬 안정된다.</p>
+<p><b>풀려는 문제.</b> CE 연구 대부분은 사용자 이력에서 "중요하다"고 지목된 아이템을 지웠을 때 1등 추천이 밀려나는지를 지표로 쓴다. 그런데 1등 자리는 점수의 작은 흔들림, 동점, 모델 품질 변화에 아주 민감하다. 그래서 "설명기 A가 B보다 낫다"는 결론이 설명 능력이 아니라 밑에 깔린 추천 모델의 우연한 상태에 좌우될 수 있다. 저자들은 이를 평가 지표의 <i>일관성(consistency)</i> 문제로 정의한다.</p>
+<p><b>핵심 아이디어.</b> 기존 지표 POS-P@T의 안쪽 합을 top-1 하나에서 top-k 아이템 전체로 넓힌다. 즉, 설명이 1등 아이템 하나만이 아니라 상위 여러 아이템을 얼마나 빨리 상위권 밖으로 밀어내는지를 함께 센다. 신호를 여러 아이템에 걸쳐 모으니 한 아이템의 순위 잡음이 평균되어 희석된다는 직관이다.</p>
+<p><b>주요 결과.</b> ML-1M·Yahoo! Music·Pinterest 3개 데이터셋, MF·VAE 2개 추천 모델, 학습 25/50/75/100% 체크포인트 4단계(총 24개 설정, 3회 반복)에서 6개 설명기(Jaccard, Cosine, LIME-RS, SHAP, ACCENT, LXR)를 비교했다. top-1 평가에서는 특히 TP25%→TP50% 구간에서 설명기 순위가 크게 출렁였고, top-2만 되어도 상위 체크포인트(TP50~100%)에서 안정되기 시작했으며, VAE·Yahoo! Music 설정에서는 top-5에서 순위가 안정됐다. MF는 작은 k에서도 이미 안정적이었다. 정규화된 값을 그림으로만 보여 주므로 구체 수치는 논문 참조.</p>
+<p><b>한계와 남는 질문.</b> 지표는 POS 하나, 추천 모델은 MF·VAE 두 가지뿐이다. 일관성을 "순위가 그림에서 덜 뒤집힌다"는 정성적 관찰로 판단했고, 순위 상관 같은 정량 척도는 확장 초록 본문에 드러나 있지 않다. 적절한 k가 데이터·모델마다 달라 결국 "튜닝할 하이퍼파라미터"로 남는다는 점도 실무적으로는 숙제다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 top-1 평가가 위험한가</h3>
+<p>반사실적 설명은 "모델이 왜 이렇게 했나"를 직접 설명하는 대신 "입력을 최소한 어떻게 바꾸면 결과가 달라지나"를 보여 준다. 추천에서는 보통 "당신이 본 영화 X, Y가 없었다면 이 영화는 추천되지 않았을 것"이라는 형태다. 사용자 입장에서 행동으로 옮길 수 있는 설명이라 인기가 많다.</p>
+<p>추천 시스템의 출력은 단일 레이블이 아니라 순위 목록이다. 그런데 CE 평가 관행은 분류 문제의 습관을 그대로 가져와 "1등 아이템이 밀려났는가"만 본다. 저자들은 이것이 순위 출력의 구조를 무시한다고 지적한다. 1등 자리는 2등과 점수 차가 근소하면 사소한 변동에도 바뀌므로, 설명기의 우열 판정이 설명기 자체보다 추천 모델의 상태에 휘둘린다.</p>
+<p>여기서 <b>일관성</b>을 이렇게 정의한다. 추천기 \(R_1\)에서 설명기 \(E_1\)이 \(E_2\)보다 좋았다면, 추천기를 살짝 바꿔도(예: 덜 학습된 체크포인트) 점수의 절댓값은 변할 수 있지만 \(E_1 \succ E_2\)라는 상대 순서는 유지되어야 한다. 같은 저자들의 RecSys 2024 논문("Are We Explaining the Same Recommenders?")이 이 불일치를 처음 보고했고, 이 논문은 그 원인 하나와 처방을 제시한다.</p>
+
+<h3>2. 관련 연구 — 설명 기법과 평가의 지형</h3>
+<p>설명가능 추천은 세 갈래로 나뉜다. (1) 모델 내재형: 해석 가능한 구성요소를 모델 안에 넣는다(설명가능 MF, 프로토타입 기반 ProtoMF 등). 특정 구조에 묶인다는 단점이 있다. (2) 사후(post-hoc)형: 학습된 모델을 블랙박스로 두고 밖에서 설명한다. (3) 부가정보형: 리뷰·속성(EFM)·지식그래프 경로를 이용한다. 설명은 풍부하지만 그런 데이터가 늘 있지는 않다.</p>
+<p>CE 생성 기법은 휴리스틱 탐색·교란에서 출발해, 강화학습으로 조합 공간을 탐색하는 방식(CERec), 대화형 추천에서 반복적으로 설명을 다듬는 방식, 순위를 바꾸기 위한 실행 가능한 수정을 찾는 recourse 방식(RecRec)으로 발전했다. LXR은 자기지도 학습으로 설명 마스크를 직접 학습해 조합 탐색을 피한다.</p>
+<p>평가 측면에서는 Nauta 등의 XAI 서베이가 수백 편 논문이 일화적 검증에 의존하고 정량 평가도 Co-12(정확성, 간결성, 일관성 등) 중 일부만 다룬다고 지적했다. 추천 CE 쪽은 대부분 top-1 변화 여부로 평가하며(Tan 등, Barkan 등, Zhong &amp; Negre 등), 저자들은 바로 이 지점을 겨냥한다.</p>
+
+<h3>3. 방법 — 지표를 top-k로 넓히기</h3>
+<p><b>설정.</b> 사용자 집합 \(\mathcal{U}\), 아이템 집합 \(\mathcal{I}\). 사용자 \(u\)는 이진 상호작용 벡터 \(x_u \in \{0,1\}^{|\mathcal{I}|}\)로 표현되며 \(x_u[i]=1\)은 \(u\)가 아이템 \(i\)와 상호작용했다는 뜻이다. 추천 모델 \(f_\theta\)는 이 벡터를 받아 아이템별 점수 \(f_\theta(x_u)[i]\)를 낸다. 점수 순으로 정렬한 상위 k개를 \(R_u^k = \{i^*_1, \dots, i^*_k\}\)라 하고, \(i^*_j\)는 j번째 추천이다.</p>
+<p><b>교란 절차.</b> 설명기 \(e\)는 각 추천 \(i^*_j\)에 대해 사용자 이력 아이템들을 "이 추천에 얼마나 책임 있는가" 순으로 정렬한다. 그 순서대로 이력 아이템을 하나씩 지워 가며 교란 입력 열 \(x_u^{(1)}, x_u^{(2)}, \dots\)를 만든다. 좋은 설명기라면 가장 책임 있는 아이템부터 지우니, 추천 아이템이 몇 단계 만에 순위에서 빠르게 떨어져야 한다.</p>
+<p><b>지표 POS-P@T.</b> LXR 논문(Barkan 등)의 Positive Perturbation 지표를 따르되 안쪽 합을 top-k로 확장한다.</p>
+\[ \text{POS-P@}T_u = \sum_{j=1}^{k} \sum_{t=1}^{|x_u|} \mathbb{1}\!\left[\operatorname{rank}\big(i^*_j;\, x_u^{(t)}\big) \le T\right] \]
+<p>\(\operatorname{rank}(i^*_j; x_u^{(t)})\)는 t번째 교란 입력을 넣었을 때 아이템 \(i^*_j\)의 순위, \(T\)는 순위 임계값(그림의 POS@5, POS@10에서 5, 10), \(|x_u|\)는 이력 길이(=최대 교란 단계 수)다. 지시함수는 그 단계에서 아이템이 아직 상위 T 안에 남아 있는지 확인한다. 따라서 값이 <b>작을수록</b> 설명이 추천 아이템을 빨리 밀어낸 것이므로 더 좋은 설명이다(그림에도 ↓ 표시).</p>
+<p class="meta">※ 확장 초록의 인쇄된 수식에는 지시함수 안이 "rank &gt; T"로 적혀 있지만, 본문 설명("아직 임계값 안에 있는지 확인")과 "낮을수록 좋음"이라는 방향에 맞추어 위처럼 해석했습니다. 정확한 표기는 원문 참조.</p>
+<p>기존 문헌과의 차이는 오직 \(\sum_{j=1}^{k}\) 하나다. k=1이면 기존 top-1 지표와 같다. 최종 점수는 사용자 평균이다.</p>
+\[ \text{POS-P@}T = \frac{1}{|\mathcal{U}|} \sum_{u \in \mathcal{U}} \text{POS-P@}T_u \]
+<p>예를 들어 top-3 값을 계산할 때는 세 번째 추천 아이템이 4위 이하로 떨어지도록 이력을 지워 나가는 과정까지 포함된다. 즉 1등뿐 아니라 2·3등 아이템에 대한 설명 품질도 함께 평가에 반영된다.</p>
+
+<h3>4. 평가 설정</h3>
+<p><b>데이터.</b> MovieLens 1M, Yahoo! Music, Pinterest — 모두 암묵적 피드백 기반 협업 필터링 설정으로, 2024년 선행 연구와 같은 구성이다.</p>
+<p><b>추천 모델.</b> 행렬분해(MF)와 변분 오토인코더(Mult-VAE, Liang 등 2018).</p>
+<p><b>성능 단계.</b> 일관성을 시험하려면 "조금 다른 추천기"가 필요하다. 저자들은 Hit Rate 기준으로 학습하면서 학습 진행 25%, 50%, 75%, 100% 시점의 체크포인트를 저장해 품질이 다른 네 추천기(TP25%~TP100%)를 만들었다. 3 데이터셋 × 2 모델 × 4 단계 = 24개 설정이며, 각 실험을 3회 반복해 평균을 보고한다. 코드·전처리·하이퍼파라미터는 공개 저장소에 있다.</p>
+<p><b>설명기 6종.</b></p>
+<ul>
+<li><b>Jaccard / Cosine 유사도</b>: 추천 아이템과 이력 아이템이 얼마나 같은 사용자들에게 함께 소비됐는지로 중요도를 매기는 단순 기준선.</li>
+<li><b>LIME-RS</b>: 국소 대리모델(LIME)을 추천에 맞게 고친 방법.</li>
+<li><b>SHAP</b>: 게임이론의 섀플리 값으로 각 이력 아이템의 기여를 배분.</li>
+<li><b>ACCENT</b>: 영향함수(influence function)를 확장해 신경 추천기에 대한 실행 가능한 반사실 설명을 만든다.</li>
+<li><b>LXR</b>: 자기지도 학습으로 설명 마스크를 그래디언트 기반으로 학습하는 최신 기법.</li>
+</ul>
+
+<h3>5. 실험 결과</h3>
+<p>가설은 "하위 순위 추천까지 평가에 넣으면 일관성이 좋아진다"이다. 저자들은 top-1, top-2, top-3, top-5 식으로 k를 늘려 가며 각 성능 단계에서 설명기 순위를 그렸다(값은 정규화, 음영은 반복 간 분산).</p>
+<p><b>VAE · Yahoo! Music (POS@5).</b> top-1만 볼 때 설명기 순위가 크게 흔들렸고, 특히 가장 약한 추천기 TP25%에서 TP50%로 넘어갈 때 변동이 컸다. top-2로 넓히면 이미 TP50~100% 구간에서 순위가 꽤 일정해지고, top-5에서는 상위 성능 추천기들 사이에서 순위가 안정됐다.</p>
+<p><b>MF · Pinterest (POS@10).</b> MF에서는 모든 데이터셋에서 작은 k(약 top-3)만으로도 순위가 안정됐다. 저자들은 MF가 단순해서 체크포인트 사이의 성능 변동이 작고, 그래서 설명기 결과의 변동도 작다고 해석한다. 다른 설정들도 비슷한 패턴이지만 안정해지는 k가 다르며, 세부 결과는 저장소에 있다.</p>
+<p><b>저자들의 해석.</b> (1) 리스트 단위로 평가해야 추천 문제의 본질과 맞고 일관성도 높아진다. (2) 일관성 개선 정도는 지표마다 다르며 POS는 추천기 품질에 특히 민감하다. (3) 따라서 지표 선택과 k 값은 데이터셋·추천기 구조에 따라 정할 하이퍼파라미터로 다뤄야 한다. (4) 한 시점의 고정된 모델이 아니라 여러 학습 체크포인트에서 평가하는 것 자체가 평가 편향을 줄이고, 기존 지표가 모델 품질 변동에 얼마나 취약한지 드러낸다.</p>
+
+<h3>6. 결론과 향후 과제</h3>
+<p>CE 평가를 top-1에서 top-k로 넓히면 주류 지표의 일관성이 확보된다. 다음 단계로 저자들은 추천 성능과 설명 품질을 함께 고려하는 통합 평가 지표, 그리고 도메인에 적응하는 CE 지표를 제안한다.</p>
+
+<h3>실무 관점 메모</h3>
+<p>사내에서 설명 기능("이 상품을 추천한 이유")을 A/B 이전에 오프라인 비교할 때, 모델 재학습마다 설명기 우열이 바뀐다면 이 논문이 지적한 현상일 가능성이 크다. 최소한 (a) 여러 체크포인트/시드에서 평가하고 (b) top-1이 아닌 노출 슬롯 수에 맞는 k로 지표를 계산하는 것만으로도 결론의 재현성이 크게 올라갈 수 있다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>반사실적 설명(Counterfactual Explanation)</b>: "입력이 이렇게 달랐다면 결과가 바뀌었을 것"이라는 형태의 설명. 추천에서는 결과를 바꾸는 최소한의 이력 아이템 집합을 찾는 문제로 바뀐다.</li>
+<li><b>사후(post-hoc) 설명</b>: 이미 학습된 모델을 고치지 않고 바깥에서 입력-출력 관계를 분석해 설명한다. 모델 종류에 구애받지 않는다(model-agnostic).</li>
+<li><b>POS-P@T</b>: 설명 순서대로 이력을 지울 때 추천 아이템이 상위 T 안에 머무는 단계 수를 센 지표. 낮을수록 설명이 정확하다. LXR 논문에서 제안된 평가 프로토콜이다.</li>
+<li><b>평가 일관성(consistency)</b>: 평가 대상(여기선 추천기)이 조금 바뀌어도 비교 대상(설명기)들의 상대 순위가 유지되는 성질. 벤치마크의 재현성과 직결된다.</li>
+<li><b>Co-12</b>: Nauta 등이 정리한 XAI 평가의 12가지 개념적 속성(Correctness, Completeness, Consistency, Compactness 등).</li>
+<li><b>LIME</b>: 설명하려는 입력 주변에서 샘플을 만들고 단순한 선형 대리모델을 맞춰 국소적 중요도를 얻는 방법.</li>
+<li><b>SHAP / 섀플리 값</b>: 협력 게임에서 각 참가자의 공헌을 공정하게 나누는 섀플리 값을 피처 기여도로 쓰는 방법.</li>
+<li><b>영향함수(Influence Function)</b>: 학습 데이터 하나를 빼거나 가중치를 바꿀 때 모델 출력이 얼마나 변하는지를 재학습 없이 근사하는 도구. ACCENT의 기반.</li>
+<li><b>Mult-VAE</b>: 사용자 상호작용 벡터를 다항분포로 재구성하는 변분 오토인코더 기반 CF 모델(Liang 등, 2018).</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문에서 서로 다른 품질의 추천기를 만들기 위해 쓴 방법은?<br>(a) 서로 다른 임베딩 차원 (b) 학습 25/50/75/100% 시점의 체크포인트 (c) 서로 다른 손실 함수 (d) 데이터 다운샘플링
+<details><summary>정답 보기</summary>(b). Hit Rate 기준 학습 중 25%, 50%, 75%, 완료 시점 체크포인트를 저장해 TP25%~TP100%의 네 추천기를 만들었다.</details></li>
+<li>[사실] 실험 설정은 총 몇 개이며 어떻게 구성되나?
+<details><summary>정답 보기</summary>24개 = 3개 데이터셋(ML-1M, Yahoo! Music, Pinterest) × 2개 추천기(MF, VAE) × 4개 성능 단계. 각 설정은 3회 반복 후 평균.</details></li>
+<li>[사실] 평가에 포함된 설명기 6종을 모두 대 보라.
+<details><summary>정답 보기</summary>Jaccard 유사도, Cosine 유사도, LIME-RS, SHAP, ACCENT, LXR.</details></li>
+<li>[원리] POS-P@T 값이 낮을수록 좋은 설명인 이유는?
+<details><summary>정답 보기</summary>설명기가 중요하다고 꼽은 이력 아이템부터 지울 때, 추천 아이템이 상위 T 안에 남아 있는 단계 수를 세기 때문이다. 진짜 원인을 먼저 지우면 아이템이 빨리 밀려나 남아 있는 단계가 적어진다.</details></li>
+<li>[원리] 기존 top-1 지표와 이 논문의 top-k 지표의 수식상 차이는 무엇인가?
+<details><summary>정답 보기</summary>안쪽 합을 1등 아이템 하나가 아니라 \(j=1..k\) 전체 추천 아이템에 대해 계산한다(\(\sum_{j=1}^{k}\) 추가). k=1이면 기존 지표와 같다.</details></li>
+<li>[원리] top-k로 넓히면 왜 일관성이 좋아질 것이라고 기대하는가?
+<details><summary>정답 보기</summary>1등 자리는 2등과의 근소한 점수 차·동점·모델 품질 변화에 민감해 잡음이 크다. 여러 상위 아이템에서 신호를 모으면 개별 아이템의 순위 잡음이 평균되어 희석되고, 추천 출력이 목록이라는 구조와도 맞는다.</details></li>
+<li>[해석] MF에서는 작은 k에서도 설명기 순위가 안정적이었고 VAE에서는 더 큰 k가 필요했다. 저자들의 설명은?
+<details><summary>정답 보기</summary>MF는 단순한 모델이라 체크포인트 간 성능 변동이 작고 추천 과제가 상대적으로 단순해, 설명기 결과의 변동도 작다. VAE는 학습 단계별 변동이 커서 더 많은 아이템을 봐야 안정된다.</details></li>
+<li>[해석] top-1 평가에서 가장 큰 순위 변동이 관찰된 구간은 어디였나? 이것이 시사하는 바는?
+<details><summary>정답 보기</summary>가장 약한 TP25%에서 TP50%로 넘어갈 때. 덜 학습된 모델의 상위 순위가 불안정할수록 top-1 기반 설명 평가가 쉽게 흔들린다는 뜻이며, 설명기 비교 결과가 "어떤 체크포인트를 썼는가"에 좌우될 수 있음을 보여 준다.</details></li>
+<li>[비판] 이 연구의 일관성 판단 방식에서 아쉬운 점과 보완책을 제안해 보라.
+<details><summary>정답 보기</summary>예시 답: 일관성을 그림 속 순위 변화로 정성적으로 판단했다. 체크포인트 간 설명기 순위의 Kendall τ나 Spearman 상관, 순위 역전 횟수 같은 정량 척도를 보고하면 비교가 명확해진다. 또한 지표가 POS 하나, 모델이 MF·VAE 둘뿐이라 NEG 지표나 시퀀셜·GNN 추천기로의 일반화는 추가 검증이 필요하다.</details></li>
+<li>[적용] 앱 홈 화면이 한 번에 상품 6개를 노출하고, "추천 이유" 기능에 쓸 설명기를 두 개 중 골라야 한다. 이 논문을 바탕으로 오프라인 평가 절차를 설계해 보라.
+<details><summary>정답 보기</summary>예시 답: (1) 노출 슬롯에 맞춰 k=6(또는 3~6 범위)으로 top-k POS-P@T를 계산한다. (2) 운영 모델 하나만이 아니라 여러 재학습 체크포인트·시드에서 평가해 설명기 순위가 유지되는지 본다. (3) k와 T를 바꿔 가며 순위가 안정되는 구간을 확인하고, 안정 구간에서 우위인 설명기를 고른다. (4) 오프라인 결과를 사용자 연구나 A/B로 보완한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#9</b> Are We Really Making Much Progress? A Worrying Analysis of Recent Neural Recommendation Approaches (2019) — 평가 관행이 잘못된 결론을 만든다는 같은 문제의식의 고전.</li>
+<li><b>#35</b> Evaluating Off-Policy Evaluation: Sensitivity and Robustness (2021) — 평가 방법 자체의 민감도·강건성을 평가한다는 메타 평가 관점이 같다.</li>
+<li><b>#71</b> Pairwise Ranking Outperforms Single-Action RL for Offline Explanation Selection: A Practical Lesson (2026) — 추천 설명을 오프라인에서 고르는 문제의 실무 사례.</li>
+<li><b>#169</b> How Faithful Is the Reasoning of LLM Recommenders? A Counterfactual Audit (2026) — 반사실적 교란으로 추천 설명의 충실도를 검증하는 최근 연구.</li>
+<li><b>#20</b> RADio – Rank-Aware Divergence Metrics to Measure Normative Diversity in News Recommendations (2022) — 순위를 고려한(rank-aware) 지표 설계라는 공통점.</li>
+</ul>
+
+</main>
+</body>
+</html>
