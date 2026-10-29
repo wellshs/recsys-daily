@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You Don’t Bring Me Flowers: Mitigating Unwanted Recommendations Through Conformal Risk Control</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-30 · #33</span></div>
+<h1>You Don’t Bring Me Flowers: Mitigating Unwanted Recommendations Through Conformal Risk Control</h1>
+<p class="meta">Giovanni De Toni (FBK), Erasmo Purificato (EC JRC), Emilia Gómez (EC JRC), Andrea Passerini (Univ. of Trento), Bruno Lepri (FBK), Cristian Consonni (EC JRC) · RecSys 2025 Full Paper · Best Full Paper</p>
+<div class="chips"><span>2025</span><span>Best Full Paper</span><span>Conformal Risk Control</span><span>원치 않는 추천</span><span>부정 피드백</span><span>후처리(post-hoc)</span><span>KuaiRand</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3705328.3748054">10.1145/3705328.3748054</a> · arXiv: <a href="https://arxiv.org/abs/2507.16829">2507.16829</a> (<a href="https://arxiv.org/pdf/2507.16829">PDF</a>) · 코드: <a href="https://github.com/geektoni/mitigating-harm-recsys">geektoni/mitigating-harm-recsys</a> · 읽기 예상 13분</p>
+
+<div class="callout">출처 메모: arXiv v1 원문(9쪽 본문)을 읽고 썼습니다. 실험 결과는 대부분 그래프로만 제시되어 정확한 수치가 본문에 없으므로, 곡선의 경향만 설명하고 구체 값은 "논문 참조"로 남겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 사용자가 누른 "추천 안 함" 같은 이진 부정 피드백만으로, 어떤 추천 모델이든 재학습 없이 "추천 목록 속 원치 않는 아이템 비율의 기댓값 ≤ α"를 증명 가능하게 보장하는 후처리 절차를 제안한다.</p>
+<p><b>풀려는 문제.</b> 플랫폼의 "관심 없음" 버튼은 눌러도 효과가 불투명하고 느리다. 사용자는 자기 피드백이 추천을 얼마나 바꿨는지 알 수 없고, 실제로 신고한 영상을 다시 추천받기도 한다. 저자들은 "사용자가 지정한 위험 수준만큼 원치 않는 콘텐츠가 줄어든다"는 정량적·검증 가능한 연결고리를 만들고자 한다.</p>
+<p><b>핵심 아이디어.</b> 점수가 임계값 \(\lambda\) 미만인 후보를 걸러내는 단계를 두고, \(\lambda\)를 conformal risk control(CRC)로 보정 데이터에서 고른다. 그런데 걸러내기만 하면 목록이 k개보다 짧아지고, 심하면 비어 버린다. 그래서 빠진 자리를 "예전에 충분히 오래 보고 신고하지 않은 아이템"으로 채운다. 이런 아이템은 다시 보여 줘도 신고될 확률이 사실상 0이라 위험을 늘리지 않고, CRC가 요구하는 단조성도 유지된다.</p>
+<p><b>주요 결과.</b> Kuaishou의 KuaiRand 데이터에서 LightGCL·GFormer·SiReN·SIGFormer를 점수 함수로 써 실험했다. 모든 모델·전략에서 실측 감소율이 목표 감소율 이상으로 나와 보장이 지켜졌다. 제거(Remove) 전략은 목표를 지나치게 초과하며 nDCG@20이 급락했고, 대체(Replace) 전략은 nDCG를 훨씬 잘 유지했다(정확한 값은 논문 그림 3 참조).</p>
+<p><b>한계와 남는 질문.</b> 데이터셋이 KuaiRand 하나뿐이고, 보장은 사용자 전체 평균(기댓값) 기준이라 신고를 자주 하는 사용자가 임계값을 끌고 가는 편향이 관찰됐다. 이미 본 콘텐츠를 반복 노출하는 것이 장기적으로 사용자 경험·다양성에 어떤 영향을 주는지는 사용자 연구가 필요하다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 버튼은 있는데 효과가 보이지 않는다</h3>
+<p>추천 시스템은 유사도 기반 필터링과 선호 예측 덕분에 효과적이지만, 같은 원리 때문에 필터 버블·래빗홀, 오정보·혐오처럼 원치 않는 콘텐츠도 퍼뜨린다. 플랫폼이 제공하는 "Not Interested" 류 기능은 인지도가 낮고 조작이 번거롭고 효과도 제한적이다. 그 결과 사용자는 추천이 왜 이렇게 나오는지 스스로 "민간 이론(folk theory)"을 세우며 알고리즘을 길들이려 한다.</p>
+<p>저자들은 conformal prediction 계열, 그중 커버리지가 아닌 일반 손실(위험)을 통제하는 <b>conformal risk control</b>을 후처리 단계에 적용한다. 기여는 네 가지다: (1) 신고 패턴과 시청 시간에 대한 실데이터 분석, (2) 반복 콘텐츠를 활용해 원치 않는 콘텐츠 비율을 증명 가능하게 제한하는 방법, (3) 안전한 대체 아이템을 고르는 실용적 휴리스틱, (4) 실데이터 실험과 ablation.</p>
+
+<h3>2. 관련 연구</h3>
+<p>원치 않는 콘텐츠 문제는 알고리즘 편향, 참여도 중심 목적함수, 피드백 루프에서 비롯된다는 연구가 많다. 대응책으로 콘텐츠 모더레이션, 공정성 제약, 다양성 증진 등이 제안됐지만 노출 제한에 대한 <i>형식적 보장</i>은 대개 없다. 가장 가까운 선행 연구와 비교하면, 이 논문은 그룹 수준이 아닌 아이템 수준의 통제를 하며, 사용자 피드백으로 별도 정책을 학습할 필요도 없다. 추천에 conformal 기법을 쓴 기존 연구는 nDCG나 FDR(오발견률)을 통제했을 뿐, "원치 않는 콘텐츠 비율"을 통제한 사례는 없었다고 저자들은 말한다. 또 반복 소비(repeat consumption)가 여러 플랫폼에서 흔한 행동이라는 연구 흐름을 가져와 대체 전략의 근거로 삼는다.</p>
+
+<h3>3. 사례 분석 — Kuaishou(KuaiRand) 데이터</h3>
+<p>KuaiRand는 Kuaishou 사용자 약 27,000명이 2022년 4월 8일~5월 8일 한 달간 본 약 3,200만 개 영상의 로그로, 시청 시간·좋아요·댓글과 함께 "추천 안 함"·"신고" 같은 <b>명시적 부정 피드백</b>을 담고 있다. 랭킹 점수나 노출 순서는 없다. 광고와 길이 0인 영상을 빼고, 한 번이라도 부정 피드백을 준 사용자(전체의 약 29%)만 남기니 7,601명, 5,600만 상호작용, 1,000만 개 고유 영상이 남았다. 사용자당 평균 7,417편(중앙값 4,623)을 봤다.</p>
+<p><b>부정 피드백의 희소성.</b> 사용자별 신고 비율 \(H_X\)(신고 영상 수 / 시청 영상 수 × 100)를 보면, 60.1%의 사용자가 1,000편당 1편 미만을 신고하고, 96% 이상이 100편당 1편 미만을 신고한다. 버튼이 여러 번 탭해야 나오는 구조라, 싫은 영상은 그냥 넘겨 버리는 경우가 많을 것이라 추정한다.</p>
+<p><b>시청 시간.</b> 영상 길이가 제각각이므로 시청 비율을 쓴다.</p>
+\[ W_\%(U,I) = \frac{W(U,I)}{\text{영상 } I \text{의 길이}} \times 100 \]
+<p>여기서 \(W(U,I)\)는 사용자 \(U\)가 영상 \(I\)에 머문 시간이다. 신고된 영상과 아닌 영상의 \(W_\%\) 분포는 모양이 거의 같다. 둘 다 0 근처와 100% 근처에 봉우리가 있고, 상호작용의 21%는 시청 시간이 0이다. 영상 길이 7~12초 구간에서 신고 영상만 보면, 끝까지 안 본 경우와 길이보다 오래 머문 경우가 각각 꼬리가 있는 정규 비슷한 모양이라 LogNormal·Weibull로 모델링할 수 있다.</p>
+<p><b>반복 시청과 재신고.</b> 시청한 영상의 평균 2.6%는 이전에 본 영상이다. 저자들은 한 영상을 두 번 볼 때의 (첫 번째 신고 여부 → 두 번째 신고 여부)를 네 경우로 나눠 정리했다(표 2의 핵심 행 재구성).</p>
+<table>
+<tr><th>1회차 → 2회차</th><th>아이템 비율</th><th>사용자 비율</th><th>평균 시청 1회차 → 2회차(초)</th></tr>
+<tr><td>미신고 → 미신고</td><td>99.79%</td><td>100%</td><td>2.71 → 10.48</td></tr>
+<tr><td>미신고 → 신고</td><td>0.11%</td><td>8.69%</td><td>0.50 → 10.73</td></tr>
+<tr><td>신고 → 신고</td><td>0.07%</td><td>6.33%</td><td>7.74 → 7.85</td></tr>
+<tr><td>신고 → 미신고</td><td>0.03%</td><td>1.49%</td><td>1.36 → 6.46</td></tr>
+</table>
+<p>약 8%의 사용자가 이미 신고한 영상을 다시 추천받았고, 또 약 8%는 처음엔 신고하지 않았던 영상을 두 번째에 신고했다. 후자는 첫 시청 시간이 매우 짧았다(평균 0.5초). 처음엔 그냥 넘겼다가 다시 마주쳤을 때 제대로 보고 신고한 것으로 해석된다. 저자들이 뽑은 시사점은 네 가지다. ① 참여도와 유해성 인식은 별개다(참여 극대화 ≠ 유해 감소). ② 플랫폼은 명시적 피드백 후에도 원치 않는 콘텐츠를 다시 보여 준다. ③ 피드백이 귀하므로 최대한 활용해야 한다. ④ 아주 짧은 시청은 원치 않는 콘텐츠의 조기 신호일 수 있다.</p>
+<p>또한 "평점 3 미만 = 원치 않음"이나 "스킵 = 원치 않음" 같은 대리 신호는 부족하다고 지적한다. 시청 시간이 긴데도 명시적으로 신고된 영상이 있기 때문이다. 그런데 이런 분리된 명시적 피드백을 공개한 데이터셋은 저자들이 아는 한 KuaiRand뿐이다.</p>
+
+<h3>4. 위험을 통제하는 추천 시스템의 정식화</h3>
+<p>아이템 집합 \(\mathcal{I}\), 사용자 \(U\), 관련도를 예측하는 랭커 \(f(U,I)\)가 있다. 후처리에서는 점수 함수 \(s(U,I)\)와 임계값 \(\lambda\)로 후보를 거른다.</p>
+\[ T_\lambda(U) = \{\, i \in \mathcal{I} : s(U, i) \ge \lambda \,\} \]
+<p>그 뒤 랭커 순서 \(\pi\)로 정렬해 상위 k개를 고른 것이 \(S_\lambda(U,k)\)다. 목표는 nDCG 같은 효용 \(\ell\)을 최대화하면서 위험의 기댓값을 사용자가 정한 \(\alpha\) 이하로 두는 \(\lambda\)를 찾는 것이다.</p>
+\[ \lambda^* = \arg\max_{\lambda\in\Lambda} \mathbb{E}[\ell(S_\lambda(U,k))] \quad \text{s.t.} \quad \mathbb{E}[R(S_\lambda(U,k))] \le \alpha \]
+<p>랭커를 재학습하지 않고 후처리 임계값만 조정한다는 점이 실무적으로 중요하다.</p>
+<p><b>위험의 정의.</b> \(H(U,I)\in\{0,1\}\)은 사용자가 그 아이템을 플래그(신고/추천 안 함)했는지를 뜻하는 이진 변수다. 추천 목록의 위험은 목록 안에서 플래그된 아이템의 비율이다.</p>
+\[ R_H(S_\lambda(U,k)) = \frac{|\{ i \in S_\lambda(U,k) : H(U,i)=1 \}|}{|S_\lambda(U,k)|} \]
+<p><b>Conformal risk control.</b> 각 사용자-아이템 쌍의 플래그 여부가 기록된 보정(calibration) 집합 \(n\)명이 있다고 하자. 보정 집합의 평균 위험 \(\hat R(\lambda) = \frac1n\sum_{j=1}^n R_H(S_\lambda(u_j,k))\)를 계산하고 다음처럼 임계값을 고른다.</p>
+\[ \hat\lambda = \inf\left\{ \lambda : \frac{n}{n+1}\hat R(\lambda) + \frac{1}{n+1} \le \alpha \right\} \]
+<p>\(\frac{1}{n+1}\) 항은 "새로 올 사용자 한 명"의 최악 위험(위험 상한이 1)을 미리 반영한 유한 표본 보정이다. 위험이 \(\lambda\)에 대해 비증가·우연속이고 상한이 1이며 교환가능성이 성립하면, \(\mathbb{E}[R(S_{\hat\lambda})] \le \alpha\)가 분포 가정 없이, 어떤 모델에 대해서도 성립한다. 점수로 랭커 출력을 쓰면 \(\lambda\)를 올릴수록 후보가 빠지기만 하므로 위험이 단조 감소한다. 순서까지 고려해 단조성이 깨지면 \(\max_{\lambda'\ge\lambda}\)로 단조화할 수 있다는 각주도 있다.</p>
+
+<h3>5. 제거 대신 대체 — 이 논문의 핵심</h3>
+<p><b>제거 방식의 한계(명제 2).</b> 기존 추천용 conformal 연구는 위처럼 거르기만 한다. 그러면 단조성은 쉽게 얻지만 목록 크기를 통제할 수 없다. 저자들은 반례를 든다. 아이템 A, B, C, D 중 D만 점수가 5이고 나머지는 1인데 위험 수준을 0.1로 잡으면, 위험을 만족시키는 유일한 방법이 \(\lambda>5\)이고 그때 후보 집합은 비어 버린다. 즉 위험을 증명 가능하게 낮추려면 추천을 통째로 비워야 하는 분포가 존재하며, 이는 어떤 점수 함수에도 적용된다.</p>
+<p><b>안전한 대체 아이템의 성질(Property 1).</b> 그래서 빠진 자리를 "안전한" 아이템으로 채운다. 근거는 사람들이 이미 본 콘텐츠를 다시 소비하고, Kuaishou에서 재시청 시 시청 시간이 오히려 길었다는 점이다. 다만 미신고 → 신고로 바뀌는 드문 경우(0.11%)가 단조성을 깨뜨릴 수 있다. 이를 막기 위한 가정은 다음과 같다. 어떤 변수 \(C\)와 값 \(\beta\)가 있어서,</p>
+\[ P(H=1 \mid H_{1st}=0,\; C>\beta) = 0 \]
+<p>\(H_{1st}\)는 첫 시청 때의 신고 여부다. 즉 "처음에 신고하지 않았고 \(C\)가 \(\beta\)보다 컸던" 아이템은 두 번째에도 신고되지 않는다는 뜻이다. Kuaishou에서는 \(C\)로 첫 시청 비율 \(W_\%\)를 쓴다. 두 번째에 신고된 영상은 첫 시청 시간이 짧았고, \(\beta\)로 거르면 재신고 확률이 전체적으로 거의 0이 된다. 단 \(\beta=50\%\)에서는 남는 반복 영상이 적고 이상치가 있어 확률이 조금 올라간다.</p>
+<p>안전 풀과 새 후보 집합은 다음과 같다(\(\mathcal{I}_U\)는 사용자에게 이미 보여 준 아이템).</p>
+\[ T^{(safe)}(U) = \{ i' \in \mathcal{I}_U : H(U,i')=0 \,\wedge\, C(i')>\beta \}, \qquad T^{(replace)}_\lambda(U) = T_\lambda(U) \cup T^{(safe)}(U) \]
+<p>Property 1이 성립하면 안전 풀의 아이템은 모두 \(H=0\)이므로, \(\lambda\)를 올려도 위험은 늘지 않는다(명제 3). 동시에 안전 풀이 충분하면 항상 k개를 채울 수 있다. 신규 사용자는 이 풀이 비어 있을 수 있는데(콜드스타트), 이때는 사용자에게 직접 고르게 하는 방안을 언급한다.</p>
+
+<h3>6. 후처리 파이프라인(알고리즘 1)</h3>
+<p>절차는 다섯 줄이다. ① 보정 집합으로 \(\hat\lambda\) 계산 → ② 점수가 \(\hat\lambda\) 미만인 후보 제거 → ③ 이전에 봤고 신고 안 했고 \(W_\% > \beta\)인 안전 풀 구성 → ④ 두 집합 합치기 → ⑤ 랭커 순서로 상위 k개 반환. ③을 빼면 고전적인 제거 방식이 된다. 필터링에 쓰는 점수와 재정렬에 쓰는 랭커가 달라도 된다. 예컨대 "신고하지 않을 확률"로 거르고 "시청 시간 예측"으로 정렬하는 2단계 구조에서도 보장이 유지된다. 계산량은 \(\hat\lambda\) 계산이 보정 집합 크기에 선형이고 미리 캐시할 수 있으며, 전체는 정렬이 지배하는 \(O(|\mathcal{I}|\log|\mathcal{I}|)\)이다. 새 데이터가 쌓이면 \(\hat\lambda\)를 주기적으로 갱신하면 된다.</p>
+
+<h3>7. 실험</h3>
+<p><b>데이터.</b> KuaiRand에서 적어도 한 사용자가 두 번 이상 본 영상만 남겨 사용자 5,657명, 아이템 117,695개, 상호작용 300만 건 이상을 얻었다. 반복/단일 상호작용으로 나누고, 단일 상호작용은 10-core 설정에서 학습 70%, 검증 15%, 테스트 15%로 무작위 분할했다. 검증 집합이 곧 CRC 보정 집합이다. 테스트 영상은 반복 집합에서 제외해 누수를 막았다.</p>
+<p><b>모델.</b> 1단계 점수 함수로 부정 피드백을 쓰지 않는 그래프 모델 LightGCL·GFormer와, 부정 피드백까지 쓰는 sign-aware 모델 SiReN·SIGFormer를 비교했다. 2단계 재정렬은 시청 비율을 예측하는 단순 NCF를 썼다. 성능 극대화가 아니라 위험 통제의 효과를 분리해 보려는 의도다. 대체 전략에서 반복 아이템은 다시 채점하지 않고 원래 시청 시간을 재사용했다. 지표는 Recall@20, nDCG@20, 그리고 식의 경험적 위험이며 10회 반복했다.</p>
+<p><b>RQ1·2: 보장과 성능.</b> 모든 전략·모델에서 실측 감소율이 목표 이상으로 나와(논문 그림 3c에서 모든 점이 대각선 위 또는 그 아래에 놓임) 보장이 지켜졌다. 제거 방식은 필요 이상으로 많이 제거하는 경향이 있었다. nDCG@20은 제거 방식에서 목표 감소율이 커질수록 급락했고, 대체 방식은 일부 하락은 있지만 훨씬 높게 유지됐다. 하락의 일부는 반복 아이템을 재채점하지 않은 실험 설정 탓이라고 저자들은 본다. Recall은 두 방식 모두 떨어졌다. 아직 안 본 관련 아이템이 빠지기 때문이다. 목표가 100% 감소(\(\alpha=0\))면 명제 2대로 모든 아이템을 제거하거나 대체해야 한다. 대체 방식도 안전 풀이 유한해 k개를 다 못 채울 수 있다.</p>
+<p><b>RQ3: 점수 함수에 따른 대체 비율.</b> 보장 자체는 모델과 무관하지만, 같은 위험 수준에서 대체를 적게 하는 모델이 실무적으로 낫다. 의외로 부정 피드백을 쓰는 SiReN·SIGFormer가 더 많은 아이템을 대체해야 했다. 부정 피드백이 너무 희소해서 음의 그래프에서 의미 있는 임베딩을 배우지 못하고, 불확실성이 커졌다는 해석이다. 가장 나은 LightGCL로 이후 실험을 진행했다.</p>
+<p><b>RQ4: \(\beta\) ablation.</b> 반복 아이템을 거르지 않으면(None) 위험 통제가 <b>실패</b>했다. 다시 보여 준 일부 아이템이 신고되면서 보정과 테스트 사이에 분포 이동이 생긴 셈이다. \(W_\% > 0\%, 50\%, 100\%\)로 거르면 보장이 회복됐다. 대신 \(\beta\)가 엄격할수록 안전 풀이 줄어 제거 방식과 비슷해진다. 안전성과 목록 크기 사이의 트레이드오프다.</p>
+<p><b>RQ5: 사용자 그룹별 편향.</b> 신고 비율 \(H_X<0.1\)인 저신고 그룹과 \(\ge0.1\)인 고신고 그룹을 나눠 보니, 낮은 목표에서 저신고 그룹의 감소율이 더 컸다(nDCG는 그룹 간 비슷). 고신고 사용자가 전역 임계값 보정을 주도해 모두에게 과도하게 보수적이 된다는 뜻이다. 저신고 사용자에게는 더 적은 수정으로도 같은 보장이 가능했을 것이다.</p>
+
+<h3>8. 논의·한계와 결론</h3>
+<p><b>방법론.</b> 전역 임계값 하나가 그룹마다 다르게 작용하므로, 데이터가 충분하면 사용자별(또는 그룹 균형) 보정이 바람직하다. 선호가 시간에 따라 변하지 않는다고 가정했고, 위험 함수가 순위 위치를 무시한다. 보장도 기댓값 수준이라 고확률 보장이나 비단조 위험으로의 확장이 남아 있다.</p>
+<p><b>평가.</b> 데이터셋이 하나뿐이라 외적 타당성, 특히 Property 1의 일반성이 제한된다. EU 디지털서비스법(DSA) 40조의 연구자 데이터 접근 제도가 대안이 될 수 있다고 언급한다.</p>
+<p><b>사용자 경험.</b> 본 콘텐츠의 반복 노출은 편중이나 양극화를 부를 수 있다. 커뮤니티 큐레이션 목록, 좋아요·나중에 보기 목록을 대체 후보로 쓰거나, 신뢰 그룹 안에서 "원치 않음" 신호를 공유해 피드백이 적은 사용자를 돕는 방안을 제안한다. 결론적으로, 모델에 무관하고 붙이기 쉬우며 분포 가정 없는 보장을 가진 사용자 중심 절차로 원치 않는 노출을 통제 가능하게 줄일 수 있음을 보였다.</p>
+
+<h3>실무 관점 메모</h3>
+<p>숏폼·피드 서비스라면 ① 기존 랭커는 그대로 두고 "신고/숨김 확률" 같은 안전 점수로 필터 단계를 추가하고, ② 검증 로그로 \(\hat\lambda\)를 정기 보정하며, ③ 빈 슬롯을 재노출 가능 풀(오래 보고 부정 피드백이 없던 아이템)로 채우는 구조로 바로 옮길 수 있다. 다만 반복 노출을 얼마나 허용할지, 신고가 드문 사용자에게 과보수적이지 않은지는 별도로 모니터링해야 한다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>Conformal prediction</b> — 보정 데이터의 비적합 점수(non-conformity score)를 이용해, 교환가능성만 가정하고도 "정답을 1−α 확률로 포함하는 예측 집합"을 유한 표본에서 보장하는 프레임워크. 모델 종류와 데이터 분포에 무관하다.</li>
+<li><b>Conformal risk control (CRC)</b> — Angelopoulos 등이 제안한 일반화. 커버리지 대신 단조 감소하는 임의의 유계 손실의 기댓값을 α 이하로 보장하는 임계값 \(\hat\lambda\)를 보정 집합에서 고른다.</li>
+<li><b>교환가능성(exchangeability)</b> — 데이터 순서를 바꿔도 결합분포가 같다는 가정. i.i.d.보다 약하다. 보정 시점과 서비스 시점의 분포가 달라지면(분포 이동) 보장이 깨질 수 있다. RQ4의 실패 사례가 그 예다.</li>
+<li><b>단조성(monotonicity)</b> — 임계값을 올릴수록 위험이 늘지 않아야 CRC가 성립한다. 이 논문에서 대체 아이템을 아무거나 넣으면 이 성질이 깨질 수 있어 Property 1이 필요했다.</li>
+<li><b>명시적 부정 피드백</b> — "추천 안 함", "신고"처럼 사용자가 직접 표현한 거부 신호. 스킵이나 낮은 평점 같은 암묵적 대리 신호보다 의미가 명확하지만 매우 희소하다.</li>
+<li><b>KuaiRand</b> — Kuaishou에서 수집된 공개 데이터셋. 시청 시간·좋아요 등 긍정 신호와 신고·추천 안 함 같은 부정 신호, 반복 시청 정보를 함께 담고 있다.</li>
+<li><b>반복 소비(repeat consumption)</b> — 사용자가 이미 소비한 아이템을 다시 소비하는 현상. 음악·영상·이커머스에서 흔하며 repeat-explore 모델 등 별도 연구 흐름이 있다.</li>
+<li><b>Sign-aware 추천 모델</b> — 긍정·부정 상호작용을 서로 다른 그래프나 임베딩으로 학습하는 모델(SiReN, SIGFormer). 부정 신호가 희소하면 오히려 불확실성이 커질 수 있다.</li>
+<li><b>2단계 추천</b> — 후보 생성/필터와 재정렬을 나누는 구조. 이 논문은 필터 단계에서만 보장을 걸고 재정렬 모델은 자유롭게 둔다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문이 통제하려는 "위험" \(R_H\)는 정확히 무엇인가?
+<details><summary>정답 보기</summary>추천 목록 \(S_\lambda(U,k)\) 안에서 사용자가 플래그(신고/추천 안 함, \(H=1\))한 아이템의 비율. 순위 위치는 고려하지 않는다.</details></li>
+<li>[사실] KuaiRand 분석에서 1,000편당 1편 미만을 신고한 사용자의 비율은? (a) 약 29% (b) 약 60% (c) 약 85% (d) 약 96%
+<details><summary>정답 보기</summary>(b) 60.1%. 29%는 부정 피드백을 한 번이라도 준 사용자 비율, 85.2%는 \(H_X<0.3\%\)까지의 누적, 96.1%는 \(H_X<1\%\)까지의 누적이다.</details></li>
+<li>[사실] 실험에서 1단계 점수 함수로 비교한 네 모델과 2단계 재정렬 모델은?
+<details><summary>정답 보기</summary>1단계: LightGCL, GFormer(부정 피드백 미사용), SiReN, SIGFormer(sign-aware). 2단계: NCF(시청 비율 예측).</details></li>
+<li>[원리] 임계값 식 \(\frac{n}{n+1}\hat R(\lambda)+\frac{1}{n+1}\le\alpha\)에서 \(\frac{1}{n+1}\) 항은 왜 들어가는가?
+<details><summary>정답 보기</summary>보정 집합 n개에 새 테스트 사례 1개를 더한 n+1개의 교환가능성을 이용하기 때문이다. 아직 모르는 테스트 사례의 위험을 최악값(상한 1)으로 두고 평균에 포함시킨 유한 표본 보정이다. 그 결과 기댓값 보장이 정확히 성립한다.</details></li>
+<li>[원리] 명제 2가 말하는 "제거 방식"의 근본 한계를 예를 들어 설명하라.
+<details><summary>정답 보기</summary>위험을 낮추려면 점수가 높은 아이템까지 걸러야 하는 분포가 있다. 예컨대 유일한 고득점 아이템보다 높은 \(\lambda\)를 써야만 위험 조건이 충족되면 후보 집합이 비어 버린다. 즉 위험 보장을 얻는 대가로 목록 크기를 통제할 수 없다.</details></li>
+<li>[원리] 대체 아이템을 아무 "이전 시청 아이템"으로 고르면 안 되는 이유와 Property 1의 역할은?
+<details><summary>정답 보기</summary>처음에는 신고하지 않았지만 두 번째에 신고하는 경우(0.11%)가 있다. 이런 아이템이 들어가면 \(\lambda\)를 올릴수록 대체가 늘며 위험이 커질 수 있어 단조성이 깨진다. Property 1은 \(C>\beta\)(예: 첫 시청 비율이 충분히 큼)인 아이템은 재신고 확률이 0이라고 가정해, 안전 풀이 위험에 기여하지 않게 만든다. 그 결과 명제 3의 단조성이 보장된다.</details></li>
+<li>[결과 해석] 부정 피드백을 활용하는 SiReN·SIGFormer가 오히려 더 많은 대체를 필요로 했다. 저자들의 설명은?
+<details><summary>정답 보기</summary>Kuaishou에서는 부정 대 긍정 피드백 비율이 너무 낮다. 부정 그래프에서 의미 있는 임베딩을 배우지 못해 점수의 불확실성이 커지고, 같은 위험 수준을 맞추려면 더 많이 제거·대체해야 했다.</details></li>
+<li>[결과 해석] \(\beta\) ablation에서 None(필터 없음)일 때 보장이 깨진 이유, 그리고 \(\beta\)를 키울 때의 대가는?
+<details><summary>정답 보기</summary>필터 없이 넣은 반복 아이템 중 일부가 재노출 때 신고되어, 보정 시점에 없던 위험이 테스트에서 생겼다(분포 이동). \(\beta\)를 키우면 보장은 회복되지만 안전 풀이 줄어 목록이 짧아지고 제거 방식에 가까워진다.</details></li>
+<li>[비판] RQ5의 "고신고 사용자 편향"은 왜 생기며, 어떻게 완화할 수 있을까?
+<details><summary>정답 보기</summary>보장이 사용자 전체 기댓값에 대해 하나의 전역 \(\hat\lambda\)로 걸린다. 그래서 위험이 높게 측정되는 고신고 사용자가 임계값을 끌어올리고, 저신고 사용자는 필요 이상으로 보수적인 처리를 받는다. 완화책으로는 그룹 조건부(group-balanced) 보정, 데이터가 충분한 사용자에 대한 개인별 보정, 그룹별 α 설정 등이 있다.</details></li>
+<li>[적용] 국내 숏폼 서비스에 이 방법을 도입한다고 할 때 반드시 점검해야 할 가정과 지표를 3가지 이상 제시하라.
+<details><summary>정답 보기</summary>예시 답: (1) 교환가능성 — 보정 로그와 서빙 시점 분포가 비슷한지, 보정 주기는 적절한지. (2) Property 1 — 우리 데이터에서 "오래 보고 신고 안 한 아이템"의 재신고율이 실제로 0에 가까운지 β별로 측정. (3) 부정 피드백 정의 — 숨김·신고·차단 등 어떤 신호를 \(H\)로 볼지. (4) 반복 노출 비율·세션 체류·다양성·신규 콘텐츠 노출 감소를 A/B로 모니터링. (5) 신고 빈도 그룹별 과보수성 점검.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#16</b> An Audit of Misinformation Filter Bubbles on YouTube: Bubble Bursting and Recent Behavior Changes (2021) — 같은 topic(08). 원치 않는·유해 콘텐츠 노출 문제를 감사(audit) 관점에서 다룬다.</li>
+<li><b>#95</b> Learning From Negative User Feedback and Measuring Responsiveness for Sequential Recommenders (2023) — 명시적 부정 피드백을 학습에 반영하고, 피드백에 대한 시스템 "반응성"을 측정한다는 문제의식이 같다.</li>
+<li><b>#82</b> Understanding and Modeling Passive-Negative Feedback for Short-video Sequential Recommendation (2023) — 숏폼 영상에서 스킵 같은 수동적 부정 신호를 다룬다. 이 논문의 "짧은 시청 = 조기 신호"와 맞닿아 있다.</li>
+<li><b>#357</b> Leveraging Explicit Negative Feedback in Large-Scale Recommendation Systems: A Case Study (2025) — 대규모 산업 환경에서 명시적 부정 피드백을 활용한 사례.</li>
+<li><b>#157</b> Minimize Negative Experiences in Video Recommendation Systems with Multimodal Large Language Models (2025) — 영상 추천의 부정 경험 최소화를 다른 방식(MLLM)으로 접근한다.</li>
+</ul>
+</main>
+</body>
+</html>
