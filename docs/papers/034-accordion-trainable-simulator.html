@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accordion: A Trainable Simulator for Long-Term Interactive Systems</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-10-31 · #34</span></div>
+<h1>Accordion: A Trainable Simulator for Long-Term Interactive Systems</h1>
+<p class="meta">James McInerney, Ehtsham Elahi, Justin Basilico, Yves Raimond, Tony Jebara · RecSys 2021 Papers 트랙</p>
+<div class="chips"><span>2021</span><span>Netflix</span><span>Spotify</span><span>시뮬레이터</span><span>Poisson process</span><span>방문 모델링</span><span>오프라인 A/B</span><span>장기 효과</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3460231.3474259">10.1145/3460231.3474259</a> · arXiv: 없음(검색 결과 미등록) · PDF: ACM DL(비공개 접근) · 수상: 없음 · 읽기 예상 12분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성</div>
+<div class="callout">출처 메모: ACM DL PDF는 이 실행 환경에서 403으로 막혔습니다. arXiv에는 등록되어 있지 않고, Semantic Scholar의 오픈 액세스 PDF도 없으며(CLOSED), 저자 홈페이지에도 PDF가 없었습니다. 그래서 공식 초록과 점 과정(point process)·추천 시뮬레이션에 대한 일반 지식으로 썼습니다. 아래 수식은 "이런 종류의 모델이 보통 어떻게 쓰이는지"를 보여 주는 <b>표준 정식화</b>이며, 논문의 정확한 매개변수화·데이터셋 이름·수치는 확인하지 못해 "논문 참조"로 남겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 추천 품질이 사용자의 <i>다음 방문</i>을 바꾸고 그 방문이 다시 다음 추천의 입력이 되는 고리를 Poisson 과정으로 모델링하고, 이를 대규모 로그로 학습해 장기적인 상호작용을 재현하는 시뮬레이터 Accordion을 제안한다.</p>
+<p><b>풀려는 문제.</b> 실제 서비스에서 사용자가 겪는 경험은 하나의 모델이 아니라 여러 ML 모델이 모인 생태계의 결과다. 그래서 개별 모델을 바꿨을 때 장기적으로 무슨 일이 일어날지 오프라인에서 예측하기 어렵다. 시뮬레이션은 이 복잡도를 다룰 수 있는 근사지만, 저자들에 따르면 기존 방법은 "사용자 이력 → 추천 품질 → 이후 방문" 사이의 상호작용을 충분히 담지 못했다.</p>
+<p><b>핵심 아이디어.</b> 사용자의 방문을 시간 위의 점 사건으로 보고, 방문 강도(intensity)가 사용자 이력과 직전 방문에서 받은 추천의 품질에 따라 달라지게 한다. 좋은 추천을 받으면 더 자주 돌아오고 나쁜 추천을 받으면 덜 돌아오는 효과가 강도 함수 안에 들어간다. 이 강도를 실데이터로 학습하면, 새 추천 정책을 넣고 "방문 → 추천 → 다음 방문"을 반복해 장기 경로를 생성할 수 있다. 초록은 학습 방법과 시뮬레이션 방법 모두를 새로 개발했다고 밝힌다.</p>
+<p><b>주요 결과.</b> 실제 인터랙티브 시스템 데이터셋 2개에서 검증했다. Accordion은 비교 방법보다 <i>하이퍼파라미터 튜닝</i>과 <i>오프라인 A/B 테스트</i>에 대한 민감도가 더 높았다. 즉 정책을 바꿨을 때 시뮬레이터 출력도 그 변화를 반영해 달라졌다. 구체적인 데이터셋·지표 값은 논문 참조.</p>
+<p><b>한계와 남는 질문.</b> "민감도가 높다"는 것은 시뮬레이터가 정책 차이에 반응한다는 뜻이지, 그 반응의 크기와 방향이 실제 온라인 A/B와 일치한다는 보장은 아니다. 저자들도 이를 "현실적인 과제 지향 시뮬레이터로 가는 중요한 한 걸음"이라고 표현한다. 방문 이외의 행동(무엇을 클릭·시청하는지)을 얼마나 정교하게 모델링하는지도 원문에서 확인해야 한다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구조를 직접 확인하지 못해, 초록이 제시하는 흐름(동기 → 기존 한계 → 모델 → 학습 → 시뮬레이션 → 실험)을 따라 재구성했습니다.</p>
+
+<h3>1. 동기 — 모델 하나가 아니라 생태계를 평가해야 한다</h3>
+<p>Netflix 같은 서비스의 홈 화면은 후보 생성, 랭킹, 행(row) 선택, 아트워크 선택 등 여러 모델이 함께 만든다. 한 모델의 오프라인 지표(예: NDCG)가 좋아져도, 사용자가 실제로 더 자주 돌아오는지는 다른 모델들과의 상호작용, 그리고 시간에 걸친 피드백 루프에 달려 있다.</p>
+<p>장기 지표(재방문, 리텐션)를 온라인 A/B로만 확인하면 몇 주에서 몇 달이 걸리고 비용도 크다. 그래서 실제 시스템을 "다루기 쉽고 해석 가능한" 형태로 근사한 시뮬레이터가 있으면, 후보 정책을 미리 걸러 내거나 하이퍼파라미터를 오프라인에서 고를 수 있다. 이것이 저자들이 말하는 시뮬레이션의 역할이다.</p>
+
+<h3>2. 기존 방법의 한계</h3>
+<p>추천 시뮬레이터 계열 연구(예: 규칙 기반 사용자 모델을 손으로 설계하는 환경, 로그로 사용자 응답 모델을 학습하는 환경)는 대개 한 세션 안의 클릭·시청 같은 <i>즉각 반응</i>에 초점을 둔다. 초록이 지적하는 빈틈은 세 가지 요소의 상호작용이다.</p>
+<ul>
+<li><b>사용자 이력</b>: 과거에 얼마나 자주, 언제 왔는지.</li>
+<li><b>추천 품질</b>: 각 방문에서 받은 추천이 얼마나 좋았는지.</li>
+<li><b>이후 방문</b>: 그 결과로 다음에 언제 돌아오는지.</li>
+</ul>
+<p>이 세 가지가 고리를 이루지 않으면, 시뮬레이터는 "추천을 바꿔도 사용자가 똑같은 빈도로 온다"고 가정하게 된다. 그러면 장기 효과를 평가할 수 없다.</p>
+
+<h3>3. 모델 — 방문을 Poisson 과정으로</h3>
+<p>Poisson 과정은 시간 축 위에 사건이 무작위로 찍히는 모델이다. 핵심은 <b>강도 함수</b> \(\lambda(t)\)로, 아주 짧은 구간 \([t, t+dt)\)에 사건이 일어날 확률이 대략 \(\lambda(t)\,dt\)라는 뜻이다. 강도가 시간과 상태에 따라 변하면 비균질(inhomogeneous) Poisson 과정이 된다.</p>
+<p>Accordion 같은 방문 모델의 표준 정식화는 사용자 \(u\)의 방문 강도를 다음처럼 두는 것이다.</p>
+\[ \lambda_u(t) = \exp\!\Big( \mathbf{w}^\top \phi\big(\mathbf{x}_u,\ \mathcal{H}_u(t),\ q_u(t)\big) \Big) \]
+<ul>
+<li>\(\mathbf{x}_u\): 사용자 고정 특징(가입 기간, 국가 등).</li>
+<li>\(\mathcal{H}_u(t)\): 시각 \(t\) 이전의 방문 이력(마지막 방문 이후 경과 시간, 최근 방문 횟수 등).</li>
+<li>\(q_u(t)\): 직전 방문들에서 받은 추천의 품질을 요약한 값. 추천 정책이 바뀌면 이 값이 바뀌고, 그것이 미래 방문 강도로 전파된다.</li>
+<li>\(\phi\), \(\mathbf{w}\): 특징 변환과 학습할 가중치. \(\exp\)는 강도를 양수로 유지한다.</li>
+</ul>
+<p>논문이 강도를 정확히 어떤 함수(선형, 신경망, 시간 구간별 상수 등)로 매개변수화했는지는 논문 참조. 중요한 점은 <b>추천 품질이 강도의 입력</b>이라는 구조다. 이 덕분에 "추천 → 방문" 인과 경로가 모델에 들어간다.</p>
+
+<h3>4. 학습 — 최대우도</h3>
+<p>관측 구간 \([0, T]\)에서 사용자 \(u\)의 방문 시각이 \(t_1, \dots, t_n\)이면, 점 과정의 로그우도는 다음과 같다.</p>
+\[ \log L_u = \sum_{i=1}^{n} \log \lambda_u(t_i) \;-\; \int_0^T \lambda_u(t)\, dt \]
+<p>첫째 항은 실제로 방문한 시점에서 강도가 높기를, 둘째 항(적분)은 방문하지 않은 시간 전체에서 강도가 낮기를 요구한다. 이 둘이 서로 당기며 "언제 올지"를 맞추게 된다. 적분 항은 강도가 복잡하면 닫힌 꼴이 없어 구간 분할이나 몬테카를로로 근사해야 한다. 대규모 로그에서 이를 효율적으로 처리하는 것이 실무상 어려운 부분이며, 초록이 "새 학습 방법"을 언급하는 지점도 이와 관련 있을 것으로 보인다(구체 기법은 논문 참조).</p>
+<p>또 하나의 어려움은 로그가 기존 정책 아래에서만 수집된다는 점이다. 추천 품질 \(q\)의 분포가 좁으면 "품질이 바뀌면 방문이 어떻게 바뀌는가"를 추정하기 어렵다. 이는 off-policy 문제와 같은 뿌리를 가진다.</p>
+
+<h3>5. 시뮬레이션 — 방문과 추천을 번갈아 생성</h3>
+<p>학습된 강도로 미래를 생성하는 절차는 개념적으로 다음 루프다.</p>
+<ol>
+<li>현재 상태로 강도 \(\lambda_u(t)\)를 계산하고, 다음 방문 시각을 샘플링한다.</li>
+<li>방문 시점에 평가하려는 추천 정책을 실행해 추천 목록을 만든다.</li>
+<li>사용자 반응을 생성하고 추천 품질 \(q_u\)를 갱신한다.</li>
+<li>이력과 품질이 바뀌었으니 강도를 다시 계산하고 1로 돌아간다.</li>
+</ol>
+<p>강도가 시간에 따라 변하는 Poisson 과정에서 표본을 뽑는 고전적 방법은 <b>thinning</b>(Lewis–Shedler)이다. 상한 \(\bar\lambda \ge \lambda(t)\)로 균질 Poisson 사건을 먼저 뽑고, 각 후보를 확률 \(\lambda(t)/\bar\lambda\)로 채택한다. Accordion이 정확히 어떤 샘플링 절차를 쓰는지, 수백만 사용자 규모에서 어떻게 확장했는지는 논문 참조. 이름 "Accordion"은 방문 간격이 추천 품질에 따라 아코디언처럼 늘었다 줄었다 하는 모습을 연상시키지만, 작명 의도는 원문에서 확인하지 못했다.</p>
+
+<h3>6. 실험 — "시뮬레이터가 정책 차이에 반응하는가"</h3>
+<p>초록이 밝히는 실험 설정은 다음과 같다.</p>
+<ul>
+<li><b>데이터</b>: 실제 인터랙티브 시스템의 데이터셋 2개. 데이터셋 이름·규모는 논문 참조(저자 소속을 보면 산업 데이터가 포함됐을 가능성이 있지만 확인하지 못했다).</li>
+<li><b>비교 대상</b>: 이력·추천 품질·방문의 상호작용을 온전히 담지 못하는 기존 시뮬레이션 방법들(구체 목록은 논문 참조).</li>
+<li><b>평가 과제 1 — 하이퍼파라미터 튜닝</b>: 추천 모델의 하이퍼파라미터를 바꿨을 때 시뮬레이터가 내는 장기 지표가 그에 맞게 달라지는지 본다. 시뮬레이터 출력이 평평하면 튜닝 도구로 쓸 수 없다.</li>
+<li><b>평가 과제 2 — 오프라인 A/B 테스트</b>: 두 정책을 시뮬레이터 안에서 맞붙였을 때 차이를 구분해 내는지 본다.</li>
+</ul>
+<p><b>결과</b>: 두 과제 모두에서 Accordion이 비교 방법보다 더 큰 민감도를 보였다. 저자들의 해석은, 추천 품질이 방문 강도에 들어가 있기 때문에 정책 변화가 방문 빈도라는 장기 신호로 전파되고, 그 결과 시뮬레이터가 정책 간 차이를 드러낸다는 것이다. 정확한 지표와 수치는 논문 참조.</p>
+
+<h3>7. 결론</h3>
+<p>Accordion은 방문 패턴을 Poisson 과정으로 다루는 학습형 시뮬레이터로, 대규모 데이터로 학습할 수 있고 새 정책을 넣어 장기 경로를 생성할 수 있다. 저자들은 이것을 현실적인 과제 지향 추천 시뮬레이터를 향한 중요한 단계로 본다. 실무 관점에서 보면, 이 논문은 "오프라인 지표는 좋은데 리텐션은 안 움직인다"는 고질적 간극을 시뮬레이션으로 메우려는 시도다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>점 과정(point process)</b>: 시간(또는 공간) 위에 흩어진 사건들의 확률 모델. 방문·구매·클릭 시각처럼 "언제 일어났는가"가 핵심인 데이터에 쓴다.</li>
+<li><b>Poisson 과정</b>: 겹치지 않는 구간의 사건 수가 서로 독립이고, 구간 안의 사건 수가 Poisson 분포를 따르는 점 과정. 강도가 상수면 균질, 시간·상태에 따라 변하면 비균질이다.</li>
+<li><b>강도 함수 \(\lambda(t)\)</b>: 단위 시간당 사건 발생률. 방문 모델에서는 "지금 이 사용자가 들어올 가능성의 속도"로 해석한다.</li>
+<li><b>Thinning</b>: 비균질 Poisson 과정을 샘플링하는 방법. 상한 강도로 후보 사건을 많이 뽑은 뒤, 실제 강도 비율로 일부만 남긴다.</li>
+<li><b>Hawkes 과정</b>: 과거 사건이 미래 강도를 높이는 자기 흥분형 점 과정. 이력이 강도에 들어간다는 점에서 Accordion 계열 모델의 가까운 친척이다.</li>
+<li><b>오프라인 A/B 테스트</b>: 실제 사용자에게 노출하지 않고 로그나 시뮬레이터로 두 정책의 성과를 비교하는 것. Off-policy 평가와 시뮬레이션이 대표적 수단이다.</li>
+<li><b>피드백 루프</b>: 추천이 사용자 행동을 바꾸고, 그 행동이 다시 학습 데이터가 되어 다음 추천을 바꾸는 순환. 장기 효과 평가가 어려운 근본 원인이다.</li>
+<li><b>리텐션·재방문 지표</b>: 사용자가 얼마나 자주, 얼마나 오래 서비스로 돌아오는가. 구독형 서비스의 핵심 사업 지표이지만 반응이 느리고 잡음이 크다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] Accordion이 사용자 방문을 모델링하는 확률 과정은? (a) Markov 결정 과정 (b) Poisson 과정 (c) Gaussian 과정 (d) Dirichlet 과정
+<details><summary>정답 보기</summary>(b) Poisson 과정. 방문을 시간 위의 사건으로 보고 강도 함수로 모델링한다.</details></li>
+<li>[사실] 초록이 "기존 방법이 충분히 담지 못했다"고 지적하는 세 요소는?
+<details><summary>정답 보기</summary>사용자 이력, 추천 품질, 그 이후의 방문. 이 셋 사이의 상호작용이 빠지면 추천 변화가 장기 방문에 미치는 영향을 시뮬레이션할 수 없다.</details></li>
+<li>[사실] 실험에서 Accordion의 우위를 보인 두 가지 평가 과제는?
+<details><summary>정답 보기</summary>하이퍼파라미터 튜닝과 오프라인 A/B 테스트. 두 과제 모두에서 비교 방법보다 민감도가 높았다. 실험은 실제 인터랙티브 시스템 데이터셋 2개에서 했다.</details></li>
+<li>[원리] 강도 함수의 입력에 "직전 방문의 추천 품질"을 넣는 것이 왜 장기 효과 시뮬레이션의 핵심인가?
+<details><summary>정답 보기</summary>그래야 추천 정책 변화가 다음 방문 시각으로 전파되고, 바뀐 방문이 다시 다음 추천에 영향을 주는 고리가 생긴다. 이 입력이 없으면 정책을 바꿔도 방문 빈도는 그대로여서 리텐션 같은 장기 지표의 차이를 볼 수 없다.</details></li>
+<li>[원리] 점 과정 로그우도 \(\sum_i \log\lambda(t_i) - \int_0^T \lambda(t)dt\)에서 적분 항이 하는 역할은?
+<details><summary>정답 보기</summary>방문이 없었던 시간 전체에 걸쳐 강도가 높으면 벌점을 준다. 이 항이 없으면 강도를 무한히 키우는 것이 최적이 된다. 첫째 항(방문 시점의 강도를 높임)과 균형을 이뤄 "언제 오고 언제 안 오는지"를 함께 맞춘다.</details></li>
+<li>[원리] Thinning 샘플링 절차를 설명하고, 상한 \(\bar\lambda\)가 너무 크면 어떤 문제가 생기는지 말하라.
+<details><summary>정답 보기</summary>상한 강도 \(\bar\lambda\)로 균질 Poisson 후보 사건을 뽑고, 각 후보를 확률 \(\lambda(t)/\bar\lambda\)로 채택한다. 상한이 실제 강도보다 너무 크면 대부분의 후보가 버려져 계산이 낭비된다. 결과는 여전히 정확하지만 비효율적이다.</details></li>
+<li>[결과 해석] "하이퍼파라미터 튜닝에 대한 민감도가 높다"는 결과는 실무에서 무엇을 의미하는가?
+<details><summary>정답 보기</summary>추천 모델 설정을 바꾸면 시뮬레이터가 내는 장기 지표도 달라진다는 뜻이다. 그래야 시뮬레이터 안에서 하이퍼파라미터를 비교·선택할 수 있다. 출력이 설정과 무관하게 평평한 시뮬레이터는 튜닝 도구로 쓸모가 없다.</details></li>
+<li>[결과 해석] 민감도가 높다는 것만으로 시뮬레이터가 "정확하다"고 할 수 있는가?
+<details><summary>정답 보기</summary>아니다. 민감도는 시뮬레이터가 정책 차이에 반응한다는 필요조건일 뿐이다. 반응의 방향과 크기가 실제 온라인 A/B 결과와 일치하는지(정책 순위 일치, 효과 크기 보정 등)를 따로 검증해야 한다. 저자들도 이를 현실적 시뮬레이터로 가는 "한 걸음"이라고 표현한다.</details></li>
+<li>[비판] 기존 정책 로그만으로 강도 함수를 학습할 때 생기는 편향 문제를 설명하고 완화책을 제시하라.
+<details><summary>정답 보기</summary>로그 속 추천 품질은 기존 정책이 만든 좁은 범위에 몰려 있고, 품질이 높은 사용자는 원래 활동적인 사용자일 수 있다(교란). 그래서 품질→방문 효과가 과대·과소 추정될 수 있다. 완화책으로는 무작위 탐색 트래픽 활용, 성향 점수 가중, 사용자 고정효과로 활동성 통제, 과거 A/B 결과로 시뮬레이터를 보정·검증하는 방법이 있다.</details></li>
+<li>[적용] 국내 OTT/음악 서비스에서 Accordion 방식의 방문 시뮬레이터를 도입한다면, 추천 품질 \(q\)를 무엇으로 정의하고 어떻게 검증하겠는가?
+<details><summary>정답 보기</summary>예시 답: \(q\)는 방문 세션 안의 재생 시작률, 완주율, 추천 슬롯 클릭률 같은 즉각 지표로 정의한다. 검증은 (1) 과거 온라인 A/B 몇 건을 시뮬레이터로 재현해 리텐션 차이의 방향·크기가 맞는지 확인, (2) 홀드아웃 기간의 방문 간격 분포 적합도 점검, (3) 사용자 세그먼트(신규·휴면·헤비)별 보정 확인 순으로 한다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#15</b> Pessimistic Reward Models for Off-Policy Learning in Recommendation (2021) — 같은 topic(01). 로그 데이터만으로 정책을 평가·학습할 때의 편향을 다룬다.</li>
+<li><b>#35</b> Evaluating Off-Policy Evaluation: Sensitivity and Robustness (2021, Sony) — 같은 topic(01). 오프라인 평가 도구의 민감도·강건성을 평가한다는 문제의식이 겹친다.</li>
+<li><b>#56</b> Navigating the Feedback Loop in Recommender Systems: Insights and Strategies from Industry Practice (2023, Netflix) — Netflix 관점에서 추천 피드백 루프와 장기 효과를 다룬다.</li>
+<li><b>#37</b> Off-Policy Actor Critic for Recommender Systems (2022, Google) — 장기 보상을 최적화하는 off-policy 강화학습. 시뮬레이터 없이 같은 목표에 접근한다.</li>
+<li><b>#251</b> Lasso: Large Language Model-based User Simulator for Cross-Domain Recommendation (2025, Kuaishou) — LLM 기반 사용자 시뮬레이터. 학습형 시뮬레이터의 최근 방향과 비교해 볼 만하다.</li>
+</ul>
+</main>
+</body>
+</html>
