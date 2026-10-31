@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluating Off-Policy Evaluation: Sensitivity and Robustness</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-01</span></div>
+<h1>Evaluating Off-Policy Evaluation: Sensitivity and Robustness</h1>
+<p class="meta">Yuta Saito, Takuma Udagawa, Haruka Kiyohara, Kazuki Mogi, Yusuke Narita, Kei Tateno · RecSys 2021 Papers 트랙</p>
+<div class="chips"><span>2021</span><span>Sony</span><span>Off-Policy Evaluation</span><span>추정량 선택</span><span>강건성</span><span>CDF</span><span>CVaR</span><span>Open Bandit Dataset</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3460231.3474245">10.1145/3460231.3474245</a> · arXiv: <a href="https://arxiv.org/abs/2108.13703">2108.13703</a> (<a href="https://arxiv.org/pdf/2108.13703">PDF</a>, arXiv 제목 "Evaluating the Robustness of Off-Policy Evaluation") · 코드: <a href="https://github.com/sony/pyIEOE">sony/pyIEOE</a> · 수상: 없음 · 읽기 예상 13분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> OPE 추정량을 "하이퍼파라미터 하나·평가 정책 하나에서의 평균 MSE"로 비교하는 관행은 위험하므로, 설정을 무작위로 바꿔 가며 얻은 오차의 <i>분포(CDF)</i> 전체로 추정량을 비교하자는 실험 절차 IEOE를 제안한다.</p>
+<p><b>풀려는 문제.</b> DM, IPW, DR, Switch-DR, DRos 등 OPE 추정량은 많아졌지만, 대부분 보상 모델 \(\hat q\), clipping 임계값, cross-fitting 폴드 수 같은 하이퍼파라미터를 갖는다. 실무자는 로그 데이터만으로 이것을 튜닝하기 어렵고, 같은 추정량을 여러 후보 정책에 돌려야 한다. 그런데 논문들은 대개 한 설정에서의 평균 성능만 보고하므로 "어느 추정량이 안전한가"를 알 수 없다.</p>
+<p><b>핵심 아이디어.</b> 시드마다 하이퍼파라미터를 샘플러로 뽑고, 평가 정책을 균등하게 뽑고, 로그를 부트스트랩 재표본해서 제곱오차를 한 번 계산한다. 이를 수백~천 번 반복해 얻은 제곱오차들의 경험적 CDF를 그리고, AU-CDF·CVaR·표준편차 같은 요약 점수를 계산한다. 평균만 보면 사라지는 "최악의 경우 얼마나 틀리는가", "설정에 얼마나 흔들리는가"가 드러난다.</p>
+<p><b>주요 결과.</b> Open Bandit Dataset(ZOZOTOWN)에서 표본이 작을 때(\(n=30{,}000\))는 평균 기준으로 추정량들이 거의 구분되지 않지만, CVaR\(_{0.7}\)과 Std는 DM이 가장 안정적임을 보였다. 표본이 클 때(\(n=300{,}000\))는 IPWps가 모든 지표에서 최고였고 DM은 평균 기준 최고 대비 약 10.8배로 최악이었다. 실제 쿠폰 배분 실험(약 4만 명)에서는 하이퍼파라미터가 없는 SNIPW가 이진·연속 보상 모두에서 가장 안정적이어서, 해당 플랫폼이 SNIPW를 채택했다.</p>
+<p><b>한계와 남는 질문.</b> 실데이터에 적용하려면 서로 다른 정책으로 모은 로그가 최소 2개 필요하다(한 정책을 정답 측정용으로 써야 하므로). 또 "어느 추정량이 좋은가"는 데이터 크기·정책 간 겹침에 따라 뒤집히므로, IEOE는 정답을 주는 것이 아니라 <i>내 환경에서 직접 검증하는 절차</i>를 준다는 점을 기억해야 한다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 '추정량의 추정량'이 필요한가</h3>
+<p>추천·광고·정밀의료에서 쓰이는 밴딧/강화학습 정책은 로그를 남긴다. 이 로그로 새 정책을 평가하고 싶지만, 로그에는 <i>실제로 선택된</i> 행동의 결과만 있고, 기존 정책이 선호한 행동이 과대표집되어 있다. A/B 테스트는 편향이 없지만 느리고 사용자 경험을 해칠 수 있다. 그래서 로그만으로 새 정책의 성능을 추정하는 OPE가 주목받는다.</p>
+<p>문제는 추정량이 늘면서 생긴 새로운 고민이다. DM은 보상 회귀 모델을 무엇으로 쓸지 정해야 하는데, 밴딧 데이터에서는 그 회귀 모델의 정확도를 측정하기도 어렵다. Switch-DR이나 DRos처럼 정교한 추정량은 일부 실험에서 더 좋지만 튜닝할 손잡이가 더 많다. 선행 실증 연구들은 OPE 정확도가 하이퍼파라미터에 매우 민감하다고 시사한다.</p>
+<p>저자들은 기존 OPE 논문 대부분이 "하이퍼파라미터 한 세트 + 임의의 평가 정책 하나"로 실험하고, 시드만 바꿔 평균을 낸다고 지적한다. 이렇게 보고된 숫자는 성능 분포에서 뽑힌 확률변수 하나에 불과하므로 설정 변화에 대한 강건성을 알려 주지 못한다. 기여는 네 가지다: (1) 실험 절차 IEOE, (2) 오픈소스 pyIEOE, (3) 공개 데이터 벤치마크, (4) 실제 e-커머스 적용 사례.</p>
+
+<h3>2. OPE 설정과 기존 추정량</h3>
+<p>표준 contextual bandit을 가정한다. 문맥 \(x\sim p(x)\), 행동 \(a\in\mathcal A\), 보상 \(r\in[0,r_{\max}]\sim p(r\mid x,a)\)이며, 정책 \(\pi(a\mid x)\)는 문맥마다 행동 분포를 준다. 로그 \(\mathcal D=\{(x_i,a_i,r_i)\}_{i=1}^n\)은 행동 정책 \(\pi_b\)가 만들었다. 목표는 평가 정책 \(\pi_e\)의 정책 가치</p>
+\[ V(\pi_e)=\mathbb E_{p(x)\pi_e(a\mid x)p(r\mid x,a)}[r] \]
+<p>를 추정하는 것이다. 여기서 \(\mathbb E_n[\cdot]\)는 로그 \(n\)개에 대한 표본 평균, \(q(x,a)=\mathbb E[r\mid x,a]\)는 평균 보상 함수, \(\rho(x,a)=\pi_e(a\mid x)/\pi_b(a\mid x)\)는 중요도 가중치다. 추정량은 \(\hat V(\pi_e;\mathcal D,\theta)\)로 쓰는데, \(\theta\)가 이 논문의 주인공인 하이퍼파라미터 묶음이다.</p>
+<p><b>DM.</b> \(\hat q\)를 회귀로 학습한 뒤 \(\hat V_{\mathrm{DM}}=\mathbb E_n[\mathbb E_{a\sim\pi_e}[\hat q(x_i,a)]]\). 분산은 작지만 \(\hat q\)가 틀리면 그대로 편향이 된다.</p>
+<p><b>IPW와 IPWps.</b> \(\hat V_{\mathrm{IPW}}=\mathbb E_n[\rho(x_i,a_i)r_i]\)는 \(\pi_b\)를 알면 불편이지만 두 정책이 다를수록 분산이 커진다. 가중치를 \(\min\{\rho,\lambda\}\)로 자르면 분산을 줄이는 대신 편향이 생기며, Su et al.의 용어로 이를 pessimistic shrinkage(IPWps)라 부른다. \(\lambda=\infty\)면 원래 IPW다.</p>
+<p><b>DR과 DRps.</b> DM 값을 기준선으로 두고 잔차 \(r_i-\hat q(x_i,a_i)\)만 가중해 더한다.</p>
+\[ \hat V_{\mathrm{DR}}=\mathbb E_n\big[\mathbb E_{a\sim\pi_e}[\hat q(x_i,a)]+\rho(x_i,a_i)\,(r_i-\hat q(x_i,a_i))\big] \]
+<p>\(\hat q\)가 control variate 역할을 해 IPW보다 분산이 작고, 가중치와 보상 모델 중 하나만 정확해도 일치성을 갖는다(doubly robust). 여기에도 clipping을 붙이면 DRps다.</p>
+<p><b>자기정규화(SNIPW, SNDR).</b> \(\hat V_{\mathrm{SNIPW}}=\mathbb E_n[\rho r]/\mathbb E_n[\rho]\). 분모로 나누기 때문에 추정값이 보상 범위를 벗어나지 않고 더 안정적이다. 진짜 \(\pi_b\)를 알면 하이퍼파라미터가 하나도 없다는 점이 뒤에서 중요해진다. SNDR은 DR의 보정항에 같은 정규화를 적용한다.</p>
+<p><b>Switch-DR.</b> 가중치가 \(\tau\) 이하인 표본에만 보정항을 쓰고, 큰 가중치에서는 DM으로 전환한다. \(\tau=0\)이면 DM, \(\tau\to\infty\)면 DR.</p>
+<p><b>DRos.</b> MSE 상한을 최소화하도록 설계된 가중치 \(\hat\rho(x,a;\lambda)=\frac{\lambda}{\rho^2+\lambda}\rho\)를 쓴다. \(\lambda=0\)이면 DM, \(\lambda\to\infty\)면 DR. 큰 \(\rho\)일수록 더 많이 줄어드는 '부드러운' 축소다.</p>
+<p><b>Cross-fitting.</b> \(\hat q\)를 같은 데이터로 학습·평가하면 과적합 편향이 생기므로, 데이터를 \(K\)개 폴드로 나눠 각 폴드의 추정에는 나머지 폴드로 학습한 \(\hat q_k\)를 쓰고 평균낸다. \(K\)도 하이퍼파라미터다.</p>
+<p><b>하이퍼파라미터 튜닝.</b> Su et al.(2020)의 방식대로 \(\hat\theta\in\arg\min_\theta \mathrm{BiasUB}(\theta;\mathcal D)^2+\mathcal V_n(\theta;\mathcal D)\), 즉 "추정된 편향 상한의 제곱 + 표본 분산"을 최소화한다. 편향 상한은 수정된 가중치와 원래 가중치 차이에 잔차를 곱한 평균의 절댓값에, 신뢰수준 \(\delta\)와 최대 가중치 \(\rho_{\max}\)에 의존하는 집중부등식 항을 더한 형태다. 정리하면, 표1의 하이퍼파라미터는 DM이 \(\hat q, K\), IPWps가 \(\lambda\), SNIPW는 없음(\(\pi_b\)를 모르면 \(\hat\pi_b\)), DR 계열은 \(\hat q, K\)에 각자의 \(\lambda\) 또는 \(\tau\)를 더한 것이다.</p>
+
+<h3>3. 오프라인 평가를 평가하기 — 현재 관행의 문제</h3>
+<p>표준 지표는</p>
+\[ \mathrm{MSE}(\hat V;\pi_e,\theta)=\mathbb E_{\mathcal D}\big[(V(\pi_e)-\hat V(\pi_e;\mathcal D,\theta))^2\big] \]
+<p>이다. 저자들은 일부러 \(\pi_e\)와 \(\theta\)를 인자로 적어, 이 값이 특정 정책·특정 하이퍼파라미터에 묶인 숫자임을 강조한다. 실무에서 원하는 것은 "튜닝을 크게 하지 않아도, 여러 후보 정책에 대해 대체로 잘 맞는" 추정량이다. 좁은 설정에서만 잘 되는 추정량은 실제 적용에서 실패할 위험이 크다.</p>
+
+<h3>4. IEOE — 성능의 분포를 본다</h3>
+<p>추정량의 성능 지표(예: 제곱오차)를 확률변수 \(Z\)로 보고, 그 CDF \(F_Z(z)=P(Z\le z)\)를 추정한다. \(m\)개의 실현값 \(z_1,\dots,z_m\)이 있으면</p>
+\[ \hat F_Z(z)=\frac1m\sum_{i=1}^m \mathbb I\{z_i\le z\} \]
+<p>이다. 곡선이 왼쪽 위로 붙을수록 "작은 오차를 높은 확률로" 달성한다는 뜻이다. 이 아이디어는 강화학습 알고리즘 평가에서 CDF 기반 분석을 쓴 선행 연구에서 가져왔다.</p>
+<p>요약 점수는 세 가지를 쓴다.</p>
+<ul>
+<li><b>AU-CDF</b> \(=\int_0^{z_{\max}}F_Z(z)\,dz\): 오차 \(z_{\max}\) 이하 구간에서 CDF 아래 넓이. 클수록 좋다. \(z_{\max}\) 선택에 따라 값이 달라진다.</li>
+<li><b>CVaR\(_\alpha\)</b> \(=\mathbb E[Z\mid Z\ge F_Z^{-1}(\alpha)]\): 상위(나쁜 쪽) \(100(1-\alpha)\)% 시행의 평균 오차. CVaR\(_{0.7}\)은 최악 30%의 평균이다. 작을수록 좋다.</li>
+<li><b>Std</b>: 오차의 표준편차. 설정 변화에 얼마나 흔들리는지 보여 준다.</li>
+</ul>
+<p><b>알고리즘 1(합성·분류 데이터).</b> 입력은 로그 \(\mathcal D\), 하이퍼파라미터 후보 공간 \(\Theta\), 평가 정책 집합 \(\Pi_e\), 하이퍼파라미터 샘플러 \(\phi\), 시드 집합 \(\mathcal S\). 시드마다 ① \(\theta\leftarrow\phi(\Theta;s)\), ② \(\pi_e\)를 균등 추출, ③ \(\mathcal D\)를 복원추출해 \(\mathcal D^*\) 생성, ④ 제곱오차 계산. 샘플러 \(\phi\)는 목적에 따라 고른다. 실무자가 2장의 튜닝법을 쓸 것이라면 그것을 \(\phi\)로 쓰고, 튜닝 비용이나 과적합이 걱정되면 보수적으로 균등분포를 쓴다.</p>
+<p><b>알고리즘 2(실데이터).</b> 실데이터에는 정답 정책 가치가 없으므로, 서로 다른 정책 \(\pi_1,\dots,\pi_\ell\)로 각각 모은 로그 \(\mathcal D_1,\dots,\mathcal D_\ell\)을 이용한다. 평가 정책으로 \(\pi_j\)를 뽑으면 \(\mathcal D_j\)는 테스트셋, 나머지의 합집합은 OPE용 평가셋이 된다. 테스트셋의 단순 평균 보상 \(V_{\mathrm{on}}(\pi_j;\mathcal D_{te})=\mathbb E_n[r_i]\)을 on-policy 정답으로 삼고, 평가셋을 부트스트랩해 추정한 값과의 제곱오차를 기록한다.</p>
+\[ z=\big(V_{\mathrm{on}}(\pi_j;\mathcal D_{te})-\hat V(\pi_j;\theta,\mathcal D^*_{ev})\big)^2 \]
+
+<h3>5. Open Bandit Dataset 실험</h3>
+<p><b>데이터.</b> 패션 e-커머스(ZOZOTOWN)에서 모은 OBD의 "ALL" 캠페인에서 3만 건, 30만 건을 무작위 추출했다. 문맥은 20차원, 행동(추천 아이템)은 80개, 보상은 클릭 여부다. OBD에는 균등 랜덤 정책 \(\pi_A\)와 Bernoulli Thompson Sampling 정책 \(\pi_B\)가 각각 모은 로그가 있어 알고리즘 2를 바로 적용할 수 있다.</p>
+<p><b>추정량과 탐색 공간.</b> DM, IPWps, SNIPW, DRps, SNDR, Switch-DR, DRos 7종. 진짜 행동 정책 확률을 쓰므로 SNIPW는 하이퍼파라미터가 없다. \(\hat q\)는 LR/RR, RandomForest, LightGBM 중에서, \(K\in\{1,\dots,5\}\)(1은 cross-fitting 안 함), \(\lambda,\tau\in\{1,5,10,50,\dots,10^5,\infty\}\). \(\lambda,\tau\)는 2장의 튜닝법으로, \(\hat q\)의 내부 하이퍼파라미터는 scikit-learn RandomizedSearchCV(n_iter=5)로 정했다. 시드는 500개.</p>
+<p><b>결과(표 4, 최고값으로 나눈 정규화 점수).</b></p>
+<table>
+<tr><th>추정량</th><th>n=3만 Mean</th><th>n=3만 CVaR<sub>0.7</sub></th><th>n=30만 Mean</th><th>n=30만 CVaR<sub>0.7</sub></th></tr>
+<tr><td>DM</td><td>1.00</td><td>1.00</td><td>10.77 (최악)</td><td>7.45 (최악)</td></tr>
+<tr><td>IPWps</td><td>1.02</td><td>1.19</td><td>1.00</td><td>1.00</td></tr>
+<tr><td>SNIPW</td><td>1.02</td><td>1.20</td><td>1.58</td><td>1.57</td></tr>
+<tr><td>DRps</td><td>1.04</td><td>1.27</td><td>2.48</td><td>2.67</td></tr>
+<tr><td>SNDR / Switch-DR / DRos</td><td>1.02</td><td>1.27</td><td>약 3.3</td><td>3.50</td></tr>
+</table>
+<p>작은 표본에서는 평균 제곱오차가 1.00~1.04 사이로 사실상 구별되지 않는다. 그러나 CVaR과 Std는 DM이 가장 낮다. CDF를 보면 더 세밀한데, DM은 최악의 경우에 강하고 다른 추정량들은 제곱오차가 작은 구간(0.2 아래, 정규화 축 기준)에서 더 낫다. 따라서 최악을 피하고 싶다면 DM, 그렇지 않다면 다른 추정량이 답이 될 수 있다. 평균만 보면 얻을 수 없는 판단이다.</p>
+<p>큰 표본에서는 그림이 뒤집힌다. IPWps가 CDF 전 구간에서 앞서고 SNIPW가 2위, 보상 모델에 의존하는 추정량들은 뒤처지며 DM은 최악이다. 저자들의 해석: 적절한 추정량은 데이터 크기 같은 상황에 따라 크게 바뀌므로, OPE를 하기 전에 내 환경에서 추정량을 먼저 고르는 절차가 필수다.</p>
+
+<h3>6. 실제 적용 — 쿠폰 배분 정책</h3>
+<p>2020년 9월, 한 e-커머스 플랫폼에서 세 정책 \(\pi_A,\pi_B,\pi_C\)를 사용자에게 무작위 배정해 데이터를 모았다. 행동은 쿠폰 4종 중 하나, 보상은 (a) 콘텐츠 소비 여부(이진) 또는 (b) 배정 후 7일간 매출(연속). 전체 39,687명이며 각 로그는 약 1/3씩이다. 데이터가 크지 않아 과도한 튜닝이 과적합을 부를 수 있고, 여러 후보 정책을 평가해야 하므로 "하이퍼파라미터가 적고 여러 정책에 안정적인" 추정량을 찾는 것이 목표였다.</p>
+<p>세 정책 중 하나를 평가 정책(테스트셋)으로, 나머지 둘을 행동 정책 로그로 쓰는 알고리즘 2를 적용했다. \(\lambda,\tau\)는 튜닝법으로, \(\hat q\) 하이퍼파라미터는 균등 샘플링으로 정했고 시드는 1,000개.</p>
+<p><b>결과(표 5).</b> 이진 보상에서 SNIPW는 사실상 전 구간에서 최고다. 정규화 Mean으로 SNIPW 1.00에 비해 SNDR 7.45, DR 계열 8.16, DM 8.70, IPWps 29.45였고, CVaR\(_{0.7}\)도 SNIPW 1.00, IPWps 31.96(최악)이었다. 연속 보상에서는 AU-CDF 1위가 DM이었지만(SNIPW 2위), CVaR과 Std는 SNIPW가 최고였다. IPWps는 두 보상 모두에서 최악이었는데, 데이터가 작고 일부 행동 정책이 거의 결정적이어서 가중치가 매우 불안정했기 때문이다. Switch-DR도 \(\tau\)를 튜닝했는데도 정확하지 않았다.</p>
+<p>결론적으로 저자들은 최악의 경우 성능이 가장 좋고 하이퍼파라미터가 없어 과적합 위험이 낮은 SNIPW를 권했고, 해당 플랫폼은 검증 후 실제로 SNIPW로 쿠폰 정책을 개선하고 있다고 보고한다. 5장에서 IPWps가 1위였던 것과 정반대라는 점이 이 논문의 메시지를 잘 보여 준다.</p>
+
+<h3>7. 결론과 한계</h3>
+<p>평균 MSE 하나로는 강건성을 알 수 없고, IEOE는 하이퍼파라미터·평가 정책 변화에 대한 민감도를 해석 가능한 형태로 보여 준다. 한계로는 실데이터 적용 시 서로 다른 정책의 로그가 2개 이상 필요하다는 점을 들며, 단일 정책 로그만으로 추정량을 평가하는 절차를 후속 과제로 남긴다.</p>
+
+<h3>부록 A — 분류 데이터 벤치마크</h3>
+<p>UCI의 OptDigits(5,620개, 10클래스, 64차원), PenDigits(10,992개, 10클래스, 16차원), SatImage(6,435개, 6클래스, 36차원)를 밴딧 데이터로 바꿨다. 분류기 \(\pi_{det}\)와 균등 정책을 \(\pi(a\mid x)=\alpha\,\mathbb I\{\pi_{det}(x)=a\}+(1-\alpha)\pi_u(a)\)로 섞어 확률적 정책을 만들고, 맞히면 보상 1을 준다. 행동 정책은 LR에 \(\alpha=0.9\), 평가 정책은 LR/RF와 \(\alpha\in\{0.8,0.2\}\) 조합 4개와 균등 랜덤 1개다.</p>
+<p><b>진짜 \(\pi_b\)를 아는 경우(표 8):</b> IPWps가 세 데이터셋 모두 1위, SNIPW가 2위. DM은 최악으로, OptDigits에서 CVaR\(_{0.7}\)이 최고 대비 2,215배였다. 저자들은 \(\hat q\)의 편향이 클 때 모델 의존 추정량이 무너지며, 행동 정책이 기록되어 있다면 단순하고 손잡이가 적은 추정량이 넓은 설정에서 강건할 가능성을 제기한다.</p>
+<p><b>\(\pi_b\)를 추정하는 경우(표 9):</b> 여전히 IPWps가 최고다. 반면 DRps·Switch-DR·DRos는 오차가 폭발한다(예: PenDigits CVaR\(_{0.7}\) 약 1,527배, SatImage에서는 \(5.27\times10^7\)배). 추정된 행동 확률이 과적합으로 \(10^{-7}\)까지 내려가면 가중치가 커지고, 그 가중치가 \(\hat q\)의 오차를 증폭시키기 때문이다. \(\lambda,\tau\)를 튜닝했는데도 막지 못했다. 행동 정책 추정에는 CalibratedClassifierCV를 썼다(캘리브레이션이 OPE에 중요하다는 선행 연구에 근거).</p>
+
+<h3>부록 B — pyIEOE</h3>
+<p>OpenBanditPipeline(obp)과 함께 쓰도록 만든 패키지다. <code>InterpretableOPEEvaluator</code>에 시드 목록, 로그, (정답 가치, 행동 분포) 쌍으로 된 평가 정책들, 추정량, 회귀 모델과 각 하이퍼파라미터 공간을 넘기고, <code>estimate_policy_value()</code> → <code>visualize_cdf_aggregate()</code>로 CDF를 그린다. <code>calculate_au_cdf_score</code>, <code>calculate_cvar_score</code>로 요약 점수도 얻는다. 저자들은 준비 과정을 빼면 핵심은 네 줄 정도라고 설명한다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Off-Policy Evaluation(OPE).</b> 다른 정책(행동 정책)이 남긴 로그만으로 새 정책의 기대 보상을 추정하는 문제. 관측되지 않은 반사실적 결과를 다뤄야 하므로 인과추론 문제이기도 하다.</p>
+<p><b>행동 정책 / 평가 정책.</b> \(\pi_b\)는 로그를 만든 정책, \(\pi_e\)는 성능을 알고 싶은 후보 정책. 두 정책의 행동 분포가 겹칠수록(overlap) OPE가 쉽다.</p>
+<p><b>중요도 가중치.</b> \(\rho=\pi_e/\pi_b\). 로그의 표본을 \(\pi_e\)가 뽑았을 확률로 재가중해 분포 차이를 보정한다. \(\pi_b\)가 작은 행동에서 값이 폭발해 분산의 원인이 된다.</p>
+<p><b>편향-분산 트레이드오프와 shrinkage.</b> 가중치를 자르거나(pessimistic) 부드럽게 줄이면(optimistic, DRos) 분산은 줄고 편향은 는다. \(\lambda,\tau\)가 그 균형을 정하는 손잡이다.</p>
+<p><b>Doubly Robust.</b> 보상 모델 예측에 IPW로 가중한 잔차를 더하는 추정량. 보상 모델이나 가중치 중 하나만 맞아도 일치성을 갖지만, 둘 다 틀리면(특히 추정된 \(\pi_b\)가 극단적이면) 오히려 크게 틀릴 수 있다.</p>
+<p><b>자기정규화(Self-normalization).</b> 가중치 합으로 나눠 추정값을 보상 범위 안에 묶는 기법. 약간의 편향을 대가로 안정성을 얻으며, 하이퍼파라미터가 없다.</p>
+<p><b>Cross-fitting.</b> 보상 모델 학습 데이터와 추정에 쓰는 데이터를 폴드로 분리해 과적합 편향을 줄이는 방법. Double ML 문헌에서 널리 쓰인다.</p>
+<p><b>경험적 CDF.</b> 관측값 중 \(z\) 이하의 비율로 만든 계단 함수. 평균·분산이 놓치는 분포 모양(꼬리, 이봉성)을 그대로 보여 준다.</p>
+<p><b>CVaR(Conditional Value-at-Risk).</b> 금융 리스크 지표로, 분위수 \(\alpha\)를 넘는 나쁜 결과들의 평균. 여기서는 "최악 30% 시행의 평균 제곱오차"처럼 꼬리 위험을 재는 데 쓴다.</p>
+<p><b>Open Bandit Dataset.</b> ZOZOTOWN 패션 추천에서 균등 랜덤과 Thompson Sampling 두 정책으로 수집해 공개한 대규모 로그. 정책별 로그가 있어 on-policy 정답과 OPE 추정치를 비교할 수 있다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실, 객관식) 이 논문이 OPE 추정량을 비교하는 핵심 대상은? ① 평균 MSE ② 제곱오차의 경험적 CDF ③ 정책 가치의 신뢰구간 ④ 추정량의 계산 시간
+<details><summary>정답 보기</summary>② 하이퍼파라미터·평가 정책·부트스트랩 표본을 바꿔 가며 얻은 제곱오차의 CDF를 그리고, AU-CDF·CVaR·Std로 요약한다.</details></li>
+<li>(사실) Open Bandit Dataset 실험의 문맥 차원, 행동 수, 보상 형태는?
+<details><summary>정답 보기</summary>문맥 20차원, 행동(아이템) 80개, 보상은 클릭 여부(0/1). "ALL" 캠페인에서 3만·30만 건을 추출했다.</details></li>
+<li>(사실, 객관식) 실제 쿠폰 사례에서 최종 채택된 추정량은? ① DM ② IPWps ③ SNIPW ④ DRos
+<details><summary>정답 보기</summary>③ SNIPW. 이진·연속 보상 모두에서 CVaR<sub>0.7</sub>와 Std가 가장 좋았고 하이퍼파라미터가 없다.</details></li>
+<li>(원리) 알고리즘 2에서 실데이터의 "정답" 정책 가치를 어떻게 얻는가? 왜 로그가 최소 2개 필요한가?
+<details><summary>정답 보기</summary>평가 정책 \(\pi_j\)가 직접 모은 로그 \(\mathcal D_j\)의 평균 보상을 on-policy 정답으로 쓰고, 다른 정책들의 로그로 OPE를 한다. 정답용 로그와 OPE용 로그를 서로 다른 정책에서 얻어야 하므로 최소 2개가 필요하다.</details></li>
+<li>(원리) 하이퍼파라미터 샘플러 \(\phi\)로 튜닝법 대신 균등분포를 쓰는 것은 어떤 상황을 가정한 것인가?
+<details><summary>정답 보기</summary>실무에서 튜닝 비용이 크거나 과적합 위험 때문에 정교한 튜닝을 못 하는 상황. 아무 설정이나 골라도 괜찮은지를 보는 보수적 평가가 된다.</details></li>
+<li>(원리) Switch-DR과 DRos는 각각 어떤 극한에서 DM과 DR이 되는가? 둘의 축소 방식 차이는?
+<details><summary>정답 보기</summary>Switch-DR은 \(\tau=0\)에서 DM, \(\tau\to\infty\)에서 DR. 가중치가 \(\tau\)를 넘는 표본의 보정항을 통째로 버리는 경성(hard) 전환이다. DRos는 \(\lambda=0\)에서 DM, \(\lambda\to\infty\)에서 DR이며, \(\hat\rho=\lambda\rho/(\rho^2+\lambda)\)로 큰 가중치를 연속적으로 줄인다.</details></li>
+<li>(결과 해석) OBD에서 \(n=30{,}000\)일 때 평균은 비슷했는데 왜 DM을 "보수적 선택"이라 했나?
+<details><summary>정답 보기</summary>평균 제곱오차는 1.00~1.04로 거의 같지만, DM은 CVaR<sub>0.7</sub>과 Std가 가장 낮아 최악의 경우에 덜 틀린다. 반면 다른 추정량은 오차가 작은 구간에서는 더 좋았다. 꼬리 위험을 중시하면 DM이 맞다.</details></li>
+<li>(결과 해석) 부록 A에서 행동 정책을 추정하자 DR 계열이 폭발한 이유는?
+<details><summary>정답 보기</summary>추정된 \(\hat\pi_b\)가 과적합해 일부 행동 확률을 \(10^{-7}\) 수준까지 낮게 내놓았고, 그 역수인 가중치가 거대해져 \(\hat q\)의 잔차 오차를 증폭했다. clipping 임계값을 튜닝해도 막지 못했다.</details></li>
+<li>(비판) AU-CDF는 \(z_{\max}\)에 의존한다. 이 선택이 결론을 어떻게 바꿀 수 있으며, 어떻게 보완하겠는가?
+<details><summary>정답 보기</summary>\(z_{\max}\)를 작게 잡으면 오차가 작은 구간의 성능만, 크게 잡으면 꼬리까지 반영된다. 실제로 OBD 소표본에서는 구간별 우열이 달랐다. 여러 \(z_{\max}\)에서 점수를 보거나, CVaR·CDF 그림을 함께 보고, 서비스에서 허용 가능한 오차 수준을 기준으로 \(z_{\max}\)를 정하는 것이 바람직하다.</details></li>
+<li>(적용) 우리 서비스에 정책 로그가 하나뿐이다. IEOE의 정신을 살려 추정량을 고르려면?
+<details><summary>정답 보기</summary>예시 답안: (1) 실데이터 특성(행동 수, 문맥 분포, 행동 정책의 결정성)을 흉내 낸 합성/반합성 데이터로 알고리즘 1을 돌린다. (2) 로그의 일부를 다른 정책으로 '재샘플링'해 가짜 평가 정책을 만들고 정답을 근사한다. (3) 작은 규모의 무작위 탐색 트래픽을 확보해 두 번째 로그를 만든다. 어느 경우든 평균이 아니라 CVaR·Std를 함께 보고, 하이퍼파라미터가 적은 SNIPW 같은 추정량을 기본 후보로 둔다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#15</b> Pessimistic Reward Models for Off-Policy Learning in Recommendation — 같은 OPE/OPL 계열. 보상 모델의 불확실성을 비관적으로 다룬다는 점에서 DM·DR의 보상 모델 문제와 연결된다. (<a href="015-pessimistic-reward-models.html">페이지</a>)</li>
+<li><b>#34</b> Accordion: A Trainable Simulator for Long-Term Interactive Systems — OPE의 대안인 시뮬레이션 기반 오프라인 평가. (<a href="034-accordion-trainable-simulator.html">페이지</a>)</li>
+<li><b>#45</b> Off-Policy Evaluation of Candidate Generators in Two-Stage Recommender Systems — 실제 2단계 추천 구조에 OPE를 적용하는 문제.</li>
+<li><b>#46</b> Generalized Position-Based Model: Rethinking Position Weights in Ranking Off-Policy Evaluation — 랭킹 OPE에서의 가중치 설계.</li>
+<li><b>#318</b> From M Passes to One: A MapReduce-Style Bootstrap for Pointwise Off-Policy Evaluation in Production Recommenders — IEOE가 쓰는 부트스트랩 재표본을 대규모 프로덕션에서 효율화하는 주제.</li>
+</ul>
+
+</main>
+</body>
+</html>
