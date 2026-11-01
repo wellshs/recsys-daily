@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-02</span></div>
+<h1>Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy</h1>
+<p class="meta">Maryam Aziz, Jesse Anderton, Kevin Jamieson, Alice Y. Wang, Hugues Bouchard, Javed Aslam (Spotify · University of Washington · Northeastern University) · RecSys 2022 Papers 트랙</p>
+<div class="chips"><span>2022</span><span>Spotify</span><span>Pure Exploration</span><span>Infinitely-Armed Bandit</span><span>Best-Arm Identification</span><span>Fixed Budget</span><span>신규 콘텐츠 콜드스타트</span><span>인기 편향</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3546766">10.1145/3523227.3546766</a> · arXiv: 없음 · 확장판: ACM TORS 2025 "Unbiased Identification of Broadly Appealing Content Using a Pure Exploration Infinitely Armed Bandit Strategy" (<a href="https://doi.org/10.1145/3626324">10.1145/3626324</a>) · <a href="https://research.atspotify.com/publications/identifying-new-podcasts-with-high-general-appeal-using-a-pure-exploration-infinitely-armed-bandit-strategy/">Spotify Research 소개 페이지</a> · 수상: 없음 · 읽기 예상 11분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성. ACM DL(학회판·TORS 확장판 모두)이 이 환경에서 403으로 막혀 있고, arXiv·저자 공개 PDF도 찾지 못했습니다. 아래 내용은 학회판·확장판 초록과 infinitely-armed bandit 분야의 일반 배경지식으로 재구성했습니다. 알고리즘 이름, 세부 수식, 실험 수치처럼 원문에서 확인하지 못한 내용은 "논문 참조"로 적었습니다. 배경 설명이 논문 자체의 주장인 것처럼 읽히지 않도록 표시해 두었습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 매달 쏟아지는 신규 팟캐스트 중 "누구에게나 통할 만한" 쇼를 찾는 일은 지도학습보다 <i>고정 예산·무한 팔 순수 탐색 밴딧</i>으로 푸는 편이 낫다. 이 방식은 인기 편향도 피한다는 주장이다.</p>
+<p><b>풀려는 문제.</b> 신규 팟캐스트는 매달 수만 개씩 올라온다. 모두를 개인화 추천 후보에 올릴 수는 없으므로, 잠재 청취자층이 넓은 쇼를 먼저 골라야 한다. 하지만 신규 쇼는 청취 기록이 거의 없고, 지금까지 많이 들린 쇼가 곧 잠재력이 큰 쇼라는 보장도 없다.</p>
+<p><b>핵심 아이디어.</b> 저자들은 먼저 콘텐츠 특징이나 초기 소비 특징으로 인기도를 예측하는 지도학습 접근을 검토했다. 그러나 두 종류 특징 모두 이 과제에 부족하다고 결론 내리고 버렸다. 대신 각 팟캐스트를 밴딧의 "팔"로 보고, 제한된 노출 예산 안에서 사용자 반응을 직접 모아 최상위 팔을 식별한다. 팔이 사실상 무한히 많으므로, 모든 팔을 한 번씩 당겨 보는 것조차 불가능하다는 점이 일반 밴딧과의 차이다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 제안한 non-contextual 알고리즘은 다양한 "팔 저장소(reservoir) 분포"에서 best-arm identification 성능이 좋았고, 다수의 최신 알고리즘을 앞섰다. 팟캐스트 시뮬레이션에서는 쇼들을 매력도 순의 그룹으로 효율적으로 정렬했고, 지도학습 접근에 내재한 인기 편향을 피했다. 구체 수치와 비교 대상 목록은 논문 참조.</p>
+<p><b>한계와 남는 질문.</b> 문맥(사용자 특성)을 쓰지 않으므로 "일반적 매력"만 측정하고 틈새 취향은 보지 않는다. 실서비스 A/B가 아닌 시뮬레이션 검증이라는 점도 한계다. TORS 확장판은 "많이 들린 쇼가 더 들리는" 피드백 루프 상황을 추가로 실험해 알고리즘이 이런 인기 편향에 강건하다고 보고한다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 신규 콘텐츠의 '발굴' 문제</h3>
+<p>추천 시스템은 보통 "이 사용자에게 무엇을 보여 줄까"를 묻는다. 이 논문은 그보다 한 단계 앞의 질문, 즉 "어떤 신규 아이템을 추천 후보 풀에 올릴 가치가 있는가"를 다룬다. 플랫폼 입장에서 신규 쇼가 너무 많으면 사람이 다 검토할 수 없다. 그렇다고 기존 인기 신호에만 기대면 이미 유명한 제작자나 이미 노출을 많이 받은 쇼만 계속 뽑히는 악순환이 생긴다.</p>
+<p>저자들은 이를 콜드스타트 아이템 문제이면서 동시에 탐색 예산 배분 문제로 본다. 사용자 일부에게 신규 쇼를 시험 노출하는 것 자체가 비용(추천 슬롯, 사용자 경험)이므로, 적은 노출로 "진짜 넓은 매력"을 가진 쇼를 골라내는 효율이 핵심 목표다.</p>
+
+<h3>2. 지도학습 접근을 검토하고 버린 이유</h3>
+<p>먼저 자연스러운 대안부터 시험한다. 쇼의 메타데이터·텍스트 같은 콘텐츠 특징이나 공개 직후 소비량 같은 특징으로 장기 청취자 규모를 회귀/분류하는 방식이다. 초록은 두 특징 군 모두 "inadequate"하다고 요약한다.</p>
+<p>직관적으로 이유는 두 가지다. 첫째, 콘텐츠 특징만으로는 "재미"나 "보편적 호소력"을 잘 예측하지 못한다. 둘째, 초기 소비 특징은 그 쇼가 이미 받은 노출량(마케팅, 기존 팬덤, 추천 슬롯)에 크게 좌우된다. 그래서 모델이 매력도가 아니라 <i>과거 노출</i>을 학습하게 되고, 이것이 저자들이 말하는 지도학습의 인기 편향이다. 실제로 사용한 특징 목록과 예측 성능 수치는 논문 참조.</p>
+
+<h3>3. 문제 설정 — 고정 예산 무한 팔 순수 탐색</h3>
+<p>각 팟캐스트 \(i\)는 미지의 평균 보상 \(\mu_i\)를 가진다. \(\mu_i\)는 무작위로 고른 사용자가 그 쇼에 긍정 반응(예: 일정 시간 이상 청취)할 확률처럼 해석할 수 있는 "일반적 매력"이다. 신규 쇼는 끝없이 공급되므로 다음처럼 모델링한다(무한 팔 밴딧의 표준 설정).</p>
+\[ \mu_i \overset{\text{iid}}{\sim} \mathcal{R}, \qquad X_{i,t} \sim \nu(\mu_i),\ \ \mathbb{E}[X_{i,t}] = \mu_i \]
+<p>여기서 \(\mathcal R\)은 팔 저장소(reservoir) 분포, 즉 "새 쇼를 하나 꺼냈을 때 그 매력도가 따르는 분포"다. \(X_{i,t}\)는 쇼 \(i\)를 \(t\)번째로 노출했을 때 관찰한 보상이다. 알고리즘은 새 팔을 꺼낼지, 이미 꺼낸 팔을 더 당길지를 매 단계 고른다.</p>
+<p><b>고정 예산(fixed budget)</b>은 총 당김(노출) 횟수 \(T\)가 미리 정해져 있다는 뜻이다. 예산을 다 쓰면 팔 하나 \(\hat\imath\)(또는 상위 팔 집합)를 추천해야 한다. 평가 기준으로는 흔히 단순 후회(simple regret)를 쓴다.</p>
+\[ r_T = \mu^{*} - \mu_{\hat\imath}, \qquad \mu^{*} = \text{(목표 매력도 수준, 예: } \mathcal R \text{의 상위 분위수)} \]
+<p>팔이 무한하면 "진짜 최고 팔"이 정의되지 않거나 찾을 수 없다. 그래서 문헌에서는 저장소 분포의 상단 끝(또는 상위 \(\alpha\) 분위수)과의 차이로 성능을 잰다. 이 논문이 \(\mu^*\)를 정확히 어떻게 정의했는지는 논문 참조.</p>
+<p>누적 후회를 줄이는 일반 밴딧과 달리, 순수 탐색에서는 탐색 중의 손실을 따지지 않는다. 오직 끝에 고른 팔의 품질만 중요하다. "검증 기간 동안 일부 사용자에게 시험 노출하고, 끝나면 우수 쇼를 후보 풀로 승격"하는 운영 방식과 잘 맞는 설정이다.</p>
+
+<h3>4. 제안 알고리즘 — 핵심 긴장 관계</h3>
+<p>무한 팔 순수 탐색 알고리즘은 공통적으로 두 가지를 균형 잡아야 한다. (a) 좋은 팔이 포함될 만큼 많은 팔을 꺼내기, (b) 꺼낸 팔들의 평균을 구분할 만큼 충분히 당기기. 꺼내는 팔 수를 \(n\)이라 하면 팔당 평균 예산은 \(T/n\) 정도다. 이를 기준으로 생각하면 직관이 잡힌다. \(n\)이 너무 작으면 상위 분위수의 팔을 아예 못 만나고, \(n\)이 너무 크면 각 팔의 추정치 \(\hat\mu_i\)가 노이즈에 묻힌다.</p>
+<p>(배경) 문헌의 대표 전략은 이렇다. 저장소 분포의 상단 꼬리 모양 \(\Pr_{\mu\sim\mathcal R}(\mu &gt; \mu^* - \epsilon) \approx \epsilon^{\beta}\)을 가정하고 \(\beta\)에 맞춰 \(n\)을 정하는 방법(Carpentier &amp; Valko, 2015 등)이 있다. 또 successive halving처럼 여러 \(n\)을 동시에 시도하며 하위 절반을 반복 제거하는 방법(Hyperband 계열)도 있다. 저자 Aziz 등은 앞선 연구(ALT 2018)에서 같은 무한 팔 설정의 <i>고정 신뢰도</i> 버전을 다뤘다.</p>
+<p>이 논문은 <i>고정 예산</i> 버전의 새 non-contextual 알고리즘을 제안한다. 초록의 강조점은 특정 \(\mathcal R\) 모양을 미리 알 필요 없이 "넓은 범위의 저장소 분포"에서 잘 동작한다는 것이다. 알고리즘의 이름, 단계별 절차, 이론적 보장(예산 대비 simple regret 상한)은 원문을 확보하지 못해 논문 참조로 둔다.</p>
+
+<h3>5. 실험 1 — 합성 저장소 분포에서의 best-arm identification</h3>
+<p>첫 실험은 순수 알고리즘 비교다. 여러 형태의 저장소 분포(예: 상위 꼬리가 두껍거나 얇은 분포)에서 같은 예산을 주고, 마지막에 고른 팔의 품질을 측정한다. 초록은 제안 기법이 "a large number of state-of-the-art algorithms"를 앞섰다고 말한다.</p>
+<p>실무적 함의는 분명하다. 신규 팟캐스트의 실제 매력도 분포는 알 수 없고 시기마다 변할 수 있으므로, 분포 가정에 둔감한 알고리즘이 필요하다. 구체적인 분포 종류, 베이스라인 목록, 예산 크기, 수치 결과는 논문 참조.</p>
+
+<h3>6. 실험 2 — 팟캐스트 시뮬레이션</h3>
+<p>다음으로 Spotify 팟캐스트 데이터를 바탕으로 한 시뮬레이션에 알고리즘을 적용한다. 여기서 목표는 최고 쇼 하나가 아니라, 쇼들을 "매력도가 증가하는 그룹"으로 나누는 것이다. 예컨대 하위 그룹은 탈락, 상위 그룹은 개인화 추천 후보로 승격하는 식이다.</p>
+<p>초록이 보고하는 두 결론은 이렇다. (1) 적은 노출로 그룹 정렬을 효율적으로 해냈다. (2) 지도학습 방식과 달리 기존 인기도에 끌려가지 않았다. 밴딧은 각 쇼에 비슷한 출발 기회를 주고 실제 반응만으로 판단하기 때문에, 과거 노출량이 판단에 스며들 경로가 구조적으로 차단된다. 시뮬레이션의 정답 매력도 구성 방법과 그룹 수, 정확도 수치는 논문 참조.</p>
+
+<h3>7. (확장판) 인기 편향 피드백 상황에서의 강건성</h3>
+<p>TORS 확장판 초록은 실험을 하나 더 추가한다. 사용자가 일반적 매력과 무관하게 "이미 많이 재생된 쇼를 더 재생하는" 경향을 갖는 환경이다. 이런 피드백 루프 아래에서는 초기에 운 좋게 재생이 쌓인 쇼가 과대평가되기 쉽다. 저자들은 제안 알고리즘이 이 유형의 인기 편향에 강건하다고 보고한다. 이 실험은 RecSys 2022 학회판에는 없을 수 있다. 확장판에서 추가된 내용으로 보인다.</p>
+
+<h3>8. 결론</h3>
+<p>신규 콘텐츠 발굴을 "예측" 문제가 아니라 "제한된 시험 노출로 답을 측정하는" 순수 탐색 문제로 다시 정의한 것이 이 논문의 기여다. 무한 팔 설정은 콘텐츠가 계속 유입되는 플랫폼의 현실을 반영한다. non-contextual이라는 단순함은 일반적 매력이라는 목표와 맞아떨어진다. 개인화는 그다음 단계, 즉 승격된 후보 풀 위에서 일어난다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>순수 탐색(pure exploration)</b>: 탐색 중 얻는 보상은 무시하고, 탐색이 끝난 뒤 내놓는 답(최고 팔)의 품질만 최적화하는 밴딧 문제. 누적 후회 최소화와 목표가 다르다.</li>
+<li><b>Best-arm identification(BAI)</b>: 순수 탐색의 대표 과제로, 평균 보상이 가장 높은 팔을 찾는다. 상위 k개를 찾는 top-k 변형도 있다.</li>
+<li><b>고정 예산 vs 고정 신뢰도</b>: 고정 예산은 당김 횟수 \(T\)를 고정하고 오류 확률(또는 simple regret)을 줄인다. 고정 신뢰도는 오류 확률 \(\delta\)를 고정하고 필요한 당김 횟수를 줄인다.</li>
+<li><b>Infinitely-armed bandit</b>: 팔이 무한히(또는 예산보다 훨씬 많이) 존재해서, 팔 평균이 어떤 분포에서 무작위로 뽑힌다고 보는 모델. 모든 팔을 탐색할 수 없으므로 몇 개를 꺼낼지가 핵심 결정이다.</li>
+<li><b>저장소 분포(reservoir distribution)</b>: 새 팔을 꺼낼 때 그 평균 보상이 따르는 분포. 상단 꼬리가 두꺼울수록 좋은 팔을 만나기 쉽다.</li>
+<li><b>Simple regret</b>: 최종 추천 팔과 목표(최고 또는 상위 분위수) 사이의 평균 보상 차이. 순수 탐색의 표준 지표다.</li>
+<li><b>Successive halving</b>: 여러 후보에 예산을 고르게 쓴 뒤 하위 절반을 버리기를 반복하는 고정 예산 BAI 기법. Hyperband는 이를 서로 다른 후보 수로 여러 번 돌린다.</li>
+<li><b>Non-contextual bandit</b>: 사용자·상황 특징을 쓰지 않고 팔마다 하나의 평균만 추정하는 밴딧. "모두에게 통하는가"라는 목표에 맞는 단순화다.</li>
+<li><b>인기 편향(popularity bias)</b>: 과거 노출·소비가 많은 아이템이 더 추천되고 다시 더 소비되는 자기강화 현상. 신규·소규모 제작자에게 불리하다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실·객관식) 저자들이 지도학습 접근을 버린 이유로 초록이 든 것은? ① 학습 데이터가 너무 커서 ② 콘텐츠·소비 특징 모두 이 과제에 부적합해서 ③ 라벨이 존재하지 않아서 ④ 연산 비용이 커서
+<details><summary>정답 보기</summary>② 초록은 콘텐츠 특징과 소비 특징 모두 "inadequate"했다고 말한다.</details></li>
+<li>(사실) 제안 알고리즘이 속하는 밴딧 설정을 세 가지 수식어로 말해 보라.
+<details><summary>정답 보기</summary>Non-contextual, 고정 예산(fixed-budget), 무한 팔(infinitely-armed) 순수 탐색(pure exploration). 과제는 best-arm identification이다.</details></li>
+<li>(사실) TORS 확장판이 새로 추가한 실험 상황은 무엇인가?
+<details><summary>정답 보기</summary>사용자가 일반적 매력과 무관하게 이미 많이 재생된 쇼를 더 재생하는 경향이 있는 상황. 저자들은 알고리즘이 이 유형의 인기 편향에 강건하다고 보고했다.</details></li>
+<li>(원리) 무한 팔 설정에서 "꺼내는 팔의 수 \(n\)"이 너무 작을 때와 너무 클 때 각각 무슨 문제가 생기는가?
+<details><summary>정답 보기</summary>너무 작으면 상위 분위수의 좋은 팔을 아예 만나지 못한다. 너무 크면 팔당 예산이 약 \(T/n\)으로 줄어 평균 추정이 노이즈에 묻히고 엉뚱한 팔을 고르게 된다.</details></li>
+<li>(원리) 누적 후회 최소화 대신 순수 탐색(simple regret)이 이 문제에 맞는 이유는?
+<details><summary>정답 보기</summary>시험 노출 기간의 손실보다, 기간이 끝나고 어떤 쇼를 후보 풀로 승격하느냐가 중요하기 때문이다. 승격된 쇼는 이후 오래 노출되므로 최종 선택 품질이 가치를 좌우한다.</details></li>
+<li>(원리) 밴딧 방식이 지도학습보다 인기 편향을 덜 받는 구조적 이유는?
+<details><summary>정답 보기</summary>지도학습은 과거 노출량이 반영된 소비 특징을 입력으로 써서 노출 이력을 학습하기 쉽다. 밴딧은 각 쇼에 통제된 시험 노출을 주고 그 반응만으로 매력도를 추정하므로, 과거 노출이 판단에 들어갈 경로가 차단된다.</details></li>
+<li>(해석) 합성 실험에서 "넓은 범위의 저장소 분포에서 좋다"는 결과가 실무에서 특히 중요한 이유는?
+<details><summary>정답 보기</summary>신규 팟캐스트의 실제 매력도 분포는 미리 알 수 없고 시기·시장마다 달라질 수 있다. 분포 모양(예: 꼬리 지수)을 정확히 알아야 하는 알고리즘은 가정이 틀리면 성능이 무너지므로, 분포에 둔감한 쪽이 운영에 안전하다.</details></li>
+<li>(해석) 시뮬레이션에서 최고 쇼 하나가 아니라 "매력도 순 그룹 정렬"을 평가한 것은 운영상 어떤 의미인가?
+<details><summary>정답 보기</summary>실서비스에서는 최고 하나만 뽑는 것이 아니라 여러 쇼를 승격·보류·탈락으로 나누는 결정을 한다. 그룹 정렬 성능이 곧 후보 풀 품질과 탐색 예산 효율을 나타낸다.</details></li>
+<li>(비판) non-contextual 설계의 한계를 하나 지적하고 보완 방법을 제안하라.
+<details><summary>정답 보기</summary>예시: 특정 언어권이나 장르 팬층에서만 강한 틈새 쇼는 일반 매력이 낮게 측정되어 탈락할 수 있다. 시장·언어·장르별로 저장소와 예산을 나눠 따로 돌리거나, 승격 기준에 세그먼트별 반응을 함께 보거나, 탈락한 쇼를 contextual 밴딧으로 2차 탐색하는 방법을 생각할 수 있다.</details></li>
+<li>(적용) 내 서비스(예: 신규 상품·신규 크리에이터)에 이 방법을 적용할 때 정해야 할 것 세 가지를 들어 보라.
+<details><summary>정답 보기</summary>예시: (1) 보상 정의(클릭이 아닌 일정 시간 이상 소비, 재방문 등 "진짜 매력" 신호). (2) 탐색 예산 \(T\)와 시험 노출 대상(무작위 사용자 표본, 슬롯 위치 통제). (3) 목표 수준(상위 몇 % 분위수를 찾을지)과 승격 임계값. 이 밖에 신규 아이템 유입 주기에 맞춘 라운드 설계, 노출 위치 편향 통제도 중요하다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#38</b> Adversarial Sleeping Bandit Problems with Multiple Plays: Algorithm and Ranking Application — 같은 밴딧 토픽으로, 팔 집합이 시점마다 바뀌는 설정을 다룬다.</li>
+<li><b>#40</b> Online Matching: A Real-time Bandit System for Large-scale Recommendations — 대규모 서비스에서 신규 아이템을 탐색하는 실시간 밴딧 시스템.</li>
+<li><b>#256</b> Item-centric Exploration for Cold Start Problem — 아이템 관점의 콜드스타트 탐색으로, 이 논문과 문제의식이 가장 가깝다.</li>
+<li><b>#404</b> Accelerating Creator Audience Building through Centralized Exploration — 신규 크리에이터에게 탐색 노출을 배분하는 문제.</li>
+<li><b>#367</b> Values of Exploration in Recommender Systems — 추천에서 탐색이 주는 장기적 가치를 다룬다.</li>
+</ul>
+
+</main>
+</body>
+</html>
