@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Off-Policy Actor Critic for Recommender Systems</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-03</span></div>
+<h1>Off-Policy Actor Critic for Recommender Systems</h1>
+<p class="meta">Minmin Chen, Can Xu, Vince Gatto, Devanshu Jain, Aviral Kumar, Ed H. Chi (Google) · RecSys 2022 Papers 트랙</p>
+<div class="chips"><span>2022</span><span>Google</span><span>YouTube</span><span>강화학습</span><span>Off-Policy Actor-Critic</span><span>Offline RL</span><span>TD 학습</span><span>OOD 행동·비관주의</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3546758">10.1145/3523227.3546758</a> · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3523227.3546758">ACM DL (Open Access, CC BY-ND)</a> · arXiv: 없음 · 선행 연구: <a href="https://arxiv.org/abs/1812.02353">Top-K Off-Policy Correction for a REINFORCE Recommender System (WSDM 2019)</a> · 수상: 없음 · 읽기 예상 12분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성. ACM DL PDF가 이 환경에서 403으로 막혀 있고, arXiv·저자 공개본도 찾지 못했습니다. 아래 내용은 초록(Semantic Scholar 제공), 선행 논문인 Top-K REINFORCE(WSDM 2019), off-policy actor-critic의 일반 이론으로 재구성했습니다. 네트워크 구조, 하이퍼파라미터, 실험 수치처럼 원문에서 확인하지 못한 값은 "논문 참조"로 적었습니다. 일반 배경 설명에는 "(배경)" 표시를 붙여 논문의 주장과 구분했습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> YouTube에서 성공한 REINFORCE 추천 에이전트에 TD 학습으로 훈련한 critic(가치 함수)을 붙여 off-policy actor-critic으로 확장하면, 로그 데이터와 학습 정책 사이의 분포 차이(distribution shift)를 더 잘 다룰 수 있고 장기 사용자 경험도 좋아진다는 주장입니다.</p>
+<p><b>풀려는 문제.</b> 지도학습 추천기는 "지금 클릭할 것"만 맞추는 근시안적 모델입니다. 그래서 자기 추천이 다음 학습 데이터를 만드는 피드백 루프에 갇히고, 장기 만족은 최적화하지 못합니다. RL은 순차적 계획으로 이 문제를 풀 수 있지만, 온라인 RL은 샘플 효율이 낮고 불안정합니다. 오프라인 RL은 로그 데이터를 쓸 수 있는 대신 분포 차이라는 큰 문제를 떠안습니다.</p>
+<p><b>핵심 아이디어.</b> 선행 연구인 Top-K REINFORCE는 한 스텝 importance weight로 로그 정책(behavior policy)과 학습 정책의 차이를 보정했습니다. 이 방식은 "현재 스텝의 행동 선택"만 보정합니다. 미래 상태가 어떻게 달라지는지는 반영하지 못하죠. 이 논문은 학습 정책 기준의 \(Q(s,a)\)를 TD 학습으로 추정하는 critic을 둡니다. 이 critic이 미래 가치를 학습 정책의 행동 분포로 평가하기 때문에, 분포 차이를 한 단계 더 깊이 다룰 수 있습니다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 오프라인 실험과 실서비스 실험 모두에서 새 프레임워크가 기존 베이스라인(REINFORCE 기반 시스템으로 추정)을 앞섰고, 장기 사용자 경험 지표도 개선했습니다. 구체적인 수치와 지표 이름은 논문 참조입니다.</p>
+<p><b>한계와 남는 질문.</b> 가장 흥미로운 발견은 따로 있습니다. softmax로 매개화한 추천 정책은 로그에 없던 행동, 즉 분포 밖(OOD) 행동에 지나치게 비관적일 수 있다는 점입니다. 비관(pessimism)과 낙관(optimism) 사이의 균형점을 어떻게 잡느냐가 추천용 오프라인 RL의 성패를 가른다고 저자들은 말합니다. 다만 그 균형을 자동으로 정하는 일반적인 방법이 있는지는 열린 질문으로 남습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구조를 확인하지 못해, 초록의 논리 흐름(동기 → 선행 시스템 → 제안 방법 → 실험 → OOD 발견)을 따라 재구성했습니다.</p>
+
+<h3>1. 서론: 왜 추천에 RL인가, 왜 어려운가</h3>
+<p>저자들은 산업 추천 플랫폼의 관심사가 "이번 노출의 클릭"에서 "플랫폼에서의 장기 경험"으로 옮겨가고 있다는 데서 출발합니다. RL이 매력적인 이유로는 두 가지를 듭니다. 첫째, 근시안적 시스템이 만드는 피드백 루프를 끊을 수 있습니다. 둘째, 순차적 계획으로 장기 성과를 최적화할 수 있습니다.</p>
+<p>문제는 규모입니다. 사용자와 콘텐츠가 수십억 단위인 환경에서 온라인 RL을 돌리면 탐색 비용이 크고 학습이 불안정합니다. 대안인 오프라인 RL은 쌓여 있는 off-policy 로그로 배치 학습을 할 수 있습니다. 하지만 로그를 만든 정책 \(\beta\)와 새로 학습하는 정책 \(\pi\)가 다르기 때문에 분포 차이 문제가 생깁니다. 로그에 거의 없는 행동의 가치를 추정해야 하기 때문입니다.</p>
+
+<h3>2. 출발점: Top-K Off-Policy Correction REINFORCE</h3>
+<p>(배경) 2019년 WSDM 논문에서 같은 그룹은 YouTube 후보 생성 단계에 REINFORCE 에이전트를 도입했습니다. 이 에이전트는 사용자 상태 \(s_t\)(시청 이력을 RNN으로 요약한 벡터)에서 아이템 전체에 대한 softmax 정책을 냅니다.</p>
+\[ \pi_\theta(a\mid s) = \frac{\exp(s^\top v_a / T)}{\sum_{a'\in\mathcal{A}} \exp(s^\top v_{a'} / T)} \]
+<p>여기서 \(v_a\)는 아이템 \(a\)의 임베딩, \(T\)는 온도, \(\mathcal{A}\)는 수백만 규모의 아이템 집합입니다. 로그 데이터는 다른 정책 \(\beta\)가 만들었으므로 그래디언트를 importance weight로 보정합니다.</p>
+\[ \nabla_\theta J \approx \sum_t \frac{\pi_\theta(a_t\mid s_t)}{\beta(a_t\mid s_t)}\, R_t\, \nabla_\theta \log \pi_\theta(a_t\mid s_t) \]
+<p>\(R_t\)는 \(t\)시점 이후의 할인 누적 보상입니다. 전체 궤적의 importance weight는 곱셈 때문에 분산이 폭발합니다. 그래서 현재 스텝의 비율 하나만 쓰는 근사를 택했고, 이것이 초록에서 말하는 "one-step importance weighting"입니다. 이 근사는 미래 상태 분포가 \(\pi\)에서 \(\beta\)와 다를 수 있다는 점을 무시합니다. 그래서 분포 차이를 "부분적으로만" 완화합니다.</p>
+
+<h3>3. 제안 방법: critic 추가</h3>
+<p>논문의 핵심 확장은 학습 정책 \(\pi\)를 따랐을 때의 행동 가치 \(Q^\pi(s,a)\)를 추정하는 critic 네트워크입니다. (배경) critic은 TD 학습으로 훈련합니다. 로그의 전이 \((s_t,a_t,r_t,s_{t+1})\)마다 다음과 같은 목표를 만듭니다.</p>
+\[ y_t = r_t + \gamma\, \mathbb{E}_{a'\sim\pi(\cdot\mid s_{t+1})}\big[\bar Q(s_{t+1},a')\big] \]
+<p>\(\gamma\)는 할인율, \(\bar Q\)는 안정화를 위한 타깃 네트워크입니다. 중요한 점은 다음 행동 \(a'\)를 로그 정책이 아니라 <b>학습 정책 \(\pi\)</b>로 뽑는다는 것입니다. 이렇게 하면 미래 가치가 "새 정책이 실제로 할 행동" 기준으로 계산되고, 한 스텝 보정이 놓친 미래 분포 차이를 부분적으로 메웁니다. 손실은 \((Q(s_t,a_t)-y_t)^2\) 형태의 제곱 TD 오차입니다.</p>
+<p>actor 쪽에서는 몬테카를로 누적 보상 \(R_t\) 대신 critic 추정치(또는 거기서 기준값을 뺀 advantage)를 신호로 씁니다.</p>
+\[ \nabla_\theta J \approx \sum_t \frac{\pi_\theta(a_t\mid s_t)}{\beta(a_t\mid s_t)}\, \hat A(s_t,a_t)\, \nabla_\theta \log \pi_\theta(a_t\mid s_t),\quad \hat A = Q(s_t,a_t) - V(s_t) \]
+<p>(배경) critic은 부트스트랩으로 분산을 줄여 주지만 편향을 들여옵니다. 정확한 critic 구조, Top-K 보정 결합 방식, advantage를 어떻게 정의했는지는 논문 참조입니다. 초록은 이런 구성을 프로덕션에 올리기 위한 "핵심 설계 결정"을 공유하는 것이 논문의 목적이라고 밝힙니다.</p>
+
+<h3>4. 실험: 오프라인과 라이브</h3>
+<p>초록에 따르면 두 종류의 평가를 했습니다. 하나는 로그 데이터 기반 오프라인 실험이고, 다른 하나는 실제 추천 시스템(YouTube 계열로 추정)의 라이브 A/B 실험입니다. 두 실험 모두 새 프레임워크가 베이스라인보다 낫고 장기 사용자 경험을 개선했다고 보고합니다.</p>
+<p>원문을 확인하지 못해 데이터셋 규모, 오프라인 평가 지표, 라이브 지표(시청 시간·재방문 등)와 개선 폭은 모두 논문 참조입니다. 읽을 때는 세 가지를 확인해 보세요. 첫째, 베이스라인이 2019년 REINFORCE 에이전트인지. 둘째, "장기 경험"을 어떤 지표로 정의했는지. 셋째, critic 유무를 나눈 ablation이 있는지.</p>
+
+<h3>5. 흥미로운 발견: softmax 정책의 OOD 비관주의</h3>
+<p>초록에서 가장 눈에 띄는 대목입니다. 오프라인 RL 문헌(CQL 등, 공저자 Aviral Kumar의 연구 분야)은 보통 로그에 없는 OOD 행동을 critic이 <b>과대평가</b>하는 것을 경계합니다. 그래서 의도적으로 비관주의를 넣습니다.</p>
+<p>그런데 이 논문은 반대 현상을 보고합니다. softmax 정책을 쓰는 추천 에이전트는 OOD 행동에 <b>지나치게 비관적</b>이 될 수 있다는 것입니다. (배경·해석) 직관은 이렇습니다. softmax 로그우도의 그래디언트는 관측된 행동의 logit을 올리고, 동시에 분모를 통해 나머지 모든 행동의 확률을 깎습니다. 로그에 한 번도 나오지 않은 수백만 개의 아이템은 계속 눌리기만 하니 사실상 암묵적인 비관이 걸립니다. 여기에 별도의 보수적 정규화까지 더하면 정책이 로그 정책의 복제에 가까워질 수 있습니다. 결국 RL로 얻으려던 개선 여지가 사라지는 셈입니다.</p>
+<p>저자들은 OOD 행동에 대한 비관과 낙관 사이의 적절한 균형을 찾는 것이 추천 오프라인 RL 성공의 열쇠라고 결론짓습니다. 이 균형을 어떤 장치로 조절했는지(정규화 계수, 탐색 항 등)는 논문 참조입니다.</p>
+
+<h3>6. 결론</h3>
+<p>요약하면 이 논문은 새 알고리즘 제안보다는 산업 적용 보고서에 가깝습니다. 잘 알려진 off-policy actor-critic을 수십억 규모 추천기에 올리기 위한 설계와, 거기서 얻은 비직관적 교훈(softmax의 OOD 비관)을 공유합니다. 추천 RL을 실무에 도입하려는 팀에게는 "critic을 언제, 왜 붙이는가"와 "비관주의를 얼마나 넣는가"에 대한 사례 연구가 됩니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Behavior policy \(\beta\) / Target policy \(\pi\).</b> \(\beta\)는 로그 데이터를 만든 기존 시스템의 정책이고, \(\pi\)는 지금 학습 중인 새 정책입니다. 둘이 다르면 로그 데이터는 \(\pi\)의 성과를 편향되게 보여 줍니다.</p>
+<p><b>Importance weighting.</b> \(\pi(a\mid s)/\beta(a\mid s)\) 비율로 샘플에 가중치를 줘서 \(\beta\)로 모은 데이터를 \(\pi\) 기준 기댓값으로 바꾸는 기법입니다. 궤적 전체에 곱하면 분산이 폭발하므로 한 스텝만 쓰거나 클리핑합니다.</p>
+<p><b>REINFORCE.</b> 누적 보상과 \(\nabla\log\pi\)를 곱해 정책을 직접 올리는 가장 기본적인 정책 그래디언트 알고리즘입니다. 편향은 없지만 분산이 큽니다.</p>
+<p><b>Actor-Critic.</b> 정책(actor)과 가치 함수(critic)를 함께 학습합니다. critic이 누적 보상 대신 가치 추정치를 주므로 분산이 줄어듭니다.</p>
+<p><b>TD(Temporal Difference) 학습.</b> 현재 가치 추정을 "보상 + 할인된 다음 상태 가치 추정"에 맞추는 부트스트랩 학습입니다. 에피소드가 끝날 때까지 기다릴 필요가 없습니다.</p>
+<p><b>Offline RL과 distribution shift.</b> 환경과 상호작용 없이 고정된 로그만으로 정책을 학습하는 설정입니다. 학습 정책이 로그에 드문 행동을 고르면 그 가치는 추정 근거가 없어서 오류가 커집니다.</p>
+<p><b>OOD 행동과 비관주의.</b> 로그에 거의 없는 행동을 OOD라 부릅니다. CQL 같은 방법은 이런 행동의 Q값을 일부러 낮춰(비관) 과대평가를 막습니다. 다만 지나치면 새로운 좋은 행동도 배제합니다.</p>
+<p><b>Softmax 정책 매개화.</b> 상태 벡터와 아이템 임베딩의 내적에 softmax를 씌워 전체 아이템에 대한 확률을 만드는 방식입니다. 대규모 corpus에서는 sampled softmax로 학습하는 것이 일반적입니다.</p>
+<p><b>피드백 루프.</b> 추천 결과가 사용자 행동을 만들고, 그 행동이 다시 학습 데이터가 되는 순환입니다. 근시안적 모델은 이미 많이 노출된 아이템을 계속 강화하기 쉽습니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실·객관식) 이 논문이 확장한 선행 시스템은? ① DQN 기반 슬레이트 추천 ② Top-K off-policy correction REINFORCE 에이전트 ③ 컨텍스추얼 밴딧 LinUCB ④ 지도학습 Wide&amp;Deep
+<details><summary>정답 보기</summary>②. 초록은 YouTube에서 검증된 REINFORCE 에이전트[3]를 critic으로 확장한다고 밝힙니다.</details></li>
+<li>(사실·서술형) 선행 시스템은 분포 차이를 어떤 방식으로 완화했나요?
+<details><summary>정답 보기</summary>한 스텝 importance weighting입니다. 현재 행동의 \(\pi/\beta\) 비율만 곱하므로 분포 차이를 부분적으로만 완화합니다.</details></li>
+<li>(사실·객관식) 초록이 꼽은 온라인 RL의 걸림돌 두 가지는? ① 콜드스타트·희소성 ② 샘플 비효율·불안정성 ③ 지연·메모리 ④ 공정성·프라이버시
+<details><summary>정답 보기</summary>②. 오프라인 RL은 이 문제를 피하는 대신 분포 차이라는 문제를 안게 됩니다.</details></li>
+<li>(원리·서술형) TD 목표에서 다음 행동 \(a'\)를 \(\beta\)가 아닌 \(\pi\)로 뽑는 것이 왜 중요한가요?
+<details><summary>정답 보기</summary>critic이 "학습 정책을 따랐을 때"의 가치 \(Q^\pi\)를 추정해야 하기 때문입니다. \(\beta\)로 뽑으면 로그 정책의 가치를 배우게 되어 미래 분포 차이를 보정하지 못합니다.</details></li>
+<li>(원리·서술형) critic이 REINFORCE의 누적 보상 \(R_t\)를 대체하면 편향-분산 측면에서 무엇이 달라지나요?
+<details><summary>정답 보기</summary>몬테카를로 누적 보상은 편향이 없지만 분산이 큽니다. critic의 부트스트랩 추정은 분산을 크게 줄이는 대신 함수 근사 오차에서 오는 편향을 들여옵니다.</details></li>
+<li>(원리·객관식) softmax 정책의 로그우도 그래디언트가 로그에 없는 아이템에 미치는 영향은? ① 영향 없음 ② 확률을 높임 ③ 분모를 통해 확률을 낮춤 ④ 무작위로 바뀜
+<details><summary>정답 보기</summary>③. 관측 행동의 logit을 올리면 정규화 때문에 나머지 행동의 확률이 함께 내려갑니다. 이것이 암묵적 비관으로 작용할 수 있습니다.</details></li>
+<li>(결과 해석·서술형) 일반 오프라인 RL 문헌의 우려와 이 논문의 발견은 어떤 점에서 반대인가요?
+<details><summary>정답 보기</summary>일반 문헌은 OOD 행동의 과대평가(낙관)를 걱정해 비관을 넣습니다. 이 논문은 softmax 추천 정책이 오히려 OOD에 과도하게 비관적일 수 있다고 보고합니다. 그래서 비관을 무조건 늘리기보다 균형을 잡아야 한다는 결론입니다.</details></li>
+<li>(결과 해석·서술형) 오프라인 지표 개선과 라이브 A/B의 "장기 경험" 개선을 둘 다 보고하는 것이 왜 중요한가요?
+<details><summary>정답 보기</summary>오프라인 평가는 분포 차이 때문에 그 자체로 편향될 수 있습니다. 장기 효과는 로그로 재현하기 어려워서 라이브 실험이 실질적인 검증이 됩니다.</details></li>
+<li>(비판·서술형) 이 논문의 결과를 다른 회사가 재현하기 어려운 이유를 두 가지 들어 보세요.
+<details><summary>정답 보기</summary>예: (1) 데이터와 라이브 시스템이 비공개입니다. (2) 수십억 규모의 로그와 \(\beta\) 추정 모델 같은 인프라가 전제됩니다. (3) "장기 경험" 지표가 사내 정의라 비교 기준이 없습니다.</details></li>
+<li>(적용·서술형) 여러분 서비스에 critic을 도입한다면 비관-낙관 균형을 오프라인에서 어떻게 튜닝하겠습니까?
+<details><summary>정답 보기</summary>예시 답안입니다. 정규화 강도를 바꿔 가며 OPE(예: SNIPS, DR)로 정책 가치를 추정합니다. 동시에 \(\pi\)와 \(\beta\)의 KL·커버리지를 모니터링하고, 후보 몇 개만 작은 트래픽 라이브 실험으로 검증합니다. OPE 자체의 민감도도 함께 점검해야 합니다(#35 참조).</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#15</b> <a href="015-pessimistic-reward-models.html">Pessimistic Reward Models for Off-Policy Learning in Recommendation</a>: off-policy 학습에서 비관주의를 다룬 논문으로, 이 논문의 "비관-낙관 균형" 논의와 직접 대비됩니다.</li>
+<li><b>#35</b> <a href="035-evaluating-ope-sensitivity-robustness.html">Evaluating Off-Policy Evaluation: Sensitivity and Robustness</a>: 오프라인 실험에 쓰이는 OPE가 얼마나 믿을 만한지 다룹니다.</li>
+<li><b>#34</b> <a href="034-accordion-trainable-simulator.html">Accordion: A Trainable Simulator for Long-Term Interactive Systems</a>: 장기 효과를 시뮬레이터로 평가하려는 다른 접근입니다.</li>
+<li><b>#94</b> Integrating Offline Reinforcement Learning with Transformers for Sequential Recommendation: 오프라인 RL을 순차 추천에 적용한 후속 계열 연구입니다(미발송).</li>
+<li><b>#195</b> Optimizing Long-term Value for Auction-Based Recommender Systems via On-Policy Reinforcement Learning: 장기 가치 최적화를 on-policy RL로 접근한 산업 사례입니다(미발송).</li>
+</ul>
+
+</main>
+</body>
+</html>
