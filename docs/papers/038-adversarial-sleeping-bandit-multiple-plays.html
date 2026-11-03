@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adversarial Sleeping Bandit Problems with Multiple Plays</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-04</span></div>
+<h1>Adversarial Sleeping Bandit Problems with Multiple Plays: Algorithm and Ranking Application</h1>
+<p class="meta">Jianjun Yuan, Wei Lee Woon, Ludovik Coba (Expedia Group) · RecSys 2023 Short Papers 트랙</p>
+<div class="chips"><span>2023</span><span>Expedia</span><span>Booking/Expedia</span><span>멀티암드 밴딧</span><span>Sleeping Bandit</span><span>Multiple Plays</span><span>EXP3</span><span>Regret 분석</span><span>후보 생성</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608824">10.1145/3604915.3608824</a> · arXiv: <a href="https://arxiv.org/abs/2307.14549">2307.14549</a> · PDF: <a href="https://arxiv.org/pdf/2307.14549v1">arXiv PDF</a> · 수상: 없음 · 읽기 예상 11분</p>
+
+<div class="callout">이 논문은 <b>이론 전용 숏페이퍼</b>입니다. 알고리즘과 regret 상한 증명만 있고, 오프라인·온라인 실험 수치는 없습니다(저자들이 후속 과제로 미뤘습니다). 그래서 아래 "결과"는 모두 이론적 보장에 관한 이야기입니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 매 시점 일부 아이템이 품절 등으로 "잠들어" 있는 상황에서 k개를 한꺼번에 골라야 하는 후보 생성 문제를 적대적(adversarial) 밴딧으로 정식화했습니다. 단일 선택용 sleeping EXP3를 k개 동시 선택으로 확장해, regret이 \(O(kN^2\sqrt{T\log T})\)로 묶인다는 것을 보였습니다.</p>
+<p><b>풀려는 문제.</b> 호텔·숙소·상품처럼 재고가 자주 바뀌는 커머스에서는 후보 풀의 일부가 수시로 사용 불가능해집니다. 게다가 후보 생성 단계는 하나가 아니라 여러 개를 뽑아 랭커에 넘겨야 합니다. 기존 연구는 "sleeping"과 "multiple plays"를 각각 따로 다뤘을 뿐, 둘을 동시에 다룬 연구는 없었다고 저자들은 말합니다.</p>
+<p><b>핵심 아이디어.</b> 두 선행 기법을 조립합니다. ① Warmuth &amp; Kuzmin의 "상한이 1/k인 확률 단체(capped simplex)" 기법은 k개 선택 문제를 확률 벡터 하나로 다루게 해 줍니다. 이 벡터를 k-부분집합들의 볼록 결합으로 분해한 뒤 그중 하나를 샘플링합니다. ② Saha 등(2020)의 sleeping EXP3는 아이템 가용성 확률을 경험적으로 추정하고, 그것으로 "실제로 뽑힐 확률"을 보정한 importance-weighted 손실 추정치를 만듭니다.</p>
+<p><b>주요 결과.</b> 손실은 [0,1]로 유계이면서 적대적이고, 가용성은 아이템별로 독립인 미지의 베르누이 분포를 따른다고 가정합니다. 이 조건에서 최선의 고정 정책(가용 집합 → k개 선택) 대비 regret이 \(O(kN^2\sqrt{T\log T})\)입니다. 매 라운드 지수 시간이 드는 정확한 확률 계산을 몬테카를로 근사로 바꾼 효율 버전도 같은 차수의 상한을 가집니다. 실험 결과는 없습니다.</p>
+<p><b>한계와 남는 질문.</b> \(N^2\)에 비례하는 상한은 후보가 수천~수만 개인 실서비스에서는 사실상 무의미할 만큼 큽니다. 컨텍스트(사용자 특징)를 쓰지 않으므로 개인화도 직접 다루지 않습니다. 실제 데이터에서 탐색 비용과 수렴 속도가 어떨지는 미지수로 남아 있습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 왜 후보 생성에 밴딧인가</h3>
+<p>저자들은 산업 추천의 2단계 구조(가벼운 후보 생성 → 무거운 랭킹)에서 출발합니다. 이 논문이 겨냥하는 것은 앞단인 후보 생성입니다. 후보 생성 모델은 대개 오프라인에서 대규모 배치로 학습되기 때문에 선호 변화에 늦게 반응하고 재학습도 자주 해야 한다는 것이 저자들의 문제의식입니다.</p>
+<p>밴딧은 온라인으로 피드백을 받으며 탐색과 활용을 조절하므로 이 약점을 메울 수 있습니다. 저자들은 인기 편향을 줄이고 덜 알려진 아이템을 시도해 볼 수 있다는 점도 장점으로 꼽습니다.</p>
+<p>이어서 밴딧 변형들을 두 축으로 정리합니다. 첫째 축은 손실 모델입니다. 확률적(stochastic) 손실은 팔마다 고정된 분포를 가정하고, 적대적(adversarial) 손실은 유계라는 것 외에 아무 가정도 하지 않습니다. 둘째 축은 가용성 모델입니다. 가용 집합이 미지의 확률분포를 따르는 경우도 있고, 적대적으로 바뀌는 경우도 있습니다. 손실과 가용성이 <b>둘 다</b> 적대적이면 문제가 NP-hard라는 기존 결과가 있습니다. 그래서 저자들은 "손실은 적대적, 가용성은 i.i.d. 확률적"이라는 다룰 수 있는 조합을 택합니다.</p>
+<p>Zalando, Expedia, Airbnb, Amazon 같은 회사가 품절·매진 문제를 크게 겪는데도 추천 문헌에서는 이 조합이 충분히 다뤄지지 않았다는 점이 동기입니다.</p>
+
+<h3>2. 문제 설정</h3>
+<p>후보 풀에는 \(N\)개 아이템이 있고, \(N\)은 알려져 있습니다. 매 시점 \(t=1,\dots,T\)마다 다음 순서로 진행됩니다.</p>
+<ul>
+<li>가용 집합 \(S_t\subseteq[N]\)이 주어집니다.</li>
+<li>알고리즘은 그 안에서 정확히 \(k\)개로 이루어진 \(\Omega_t\subseteq S_t\)를 고릅니다.</li>
+<li>고른 아이템들의 손실 \(\ell_t(i)\in[0,1]\)만 관측됩니다(bandit 피드백, 고르지 않은 아이템의 손실은 보이지 않음).</li>
+</ul>
+<p>목표는 누적 손실 \(\sum_t\sum_{i\in\Omega_t}\ell_t(i)\)를 최소화하는 것입니다. 추천 맥락에서 손실은 "클릭하지 않음"처럼 낮을수록 좋은 신호로 생각하면 됩니다.</p>
+<p>가정은 두 가지입니다. (a) 손실 수열은 <b>oblivious</b>합니다. 즉 상대(adversary)가 알고리즘의 무작위 선택을 보고 반응하지 않고 미리 정해 두며, 가용 집합과도 독립입니다. (b) 각 아이템의 가용 여부는 서로 독립인 베르누이 \(\mathbb{1}(i\in S_t)\sim\mathrm{Ber}(a_i)\)를 따르고, \(a_i\)는 미지입니다.</p>
+<p>성능 척도인 regret은 다음과 같습니다.</p>
+\[ R_T=\max_{\pi:2^{[N]}\to[N]^k}\ \mathbb{E}\Big[\sum_{t=1}^T\sum_{i\in\Omega_t}\ell_t(i)-\sum_{t=1}^T\sum_{i\in\pi(S_t)}\ell_t(i)\Big] \]
+<p>비교 대상 \(\pi\)는 "가용 집합이 주어지면 k개를 고르는 고정된 규칙"입니다. 손실을 사후에 다 안다고 했을 때 가장 좋은 고정 규칙과 비교하는 셈입니다. 단일 최적 팔과 비교하는 고전 밴딧과 달리, 비교 대상 자체가 가용성에 따라 달라지는 정책이라는 점이 sleeping 설정의 특징입니다. 기대값은 가용성의 무작위성과 알고리즘의 무작위성 양쪽에 대해 취합니다. \(R_T/T\to0\)이면 평균적으로 최선의 고정 정책만큼 잘한다는 뜻입니다.</p>
+
+<h3>3. 알고리즘: Sleeping EXP3 with Multiple Plays</h3>
+<p>알고리즘은 아이템별 가중치 \(w_t(i)\)(초기값 1)를 유지하며, 매 라운드 다음 단계를 밟습니다.</p>
+
+<p><b>(1) 상한 걸린 확률 만들기 (Algorithm 2).</b> 가용 아이템의 가중치를 정규화해 \(p(i)=w(i)/\sum_{j\in S}w(j)\)를 만듭니다(비가용이면 0). k개를 뽑을 때 한 아이템이 뽑힐 확률은 1을 넘을 수 없으므로, \(p\)의 각 성분이 \(1/k\) 이하가 되어야 합니다. 이 제약을 만족하는 집합이 capped simplex입니다.</p>
+\[ \mathcal{P}_k=\{q:\textstyle\sum_i q(i)=1,\ 0\le q(i)\le 1/k\} \]
+<p>최대 성분이 \(1/k\)를 넘으면, 큰 값부터 차례로 \(1/k\)로 자르고 나머지 질량을 남은 성분에 비례 배분하는 사영(projection)을 반복합니다. 그 결과에 \(k\)를 곱한 \(q^{S}(i)=k\,\hat p(i)\)가 "아이템 \(i\)가 이번 라운드에 뽑힐 확률"이 됩니다. 이 벡터의 합은 \(k\)입니다.</p>
+
+<p><b>(2) 볼록 결합으로 분해 후 샘플링 (Algorithm 3).</b> 합이 \(k\)이고 성분이 1 이하인 벡터는 "정확히 k개 성분만 1인 0/1 벡터(코너)"들의 볼록 결합으로 쓸 수 있습니다(Warmuth &amp; Kuzmin의 결과). 분해 절차는 다음과 같습니다. 현재 값이 1인 성분을 모두 포함하는 k개짜리 코너 \(r\)을 고릅니다. 그 코너에 줄 수 있는 최대 비중 \(\min(s,1-l)\)을 계산하는데, \(s\)는 선택된 k개 중 최솟값이고 \(l\)은 선택되지 않은 성분 중 최댓값입니다. 그 비중만큼 \(r\)을 빼고, 0이 될 때까지 반복합니다. 이렇게 얻은 혼합 분포에서 부분집합 \(\Omega_t\)를 하나 샘플링하면, 각 아이템이 뽑힐 주변 확률이 정확히 \(q^{S_t}_t(i)\)가 됩니다.</p>
+
+<p><b>(3) "실제로 뽑힐 확률"의 추정.</b> 고전 EXP3에서는 아이템이 뽑힐 확률이 알고리즘의 분포 하나로 정해집니다. sleeping 설정에서는 여기에 가용성의 무작위성이 겹칩니다. 그래서 가용성 확률부터 추정합니다.</p>
+\[ \hat a_t(i)=\frac{1}{t}\sum_{j=1}^t\mathbb{1}(i\in S_j),\qquad P_{\hat a}(S)=\prod_{i=1}^N\hat a_t(i)^{\mathbb{1}(i\in S)}\big(1-\hat a_t(i)\big)^{1-\mathbb{1}(i\in S)} \]
+<p>\(\hat a_t(i)\)는 지금까지 아이템 \(i\)가 가용이었던 비율입니다. \(P_{\hat a}(S)\)는 독립 베르누이 가정 아래에서 특정 가용 집합 \(S\)가 나타날 확률의 추정치입니다. 이것으로 가능한 모든 가용 집합에 대해 선택 확률을 평균 냅니다.</p>
+\[ \hat q_t(i)=\sum_{S\in 2^{[N]}}P_{\hat a}(S)\,q^S_t(i) \]
+<p>즉 \(\hat q_t(i)\)는 "가용성까지 감안했을 때 현재 가중치로 아이템 \(i\)가 선택될 주변 확률"입니다.</p>
+
+<p><b>(4) 손실 추정과 가중치 갱신.</b> EXP3 방식의 importance-weighted 추정치를 씁니다.</p>
+\[ \hat\ell_t(i)=\begin{cases}\dfrac{\ell_t(i)}{\hat q_t(i)+\lambda_t}, & i\in\Omega_t\\[4pt] 0, & \text{otherwise}\end{cases}\qquad w_{t+1}(i)=w_t(i)\,e^{-\eta\hat\ell_t(i)} \]
+<p>분모에 더한 \(\lambda_t\)는 선택 확률이 작은 아이템의 추정치가 폭발하지 않게 막는 장치입니다. 약간의 편향을 감수하고 분산을 줄이는 셈입니다. \(\eta\)는 학습률입니다. 손실이 큰 아이템일수록 가중치가 지수적으로 줄어 다음에 덜 뽑힙니다.</p>
+
+<p><b>계산 복잡도.</b> 저자들의 분석은 이렇습니다. 사영은 정렬 때문에 \(O(K\log K)\), 분해는 \(O(K^2)\)가 듭니다. 가장 비싼 단계는 가능한 모든 가용 집합에 대해 합을 내는 (3)으로, 라운드당 지수 시간이 걸립니다. 논문은 이를 \(O(2^k)\)로 표기했지만, 식 (2c)의 합은 \(2^{[N]}\) 전체에 걸쳐 있으므로 읽을 때 주의가 필요합니다. 대안으로 Saha 등의 방법을 빌려, 추정 가용성 분포에서 가용 집합 \(t\)개를 독립 샘플링해 평균 내는 근사를 씁니다.</p>
+\[ \tilde q_t(i)=\frac{1}{t}\sum_{\tau=1}^{t}q_t^{S_t^{(\tau)}}(i) \]
+<p>이 근사는 \(\hat q_t\)의 불편 추정치이고 집중 부등식으로 오차를 제어할 수 있습니다. 비용은 라운드당 \(O(tK)\)입니다.</p>
+
+<h3>4. 이론적 결과</h3>
+<p><b>정리 1.</b> 파라미터를 다음과 같이 둡니다.</p>
+\[ \lambda_t=\min\Big\{1,\ \sqrt{\tfrac{2kN^2\log(N/\delta)}{t}}+\tfrac{8kN\log(N/\delta)}{3t}\Big\},\quad \delta=N/T^2,\quad \eta=\sqrt{\ln(N/k)/(NT)} \]
+<p>그러면 \(R_T\le O(kN^2\sqrt{T\log T})\)입니다.</p>
+<p>증명의 뼈대는 네 단계입니다.</p>
+<ol>
+<li><b>실제 손실 → 추정 손실.</b> 실제 기대 손실을 추정 손실과 선택 확률의 내적으로 바꿉니다. 이때 가용성 추정 오차에 대한 집중 부등식(Saha 등 Lemma 1, k배 스케일)이 쓰이며, \(2N\lambda_t+\delta/\lambda_t\) 크기의 오차항이 생깁니다.</li>
+<li><b>추정치의 편향.</b> 추정 손실의 기대값은 실제 손실보다 최대 \(\delta/\lambda_t\)만큼만 큽니다(Lemma 2).</li>
+<li><b>가용 집합 고정 후 기존 정리 적용.</b> 가용성이 손실과 독립이라는 가정 덕에, 가용 집합 \(S\)를 고정한 조건부 문제로 나눌 수 있습니다. \(q^S/k\)와 최적 정책의 지시 벡터를 \(k\)로 나눈 것이 모두 \(\mathcal{P}_k\)에 속하므로, Kale 등의 slate 밴딧 정리를 그대로 적용합니다. 그 결과는 \(\frac{k\ln(N/k)}{\eta}+k\eta\sum_t\hat\ell_t^{2\top}q_t\)입니다.</li>
+<li><b>항별 합산.</b> 2차 항은 \(N+\delta/\lambda_t^2\)로 묶이고(Saha 등 Lemma 5), \(\sum\lambda_t\)와 \(\sum 1/\lambda_t^2\)를 각각 계산해 합칩니다. 초반 \(O(\log T)\) 라운드는 \(\lambda_t=1\)인 구간이라 그 regret은 \(O(\log T)\)로 따로 처리합니다.</li>
+</ol>
+<p>최종 차수에서 \(\sqrt{T}\)는 적대적 밴딧의 표준 속도이고, \(\log T\)는 신뢰수준 \(\delta=N/T^2\) 설정에서 옵니다. \(kN^2\)은 k배 스케일과 가용성 추정 오차의 누적에서 나옵니다.</p>
+<p><b>보조정리 3.</b> 효율 근사 \(\tilde q_t\)를 쓰면 \(\lambda_t\)의 상수만 바꿔(\(\log(2N/\delta)\), 계수 4kN) 같은 \(O(kN^2\sqrt{T\log T})\) 상한을 얻습니다. 증명은 근사치가 참값 주위에 집중한다는 Saha 등의 Lemma 6에 기댄 스케치로 제시됩니다.</p>
+
+<h3>5. 결론과 향후 과제</h3>
+<p>저자들은 온라인 후보 생성을 "피드백은 밴딧과 같지만, 팔이 사용 불가능해지고 여러 개를 동시에 고른다"는 두 특징을 가진 문제로 정리합니다. 그리고 이를 다루는 첫 알고리즘과 sub-linear regret 보장을 제시했다고 요약합니다. 이번 단계는 이론 이해에 한정했고, 공개·사내 데이터셋으로 오프라인 평가를 한 뒤 프로덕션 A/B 테스트를 하겠다고 밝힙니다. 따라서 이 논문에는 데이터셋, 베이스라인, 지표, 수치가 등장하지 않습니다.</p>
+
+<h3>읽고 나서: 실무자의 관점</h3>
+<p>이 논문은 실제로 바로 쓸 수 있는 시스템이라기보다 "품절이 있는 k개 선택"을 정식화한 템플릿에 가깝습니다. 실무에 옮길 때 짚어 볼 점은 네 가지입니다.</p>
+<ul>
+<li><b>손실 정의.</b> 랭커 이후의 클릭·예약을 어느 후보의 손실로 귀속할지 정해야 합니다.</li>
+<li><b>가용성 독립 가정.</b> 같은 지역 호텔이 성수기에 함께 매진되는 것처럼, 실제 가용성은 상관되어 있는 경우가 많습니다.</li>
+<li><b>규모.</b> \(N\) 규모의 상수와 근사 샘플링 비용이 실서비스 규모에서 감당 가능한지 따져야 합니다.</li>
+<li><b>비교 기준.</b> 비교 대상이 "고정 정책"이므로, 선호가 계속 변하는 환경이라면 동적 regret 관점이 더 맞을 수 있습니다.</li>
+</ul>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>멀티암드 밴딧(MAB).</b> 여러 선택지(팔) 중 하나를 반복해 고르며 보상·손실을 관측하는 온라인 학습 문제입니다. 모르는 팔을 시도하는 탐색과 좋아 보이는 팔을 고르는 활용 사이에서 균형을 잡는 것이 핵심입니다.</li>
+<li><b>적대적(adversarial) 밴딧.</b> 손실이 확률분포를 따른다는 가정 없이 임의로(유계로만) 정해지는 설정입니다. 그 대신 최선의 고정 팔과 비교하는 regret을 씁니다. 대표 알고리즘이 EXP3입니다.</li>
+<li><b>EXP3.</b> 팔별 가중치를 지수적으로 갱신하는 multiplicative weights를 밴딧 피드백에 맞춘 알고리즘입니다. 관측된 손실을 선택 확률로 나눈 importance-weighted 추정치를 써서 비편향성을 확보하며, regret은 \(O(\sqrt{T})\) 수준입니다.</li>
+<li><b>Sleeping bandit.</b> 매 라운드 일부 팔만 선택 가능한 밴딧입니다. 비교 대상이 "가용 집합에 따라 행동을 정하는 정책"이 되어 고전 문제보다 어렵습니다. 손실과 가용성이 모두 적대적이면 효율적으로 풀기 어렵다(NP-hard)는 결과가 알려져 있습니다.</li>
+<li><b>Multiple plays / slate 밴딧.</b> 매 라운드 k개 팔을 동시에 고르는 변형입니다. 각 팔의 선택 확률 합이 k가 되고 개별 확률은 1 이하여야 한다는 제약이 생깁니다.</li>
+<li><b>Capped simplex \(\mathcal{P}_k\).</b> 합이 1이고 각 성분이 \(1/k\) 이하인 확률 벡터 집합입니다. 그 꼭짓점이 "k개 성분이 \(1/k\)인 벡터", 곧 k-부분집합에 대응합니다. 그래서 k개 선택 문제를 연속 공간의 온라인 학습으로 바꿔 줍니다.</li>
+<li><b>Regret.</b> 알고리즘의 누적 손실에서 사후적으로 최선인 비교 대상의 누적 손실을 뺀 값입니다. \(T\)에 대해 sub-linear이면 평균 손실 차이가 0으로 수렴합니다.</li>
+<li><b>Oblivious adversary.</b> 손실 수열을 알고리즘의 무작위 선택과 무관하게 미리 정해 두는 상대입니다. 선택에 반응하는 adaptive adversary보다 약한 가정이라 분석이 쉬워집니다.</li>
+<li><b>후보 생성(candidate generation).</b> 수많은 아이템 중 랭킹 모델이 처리할 수 있는 수백 개 이내로 추리는 추천 파이프라인의 첫 단계입니다. 정밀도보다 재현율과 속도가 중요합니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실·객관식) 이 논문이 가정한 손실과 가용성의 조합은? ① 손실 확률적·가용성 적대적 ② 손실 적대적·가용성 i.i.d. 확률적 ③ 둘 다 적대적 ④ 둘 다 확률적
+<details><summary>정답 보기</summary>②. 둘 다 적대적이면 NP-hard라는 기존 결과가 있어서, 손실은 유계 적대적으로 두고 가용성은 아이템별 독립 베르누이로 가정했습니다.</details></li>
+<li>(사실·서술형) 논문이 제시한 regret 상한은 무엇이고, 각 기호는 무엇을 뜻하나요?
+<details><summary>정답 보기</summary>\(O(kN^2\sqrt{T\log T})\)입니다. \(k\)는 라운드당 선택하는 팔 수, \(N\)은 전체 팔 수, \(T\)는 시간 지평입니다.</details></li>
+<li>(사실·객관식) 이 논문의 실험 구성은? ① 공개 데이터셋 오프라인 실험 ② Expedia A/B 테스트 ③ 시뮬레이션 ④ 실험 없음(이론만)
+<details><summary>정답 보기</summary>④. 오프라인 평가와 A/B 테스트는 향후 과제로 남겼습니다.</details></li>
+<li>(원리·서술형) Algorithm 2에서 확률 벡터를 \(\mathcal{P}_k\)로 사영하는 이유는?
+<details><summary>정답 보기</summary>k개를 뽑을 때 각 아이템의 선택 확률은 \(k\,p(i)\)인데, 이 값이 1을 넘으면 실현할 수 없습니다. 그래서 각 성분을 \(1/k\) 이하로 잘라야 k-부분집합 분포로 분해할 수 있습니다.</details></li>
+<li>(원리·서술형) 손실 추정 분모에 \(\hat q_t(i)\)를 쓰고, 알고리즘 분포 \(q_t^{S_t}(i)\)를 그대로 쓰지 않는 이유는?
+<details><summary>정답 보기</summary>sleeping 설정에서 아이템이 관측될 확률은 알고리즘의 무작위성과 가용성의 무작위성이 결합된 값입니다. 그래서 추정 가용성 분포로 모든 가용 집합에 대해 평균 낸 주변 선택 확률 \(\hat q_t\)로 나눠야 importance weighting이 (근사적으로) 맞습니다.</details></li>
+<li>(원리·객관식) 분모의 \(\lambda_t\)가 하는 역할은? ① 학습률 조절 ② 선택 확률이 작은 팔의 추정치 분산 폭발 억제 ③ 가용성 추정 ④ k 스케일 보정
+<details><summary>정답 보기</summary>②. 작은 편향을 감수하고 분산을 줄이는 장치입니다. \(\lambda_t\)는 \(t\)가 커질수록 줄어듭니다.</details></li>
+<li>(해석·서술형) 정확한 \(\hat q_t\) 계산을 몬테카를로 근사 \(\tilde q_t\)로 바꾸면 무엇을 얻고 무엇을 잃나요?
+<details><summary>정답 보기</summary>라운드당 지수 시간 계산이 \(O(tK)\)로 줄어듭니다. 대신 근사 오차를 흡수하려고 \(\lambda_t\)의 상수가 커집니다(\(\log(2N/\delta)\), 계수 4kN). 차수로는 같은 \(O(kN^2\sqrt{T\log T})\)를 유지합니다.</details></li>
+<li>(해석·서술형) 이 regret 보장이 "최선의 고정 아이템 k개"가 아니라 "최선의 고정 정책 \(\pi:2^{[N]}\to[N]^k\)"과 비교한다는 것은 무엇을 의미하나요?
+<details><summary>정답 보기</summary>비교 대상은 가용 집합마다 다른 k개를 고를 수 있는 규칙입니다. 품절 상황에서 대체 아이템을 고르는 능력까지 비교 기준에 포함됩니다. 그래서 고전 regret보다 강한(어려운) 기준입니다.</details></li>
+<li>(비판·서술형) 이 상한을 수만 개 숙소가 있는 실서비스 후보 생성에 그대로 기대하기 어려운 이유를 두 가지 이상 드세요.
+<details><summary>정답 보기</summary>예: ① \(N^2\) 계수 때문에 \(N\)이 크면 상한이 \(T\)보다 커져, 현실적인 기간 안에서는 보장이 무의미해집니다. ② 컨텍스트가 없어 사용자별 개인화를 다루지 않습니다. ③ 가용성 독립 가정이 지역·시즌별 동시 매진과 맞지 않습니다. ④ 고정 정책 비교라 선호 변화(비정상성)에 대한 보장이 없습니다. ⑤ 실험 검증이 없습니다.</details></li>
+<li>(적용·서술형) 이 알고리즘을 실제 2단계 추천에 넣는다면 "손실"을 어떻게 정의하고 어떤 확장이 필요할까요?
+<details><summary>정답 보기</summary>예시 답안입니다. 후보 \(i\)가 랭커를 거쳐 노출된 뒤 클릭·예약이 없으면 1, 있으면 0으로 둘 수 있습니다. 다만 랭커 순위에 따른 노출 편향을 보정해야 합니다. 확장으로는 팔을 아이템 대신 클러스터·카테고리로 묶어 \(N\)을 줄이는 방법, 컨텍스트를 쓰는 sleeping contextual bandit, 상관된 가용성 모델, 기존 후보 생성기와의 혼합(일부 슬롯만 밴딧)을 생각할 수 있습니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#36</b> <a href="036-podcast-infinitely-armed-bandit.html">Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy</a>: 같은 밴딧 계열이지만, 팔이 무한히 많은 순수 탐색 설정을 다룹니다. 문제 정식화를 비교해 보기 좋습니다.</li>
+<li><b>#40</b> Online Matching: A Real-time Bandit System for Large-scale Recommendations: 대규모 실시간 밴딧 시스템의 산업 구현 사례로, 이 논문이 미룬 실전 문제를 다룹니다(미발송).</li>
+<li><b>#52</b> Two-Layer Bandit Optimization for Recommendations: 추천 파이프라인에 밴딧을 계층적으로 넣는 접근입니다(미발송).</li>
+<li><b>#45</b> Off-Policy Evaluation of Candidate Generators in Two-Stage Recommender Systems: 같은 후보 생성 단계를 오프라인 평가 관점에서 다룹니다(미발송).</li>
+<li><b>#15</b> <a href="015-pessimistic-reward-models.html">Pessimistic Reward Models for Off-Policy Learning in Recommendation</a>: 이 논문이 인기 편향 맥락에서 인용한 연구입니다.</li>
+</ul>
+</main>
+</body>
+</html>
