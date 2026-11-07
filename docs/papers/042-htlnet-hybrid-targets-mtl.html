@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touch the Core: Exploring Task Dependence Among Hybrid Targets for Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-08</span></div>
+<h1>Touch the Core: Exploring Task Dependence Among Hybrid Targets for Recommendation</h1>
+<p class="meta">Xing Tang, Yang Qiao (FiT, Tencent), Fuyuan Lyu (McGill University &amp; MILA), Dugang Liu (Guangdong Laboratory of AI and Digital Economy (SZ)), Xiuqiang He (FiT, Tencent) · RecSys 2024 Long Papers 트랙</p>
+<div class="chips"><span>2024</span><span>Tencent</span><span>멀티태스크 학습</span><span>Hybrid Targets</span><span>순차 의존 MTL</span><span>Label Embedding</span><span>Gumbel-softmax</span><span>Gradient Surgery</span><span>펀드 추천</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3640457.3688101">10.1145/3640457.3688101</a> · arXiv: <a href="https://arxiv.org/abs/2403.17442">2403.17442</a> · PDF: <a href="https://arxiv.org/pdf/2403.17442v2">arXiv PDF</a> · 코드: <a href="https://github.com/fuyuanlyu/HTLNet">GitHub</a> · 수상: 없음 · 읽기 예상 14분</p>
+
+<div class="callout">해설은 arXiv v2(2024년 8월, 부록 포함)를 기준으로 썼습니다. 그래프로만 제시된 결과(Figure 5의 기울기 크기 추이, Figure 7 학습 시간, Figure 8 하이퍼파라미터 곡선)와 텍스트 추출이 깨진 부록 Table 7(ZILN 결과)의 세부 수치는 "논문 참조"로 두었습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 클릭·구매 같은 이진 타깃과 시청 시간·구매 금액 같은 연속형 "핵심" 타깃을 한 모델에서 같이 학습하는 문제를 <b>hybrid targets learning</b>이라 이름 붙였습니다. 제안 모델 HTLNet은 앞 단계의 레이블 정보를 임베딩으로 넘겨 주는 구조와, 회귀 손실이 공유 파라미터를 휘두르지 못하게 막는 기울기 조정 방식을 함께 씁니다.</p>
+<p><b>풀려는 문제.</b> 노출→클릭→구매→금액처럼 단계가 이어지는 문제는 ESMM·AITM 같은 순차 의존 MTL(SDMTL)로 풀어 왔습니다. 하지만 이 모델들은 모든 타깃이 이진이라고 가정합니다. 마지막 타깃이 연속값이면 "인접 단계 예측값의 차이는 확률"이라는 가정이 깨집니다. 또 MSE 회귀 손실의 기울기는 BCE보다 크기와 방향이 크게 달라서, 함께 학습하면 학습이 불안정해집니다.</p>
+<p><b>핵심 아이디어.</b> ① <b>LEU</b>(Label Embedding Unit): 앞 단계의 예측 확률로 레이블 0/1 임베딩을 Gumbel-softmax로 섞어 다음 단계에 넘깁니다. 정답 레이블이 아니라 예측에서 뽑으니 학습과 추론의 차이가 없고, 미분도 됩니다. ② <b>IFU</b>(Information Fusion Unit): 앞 단계들의 레이블 임베딩과 타워 표현을 attention으로 골라 받습니다. ③ <b>최적화</b>: 넘겨주는 정보에는 stop-gradient를 걸고, 공유 임베딩에서는 각 분류 태스크의 기울기를 핵심 태스크 기준으로 방향(투영)과 크기(정규화)를 맞춥니다.</p>
+<p><b>주요 결과.</b> KuaiRand(시청 시간), Kaggle-Revenue(재구매 금액), Tencent 펀드 추천 Product 데이터 세 곳에서 DNN, Shared-Bottom, MMoE, PLE, AdaTT, ESMM, AITM, MetaBalance를 대부분의 지표에서 앞섰습니다. 예를 들어 KuaiRand 시청 시간 NMAE는 0.9093으로, 2위 AdaTT(0.9508)보다 낮습니다. Product 금액 Spearman도 0.2244로 PLE(0.2088)보다 높습니다. MMoE 대비 14일 온라인 A/B에서는 CTR +0.54%, CVR +1.4%, 구매 금액 +2.69%를 보고했습니다.</p>
+<p><b>한계와 남는 질문.</b> 학습 시간이 베이스라인보다 깁니다(저자 언급). 회귀 지표 NRMSE의 개선 폭은 소수점 셋째 자리 수준으로 작습니다. "마지막 하나만 연속, 앞은 모두 이진"이라는 구조 가정도 있습니다. 표 4의 해석 문장은 표의 수치와 맞지 않는 부분이 있습니다(아래 5.4절).</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 왜 "핵심 전환"을 건드려야 하나</h3>
+<p>예전 추천 MTL의 대표 목표는 "클릭할까, 구매할까"였습니다. 하지만 플랫폼이 실제로 돈을 버는 지점은 그다음입니다. 영상 플랫폼은 <b>시청 시간</b>, 펀드 플랫폼은 <b>투자 금액</b>을 가장 중요하게 봅니다. 저자들은 이런 연속형 목표를 core target이라 부르고, 그 앞의 이진 전환들과 묶어 hybrid targets라 정의합니다.</p>
+<p>단계 간에는 논리적 의존이 있습니다. 시청 시간이 길려면 먼저 봐야 하고, 보려면 먼저 클릭해야 합니다. 이 사전 지식은 모델링에 큰 도움이 됩니다. 문제는 두 가지입니다. 첫째, 목표의 성격이 다릅니다. 전환율이 높다고 금액이 큰 것은 아닙니다. 둘째, 손실 종류가 다릅니다. 회귀 손실의 기울기는 분류 손실의 기울기와 크기·방향이 다르고, 그대로 더하면 학습이 흔들립니다.</p>
+<p>MMoE·PLE 같은 범용 MTL은 태스크 관계를 게이트로 암묵적으로 배웁니다. 그래서 관련 없는 정보까지 흘러가는 negative transfer가 생기고, 단계 의존이라는 사전 지식을 쓰지 못합니다. ESMM·AITM 같은 SDMTL은 의존을 쓰지만 이진 타깃만 가정합니다. 저자들은 SDMTL의 전형적 가정을 이렇게 짚습니다.</p>
+<p>\[ \hat y_k - \hat y_{k-1} = P(t_k = 0,\ t_{k-1} = 1) \]</p>
+<p>여기서 \(\hat y_k\)는 \(k\)번째 단계의 예측값, \(t_k\)는 그 단계가 일어났는지를 뜻합니다. 인접 단계 점수 차이를 "앞 단계는 일어났지만 이번 단계는 안 일어날 확률"로 해석하는 식입니다. (원문 표기 그대로 옮겼습니다. 순차 깔때기에서는 \(\hat y_{k-1} \ge \hat y_k\)이므로 크기로 보면 \(\hat y_{k-1}-\hat y_k\)가 이 확률에 해당합니다.) 마지막 단계가 금액이나 시간이면 점수 차이를 확률로 볼 수 없으니, 이 가정은 무너집니다.</p>
+<p>기여는 세 가지입니다. hybrid targets 문제를 처음 정의했고, LEU·IFU 구조와 그에 맞는 최적화 전략으로 HTLNet을 제안했으며, 공개·사내 데이터 오프라인 실험과 온라인 A/B로 검증했습니다.</p>
+
+<h3>2. 관련 연구</h3>
+<p><b>범용 MTL 구조.</b> MMoE가 출발점입니다. PLE는 공유 전문가와 태스크 전용 전문가를 나눠 파라미터 충돌을 줄였습니다. AdaTT는 잔차 연결과 게이트로 태스크 간 융합을 적응적으로 배웁니다. 이 계열은 타깃 간 의존을 직접 쓰지 않습니다.</p>
+<p><b>SDMTL.</b> 대표 응용은 클릭 후 전환율(CVR) 추정입니다. ESMM은 \(pCTCVR = pCTR \times pCVR\)로 분해해 전체 노출 공간에서 학습합니다. ESCM2·DCMT는 IPW나 imputation으로 편향을 줄입니다. AITM은 여러 전환 단계 사이에 정보 전달 모듈을 두고, TAFE는 SDMTL 전용 특징 학습 모듈을 제안했습니다. 모두 이진 단계만 다룹니다.</p>
+<p><b>최적화.</b> GradNorm, Gradient Surgery(PCGrad), MetaBalance는 태스크 기울기의 크기나 방향을 조정합니다. Google의 MTL 랭킹 학습 안정성 연구도 있습니다. 하지만 모두 범용 MTL 구조를 전제로 하고, hybrid 구조의 특수성은 고려하지 않습니다.</p>
+
+<h3>3. 문제 정의</h3>
+<p>입력 특징 \(\mathbf{x}_i\)와 핵심 연속 타깃 \(y_i \in \mathbb{R}\)이 있습니다. 사용자는 핵심 타깃에 이르기까지 \(T\)개의 전환 단계를 거치고, 단계 \(t\)의 레이블은 \(y_i^t \in \{0,1\}\)입니다. 깔때기 제약 \(y_i^1 \ge y_i^2 \ge \cdots \ge y_i^T\)가 성립합니다. 즉 앞 단계를 통과하지 않으면 뒷 단계도 0입니다.</p>
+<p>모델은 각 단계 예측이 앞 단계들의 레이블 정보에 기대도록 구성됩니다.</p>
+<p>\[ \hat y_i^1 = f(\mathbf{x}_i \mid \Theta),\quad \hat y_i^t = f(\mathbf{x}_i \mid \Theta, y_i^1, \ldots, y_i^{t-1}),\quad \hat y_i = f(\mathbf{x}_i \mid \Theta, y_i^1, \ldots, y_i^T) \]</p>
+<p>첫 단계는 입력만 보고, 이후 단계는 앞 단계 레이블에 조건부이며, 마지막 핵심 회귀는 모든 이진 단계에 조건부입니다. 파라미터는 공유 \(\theta_s\), 핵심 타워 \(\theta_{core}\), 태스크별 \(\theta_t\)로 나뉩니다. 손실은 다음과 같습니다.</p>
+<p>\[ \mathcal{L} = \mathcal{L}_{core}(f(X;\theta_s,\theta_{core}), y) + \sum_{t=1}^{T} \mathcal{L}_t(f(X;\theta_s,\theta_t), y^t) \]</p>
+<p>\(\mathcal{L}_{core}\)는 MSE, \(\mathcal{L}_t\)는 BCE입니다. 공유 파라미터의 기울기는 \(G = \nabla_\Theta \mathcal{L}_{core} + \sum_t \nabla_\Theta \mathcal{L}_t\)입니다. 크기가 큰 항이 업데이트 방향을 결정해 버린다는 점이 두 번째 과제의 출발점입니다.</p>
+
+<h3>4. 방법: HTLNet</h3>
+<p>구성 요소는 세 가지입니다. (1) 태스크 타워, (2) 앞 단계 레이블을 인코딩하는 LEU, (3) 앞 단계 정보를 모으는 IFU입니다. 여기에 공유 파라미터용 기울기 처리가 더해집니다.</p>
+
+<p><b>4.1 공유 임베딩과 타워 입력.</b> 사용자·아이템·컨텍스트 \(m\)개 필드를 임베딩 행렬 \(E \in \mathbb{R}^{M\times d}\)로 조회해 \(e_{ij} = x_{ij}E\)를 얻고, 이를 이어 붙여 공유 임베딩 \(\mathbf{e}_i\)를 만듭니다(\(M\)은 전체 특징 수, \(d\)는 임베딩 차원). 태스크 \(t\)의 타워 입력은 다음과 같습니다.</p>
+<p>\[ h^t_{input,i} = \mathrm{concat}(rep^{t-1}_f,\ le^{t-1}_f,\ \mathbf{e}_i) \]</p>
+<p>\(rep^{t-1}_f\)는 앞 태스크 타워의 중간 표현(암묵 정보)이고, \(le^{t-1}_f\)는 레이블 임베딩(명시 정보)입니다. 둘 다 IFU를 거친 결과입니다. 분류 타워는 \(\hat y_i^t = \sigma(\mathrm{MLP}(h^t_{input,i}))\)로 확률을 내고 BCE로 학습합니다. 핵심 타워는 시그모이드 없이 \(\hat y_i = \mathrm{MLP}(h_{input,i})\)로 실수값을 내고 MSE로 학습합니다. 저자들은 기존 연구처럼 레이블을 손실의 제약으로만 쓰면 핵심 타깃이 앞 단계 레이블 정보를 충분히 받지 못한다고 봅니다. 그래서 레이블을 아예 입력 쪽으로 보냅니다.</p>
+
+<p><b>4.1.1 LEU.</b> 이진 태스크마다 두 행짜리 테이블 \(E_t \in \mathbb{R}^{2\times L_d}\)를 둡니다. 레이블 0과 1 각각에 \(L_d\)차원 학습 벡터를 대응시키는 것입니다. 이때 어떤 레이블을 넣을지가 핵심입니다.</p>
+<ul>
+<li><b>정답 레이블</b>: 학습 때만 있고 서빙 때는 없으니 train-test 불일치가 생깁니다.</li>
+<li><b>예측값을 하드하게 반올림</b>: 앞 단계 오류가 뒷 단계로 연쇄되어 학습이 불안정합니다.</li>
+<li><b>예측 분포에서 샘플링</b>: 저자들의 선택입니다. 샘플된 레이블이 핵심 태스크에 해로우면, 핵심 태스크에서 오는 기울기가 해당 임베딩을 벌합니다.</li>
+</ul>
+<p>샘플링은 미분이 안 되므로 Gumbel-softmax로 근사합니다. 논문의 식은 다음과 같습니다.</p>
+<p>\[ p_t = \frac{\exp(\log(\hat y^t)/\tau)}{\exp(\log(\hat y^t)/\tau) + \exp(\log(1-\hat y^t)/\tau)},\qquad le^t = [p_t,\ 1-p_t]\,E_t \]</p>
+<p>\(\tau\)는 온도입니다. 크면 두 임베딩이 고르게 섞이고, 0에 가까우면 원-핫에 가까워집니다. 학습 중 \(\tau\)를 줄여 가므로 초반에는 두 임베딩이 모두 업데이트되고, 후반에는 한쪽으로 수렴합니다. (논문 본문 식에는 Gumbel 노이즈 항이 명시돼 있지 않습니다. 쓰인 대로라면 온도로 날카롭게 만든 softmax에 해당합니다. 노이즈 처리 방식은 코드 참조.) 부록 A는 하드 샘플링의 문제를 두 가지로 설명합니다. 샘플된 쪽 임베딩만 업데이트되어 두 임베딩 사이 기울기 분산이 커지고, 레이블에 잡음이 많으면 한쪽 레이블 정보만으로는 부족하다는 것입니다.</p>
+
+<p><b>4.1.2 IFU.</b> 앞 단계들에서 온 벡터 목록 \([\mathbf{e}_0, \ldots, \mathbf{e}_t]\)을 attention으로 합칩니다. 레이블 임베딩용과 타워 표현용이 각각 있습니다.</p>
+<p>\[ \mathbf{e}^t_f = \sum_{u} w_u\, h_1(u),\qquad w_u = \frac{\exp(\hat w_u)}{\sum_{u'}\exp(\hat w_{u'})},\qquad \hat w_u = \frac{\langle h_2(u), h_3(u)\rangle}{\sqrt{k}} \]</p>
+<p>\(h_1, h_2, h_3\)는 각각 value·key·query 역할을 하는 학습 변환이고, \(k\)는 은닉 차원입니다. AITM의 정보 전달 모듈과 같은 방식입니다. 앞 단계 정보 중 무엇을 얼마나 받을지 스스로 정하므로, 불필요한 정보가 흘러드는 것을 줄입니다.</p>
+
+<p><b>4.2 최적화 전략.</b> 구조가 정보를 뒤로 많이 넘길수록 두 가지 문제가 커집니다. 첫째, 핵심 타워의 MSE 기울기가 다른 태스크와 크게 다릅니다. 둘째, 레이블 임베딩과 표현이 모두 핵심 타워로 들어가므로, 역전파 때 핵심 손실이 앞 단계의 예측과 표현까지 끌고 다닙니다. 해법은 세 단계입니다.</p>
+<p><b>(a) Stop-gradient.</b> 넘겨주는 경로를 끊습니다.</p>
+<p>\[ \mathrm{LEU}(\mathrm{stop\_gradient}(\hat y^t)),\qquad \mathrm{IFU}(\mathrm{stop\_gradient}(rep^t)) \]</p>
+<p>뒤 태스크는 앞 태스크의 정보를 읽기만 하고, 앞 태스크의 예측을 고치지는 못합니다. 태스크 간 상호작용은 공유 임베딩 하나로만 일어납니다. (레이블 임베딩 테이블 \(E_t\) 자체는 뒤 태스크 손실로 학습됩니다.)</p>
+<p><b>(b) 방향 충돌 제거.</b> 공유 파라미터에서 \(G_{core}\)와 \(G_t\)의 내적이 음수이면, 즉 서로 반대 방향이면 \(G_t\)에서 \(G_{core}\) 방향 성분을 빼 줍니다.</p>
+<p>\[ G_t \leftarrow G_t - \alpha \frac{G_t \cdot G_{core}}{\lVert G_{core}\rVert^2} G_{core}\quad (\text{if } G_t\cdot G_{core} < 0) \]</p>
+<p>\(\alpha=1\)이면 PCGrad처럼 \(G_{core}\)의 법평면으로 완전히 투영하고, \(\alpha<1\)이면 일부만 제거합니다. PCGrad와 다른 점은 대칭이 아니라는 것입니다. 핵심 태스크를 기준으로 두고 보조 태스크만 고칩니다. 결과적으로 모든 보조 태스크가 핵심 태스크와 충돌하지 않는 방향으로 움직입니다.</p>
+<p><b>(c) 크기 맞추기.</b> MSE 기울기는 보통 BCE보다 큽니다. MetaBalance에서 착안해 보조 태스크 기울기를 핵심 태스크 크기 쪽으로 키우거나 줄입니다.</p>
+<p>\[ G_t \leftarrow \gamma \cdot \frac{\lVert G_{core}\rVert}{\lVert G_t\rVert} G_t + (1-\gamma) G_t \]</p>
+<p>\(\gamma\)는 얼마나 맞출지 정하는 완화 계수입니다. 배율 \(\lVert G_{core}\rVert/\lVert G_t\rVert\)는 \([1/C, C]\)로 클리핑해 한 배치에서 기울기가 폭주하지 않게 합니다. 최종 공유 기울기는 \(G_s = G_{core} + \sum_t G_t\)입니다(Algorithm 1). 이 처리는 공유 파라미터에만 적용합니다.</p>
+
+<h3>5. 실험</h3>
+<p><b>연구 질문.</b> RQ1 전체 성능, RQ2 구조·최적화 각각의 기여, RQ3 LEU·IFU의 효과, RQ4 최적화 전략 비교, RQ5 온라인 효과입니다.</p>
+<p><b>데이터셋.</b> 기존 MTL 데이터는 한 종류의 레이블만 있어서, 저자들이 hybrid 타깃을 직접 정의했습니다. 모두 시간순 8:1:1로 나눴습니다.</p>
+<ul>
+<li><b>KuaiRand</b>(KuaiRand-pure, 1,186,059 샘플): click(17.62%) → long view(8.50%) → watch time(평균 6.94, 표준편차 18.79).</li>
+<li><b>Kaggle-Revenue</b>(Acquire Valued Shoppers, 5,041,007 샘플): 1년 내 재구매(85.68%) → 1개월 내 재구매(41.05%) → 1개월 재구매 금액(평균 4.52, 표준편차 165.69).</li>
+<li><b>Product</b>(Tencent 펀드 추천 로그 3개월, 19,160,294 샘플): click(8.65%) → purchase(4.82%) → 구매 금액(평균 1627.05, 표준편차 8009.42).</li>
+</ul>
+<p>금액 타깃은 표준편차가 평균의 수십 배입니다. 극단적인 롱테일이라 MSE 학습이 특히 흔들리기 쉬운 환경입니다.</p>
+<p><b>베이스라인과 지표.</b> 단일 태스크 DNN, 범용 MTL(Shared-Bottom, MMoE, PLE, AdaTT), SDMTL(ESMM, AITM), 최적화 기법(MetaBalance)을 비교했습니다. 분류에는 AUC·LogLoss, 회귀에는 NRMSE·NMAE를 썼고, 금액 타깃에는 순위 품질을 보는 Spearman·Gini를 더했습니다. 모든 모델은 은닉층 [128, 64, 32], Adam, Xavier 초기화를 쓰고, Optuna로 튜닝했습니다. 온도 초기값은 \(\tau=10\), 감쇠율 0.5이며, 넘겨주는 표현은 타워 첫 층에서 뽑습니다. 각 실험은 10회 반복했고 t-검정으로 유의성을 표시했습니다.</p>
+
+<p><b>5.2 전체 성능(RQ1).</b> 핵심 행만 추렸습니다(HTLNet vs 해당 지표 최고 베이스라인).</p>
+<table>
+<tr><th>데이터·지표</th><th>HTLNet</th><th>최고 베이스라인</th></tr>
+<tr><td>KuaiRand click AUC</td><td>0.7574</td><td>0.7541 (MB)</td></tr>
+<tr><td>KuaiRand long view AUC</td><td>0.7787</td><td>0.7768 (MB)</td></tr>
+<tr><td>KuaiRand watch time NRMSE↓</td><td>0.8937</td><td>0.8963 (PLE)</td></tr>
+<tr><td>KuaiRand watch time NMAE↓</td><td>0.9093</td><td>0.9508 (AdaTT)</td></tr>
+<tr><td>Kaggle 재구매 1Y AUC</td><td>0.6960</td><td>0.6896 (MB)</td></tr>
+<tr><td>Kaggle 금액 NMAE↓</td><td>1.0585</td><td>1.0623 (MMoE)</td></tr>
+<tr><td>Kaggle 금액 Gini</td><td>0.5233</td><td>0.5185 (AdaTT)</td></tr>
+<tr><td>Product click AUC</td><td>0.8049</td><td>0.8036 (AITM)</td></tr>
+<tr><td>Product purchase AUC</td><td>0.9023</td><td>0.9008 (MB)</td></tr>
+<tr><td>Product 금액 NMAE↓</td><td>0.8383</td><td>0.8469 (ESMM)</td></tr>
+<tr><td>Product 금액 Spearman</td><td>0.2244</td><td>0.2088 (PLE)</td></tr>
+<tr><td>Product 금액 Gini</td><td>0.8362</td><td>0.8279 (AdaTT)</td></tr>
+</table>
+<p>저자들의 해석은 네 가지입니다. ① 대부분의 MTL이 단일 DNN보다 낫다는 점은 hybrid 타깃에 MTL을 쓸 근거가 됩니다. ② MMoE·PLE·AdaTT는 핵심 회귀에서는 괜찮지만 앞 단계 분류에서는 약합니다. 저자들은 이를 최적화 난이도 탓으로 봅니다. 실제로 Kaggle 1Y AUC에서 MMoE·PLE·AdaTT(0.67대)는 단일 DNN(0.6892)보다 낮습니다. ③ MetaBalance가 보조 태스크에서 강하다는 점은 최적화가 중요하다는 방증입니다. ④ ESMM·AITM 같은 SDMTL은 회귀 핵심 타깃에서 범용 MTL보다 약간 못합니다. 이진 의존만 염두에 두고 설계된 탓이라는 추측입니다. ESMM은 Kaggle 1Y LogLoss가 0.6871로 다른 모델(0.38~0.39)보다 크게 나쁩니다.</p>
+<p>읽을 때 주의할 점도 있습니다. NRMSE는 모든 모델이 0.89~0.90(KuaiRand), 0.998~0.999(Kaggle) 범위에 몰려 있어 차이가 매우 작습니다. Kaggle 1M LogLoss, Product purchase LogLoss처럼 별표(유의)가 없는 칸도 있습니다. 반면 NMAE와 Spearman·Gini처럼 롱테일에 민감하거나 순위를 보는 지표에서는 차이가 뚜렷합니다. 부록 C.1에서는 금액 타깃에 MSE 대신 ZILN(zero-inflated lognormal) 손실을 쓴 결과도 보고합니다. 저자들은 ZILN이 모든 태스크를 개선하며, 그 위에서도 HTLNet-ZILN이 ZILN보다 낫다고 말합니다(세부 수치는 논문 참조).</p>
+
+<p><b>5.3 Ablation(RQ2, KuaiRand).</b> "w/o Architecture"는 구조를 Shared-Bottom으로 바꾸고 기울기 처리만 남긴 버전, "w/o Optimization"은 구조만 남기고 Algorithm 1을 뺀 버전입니다. click AUC 0.7574 → 0.7470 / 0.7420, watch time NMAE 0.9093 → 0.9630 / 0.9480입니다. 분류 지표는 최적화를 뺀 쪽이 더 나쁩니다. 즉 정보를 많이 넘기는 구조일수록 그에 맞는 최적화가 꼭 필요하다는 것이 저자들의 결론입니다.</p>
+
+<p><b>5.4 구조 분석(RQ3).</b> 표현 전달(IFU의 rep 경로)을 빼면 click AUC 0.7526, NMAE 0.9248입니다. 레이블 임베딩을 빼면 0.7565, 0.9198입니다. 어느 쪽을 빼도 성능이 떨어집니다. 본문은 "w/o representation이 w/o label embedding보다 약간 낫다"고 쓰지만, 표의 숫자로는 네 지표 모두 w/o label embedding 쪽이 조금 더 좋습니다. 숫자대로 읽으면 표현 전달이 빠질 때 손실이 더 큽니다. IFU의 attention을 단순 concat으로 바꾸면 click AUC 0.7574 → 0.7429, long view AUC 0.7787 → 0.7705, NRMSE 0.8937 → 0.8986, NMAE 0.9093 → 0.9133입니다. 특히 분류 태스크 하락이 큽니다. 무조건 이어 붙이면 앞 단계의 쓸모없는 정보까지 받아 negative transfer가 생긴다는 해석입니다.</p>
+
+<p><b>5.5 최적화 분석(RQ4).</b> 가장 큰 영향은 stop-gradient입니다. 빼면 click AUC 0.7292, long view AUC 0.7549로 모든 변형 중 가장 나쁩니다. 회귀 타깃이 앞 단계에 직접 간섭하면 최적화가 크게 흔들린다는 증거입니다. 방향 충돌 제거를 빼면 0.7516, 크기 조정을 빼면 0.7424이고, 크기 조정 쪽이 더 중요해 보입니다. 같은 구조에 PCGrad(Gradient Surgery)를 쓰면 0.7432, MetaBalance를 쓰면 0.7517로, 모두 제안 방식(0.7574)보다 못합니다.</p>
+<p>Figure 5는 공유 임베딩에 걸리는 태스크별 기울기 크기를 학습 단계에 따라 그립니다. 처리 없이는 watch time 기울기가 점점 커지며 click·long view와 벌어지고, 처리를 하면 세 태스크가 비슷한 크기로 함께 수렴합니다(정확한 값은 그림 참조). 부록 C.3의 \(\alpha\), \(\gamma\) 민감도 분석도 그래프로만 나옵니다.</p>
+
+<p><b>5.6 온라인 실험(RQ5).</b> Tencent FiT 펀드 추천에서 기존 MMoE 대비 트래픽 10%로 14일간 A/B를 진행했습니다. 누적 개선은 CTR +0.54%, CVR +1.4%, 구매 금액 +2.69%입니다. 대부분 날짜에서 개선이 있었고, 금액은 날마다 변동이 더 컸다고 합니다. 저자들은 회귀 타깃 자체가 어렵다는 근거로 이를 듭니다.</p>
+
+<h3>6. 결론과 한계</h3>
+<p>HTLNet은 레이블 임베딩으로 앞 단계 정보를 명시적으로 전달하고, attention으로 적응적으로 융합하며, 이 구조가 만드는 기울기 문제를 별도 전략으로 다룹니다. 한계로 저자들은 두 가지를 듭니다. 학습 시간이 베이스라인보다 길고(부록 C.2, 수치는 그림 참조), "앞은 모두 이진, 마지막만 연속"이라는 구조를 가정한다는 점입니다. 중간에 연속 타깃이 끼거나 핵심 타깃이 여럿인 경우는 앞으로의 과제입니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>멀티태스크 학습(MTL).</b> 여러 예측 과제를 한 모델로 함께 학습해 표현을 공유하는 방식입니다. 추천에서는 CTR·CVR·체류 시간 등을 동시에 예측하는 데 씁니다. 관련 없는 태스크끼리 서로 해치는 현상을 negative transfer라 합니다.</p>
+<p><b>MMoE / PLE / AdaTT.</b> 여러 전문가 네트워크와 태스크별 게이트로 태스크 관계를 암묵적으로 학습하는 구조들입니다. PLE는 공유·전용 전문가를 분리하고, AdaTT는 태스크 간 융합을 잔차·게이트로 배웁니다.</p>
+<p><b>순차 의존 MTL(SDMTL).</b> 노출→클릭→전환처럼 앞 단계가 일어나야 다음 단계가 가능한 구조를 이용하는 MTL입니다. ESMM의 확률 곱 분해, AITM의 단계 간 정보 전달이 대표적입니다.</p>
+<p><b>ESMM.</b> \(pCTCVR = pCTR \times pCVR\)로 분해해 전체 노출 공간에서 CVR을 학습합니다. 클릭한 샘플에서만 학습할 때 생기는 표본 선택 편향과 희소성을 줄입니다.</p>
+<p><b>Gumbel-softmax.</b> 이산 샘플링을 연속 완화해 역전파를 가능하게 하는 기법입니다. 온도 \(\tau\)가 크면 부드러운 확률 벡터, 작으면 원-핫에 가까운 출력을 냅니다.</p>
+<p><b>Stop-gradient.</b> 순전파에서는 값을 그대로 쓰되 역전파 때 그 경로로 기울기를 흘리지 않는 연산입니다. 정보는 읽되 상대를 고치지 않게 할 때 씁니다.</p>
+<p><b>Gradient Surgery(PCGrad).</b> 두 태스크 기울기의 코사인 유사도가 음수일 때 한쪽을 다른 쪽의 법평면에 투영해 충돌을 없애는 방법입니다. 원래는 모든 태스크 쌍에 대칭적으로 적용합니다.</p>
+<p><b>MetaBalance.</b> 보조 태스크 기울기의 크기를 주 태스크 기울기 크기에 맞춰 조정하는 MTL 최적화 기법입니다. 완화 계수로 맞추는 정도를 조절합니다.</p>
+<p><b>NRMSE / NMAE.</b> RMSE·MAE를 타깃의 규모(예: 표준편차나 평균)로 나눠 데이터셋 간 비교가 가능하게 만든 회귀 오차입니다. 정확한 정규화 정의는 논문 참조입니다.</p>
+<p><b>ZILN 손실.</b> 고객 생애가치(LTV) 예측에서 쓰는 손실입니다. "0인지 아닌지"의 확률과 0이 아닐 때의 로그정규 분포를 함께 모델링해, 0이 많고 꼬리가 긴 금액 분포에 잘 맞습니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실) 논문이 말하는 "hybrid targets"에서 core target은 어떤 성격의 타깃이며, KuaiRand에서는 무엇으로 정했나요?
+<details><summary>정답 보기</summary>연속형 타깃입니다. 플랫폼 이익과 직결되는 값으로, KuaiRand에서는 watch time을 core target으로 두고 click·long view를 앞 단계 이진 타깃으로 썼습니다.</details></li>
+<li>(사실, 객관식) HTLNet의 온라인 A/B 대조군은? ① DNN ② ESMM ③ MMoE ④ PLE
+<details><summary>정답 보기</summary>③ MMoE입니다. 펀드 추천에서 트래픽 10%로 14일간 비교했고, CTR +0.54%, CVR +1.4%, 구매 금액 +2.69%를 보고했습니다.</details></li>
+<li>(사실) LEU의 레이블 임베딩 테이블 \(E_t\)의 크기는 어떻게 되고, 각 행은 무엇을 뜻하나요?
+<details><summary>정답 보기</summary>\(2\times L_d\)입니다. 이진 태스크마다 레이블 0과 레이블 1에 해당하는 두 개의 \(L_d\)차원 학습 벡터를 둡니다.</details></li>
+<li>(원리) 기존 SDMTL의 "인접 단계 예측 차이 = 확률" 가정이 hybrid targets에서 성립하지 않는 이유는?
+<details><summary>정답 보기</summary>마지막 단계의 예측이 확률이 아니라 금액·시간 같은 연속값이기 때문입니다. 확률과 연속값의 차이를 어떤 사건의 확률로 해석할 수 없습니다. 또 전환율이 높다고 금액이 크다는 보장도 없습니다.</details></li>
+<li>(원리) LEU가 정답 레이블도, 반올림한 예측도 아닌 Gumbel-softmax 샘플을 쓰는 이유를 각각 설명하세요.
+<details><summary>정답 보기</summary>정답 레이블은 서빙 때 없으니 train-test 불일치가 생깁니다. 하드 예측은 앞 단계 오류가 연쇄되고 미분이 안 됩니다. Gumbel-softmax는 예측 분포에서 미분 가능하게 샘플링하므로, 초반에는 두 임베딩을 모두 업데이트하고 온도가 내려가면서 점차 한쪽으로 수렴합니다.</details></li>
+<li>(원리) 제안 방식의 방향 충돌 제거는 원래 PCGrad와 어떤 점이 다른가요?
+<details><summary>정답 보기</summary>비대칭입니다. 핵심 태스크 기울기 \(G_{core}\)를 기준으로 고정하고, 그와 충돌하는(내적이 음수인) 보조 태스크 기울기 \(G_t\)만 투영합니다. 또 \(\alpha\)로 제거 정도를 조절합니다. PCGrad는 모든 태스크 쌍에 대칭으로 투영합니다.</details></li>
+<li>(해석) Table 5에서 가장 크게 성능을 떨어뜨린 변형은 무엇이며, 그것이 시사하는 바는?
+<details><summary>정답 보기</summary>stop-gradient 제거입니다(click AUC 0.7574 → 0.7292, long view AUC 0.7787 → 0.7549). 핵심 회귀 손실이 넘겨받은 정보 경로를 통해 앞 단계 예측을 직접 끌고 가면 최적화가 크게 불안정해진다는 뜻입니다.</details></li>
+<li>(해석) KuaiRand watch time에서 NRMSE 개선은 0.8963 → 0.8937로 작은데, NMAE는 0.9508 → 0.9093으로 큽니다. 이 차이를 어떻게 해석할 수 있나요?
+<details><summary>정답 보기</summary>RMSE 계열은 큰 오차에 제곱 가중이 붙어 꼬리 샘플이 지배하므로, 모델 간 차이가 잘 드러나지 않습니다. MAE는 일반 샘플의 오차를 고르게 반영하므로, 대다수 샘플에서 예측이 좋아진 효과가 더 크게 보입니다. 다만 이는 해설자의 해석이고 논문이 직접 분석한 내용은 아닙니다.</details></li>
+<li>(비판) Table 4의 본문 해석과 표 수치 사이의 불일치를 지적하고, 숫자대로 읽으면 어떤 결론이 나오는지 서술하세요.
+<details><summary>정답 보기</summary>본문은 w/o representation이 약간 낫다고 하지만, 표에서는 w/o label embedding이 네 지표 모두 근소하게 낫습니다(click AUC 0.7565 vs 0.7526, NMAE 0.9198 vs 0.9248). 숫자대로라면 타워 표현 전달이 레이블 임베딩보다 더 많은 정보를 실어 나르고, 레이블 임베딩은 보조적인 기여를 한다고 볼 수 있습니다.</details></li>
+<li>(적용) 우리 서비스가 "노출 → 클릭 → 장바구니 → 결제 금액"과 함께 "환불 금액"도 예측해야 한다면, HTLNet을 그대로 쓰기 어려운 점과 확장 아이디어를 말해 보세요.
+<details><summary>정답 보기</summary>HTLNet은 핵심 연속 타깃이 하나이고 기울기 처리도 \(G_{core}\) 하나를 기준으로 합니다. 연속 타깃이 둘이면 기준 기울기를 무엇으로 둘지, 두 회귀 기울기끼리의 충돌은 어떻게 처리할지 정해야 합니다. 예컨대 비즈니스 가중합 기울기를 기준으로 쓰거나, 각 회귀 타깃 뒤에 별도의 이진 깔때기를 연결하는 구조를 생각할 수 있습니다. 금액 분포가 롱테일이면 MSE 대신 ZILN 손실을 쓰는 것도 고려합니다(부록 C.1).</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#12</b> <a href="012-progressive-layered-extraction.html">Progressive Layered Extraction (PLE)</a> (Tencent): 이 논문의 주요 베이스라인입니다. 범용 MTL의 공유·전용 전문가 구조를 이해하는 출발점입니다.</li>
+<li><b>#197</b> Task Aware Feature Extraction Framework for Sequential Dependence Multi-Task Learning (TAFE): 본문이 SDMTL의 대표 사례로 인용하는 [24]입니다. 레이블을 손실 제약으로 쓰는 방식과 비교해 볼 만합니다(미발송).</li>
+<li><b>#211</b> An Analysis Of Entire Space Multi-Task Models For Post-Click Conversion Prediction: ESMM 계열의 가정과 한계를 분석합니다. 여기서 짚은 "확률 차이" 가정 문제와 이어집니다(미발송).</li>
+<li><b>#229</b> Attending to the Core: Core-Task Attention for Recommendation: 제목으로 보아 "핵심 태스크 중심"이라는 같은 문제의식을 attention으로 다루는 논문입니다. HTLNet과 비교하며 읽기 좋습니다(미발송).</li>
+<li><b>#41</b> <a href="041-e3ir-budget-incentive-uplift.html">End-to-End Cost-Effective Incentive Recommendation under Budget Constraint</a> (Tencent): 같은 FiT 저자군(Xing Tang, Dugang Liu, Xiuqiang He)의 논문으로, 금융 플랫폼의 금액·예산 문제를 다룹니다.</li>
+</ul>
+</main>
+</body>
+</html>
