@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enhancing Online Video Recommendation via a Coarse-to-fine Dynamic Uplift Modeling Framework</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-10</span></div>
+<h1>Enhancing Online Video Recommendation via a Coarse-to-fine Dynamic Uplift Modeling Framework</h1>
+<p class="meta">Chang Meng, Chenhao Zhai, Xueliang Wang, Shuchang Liu, Xiaoqiang Feng, Lantao Hu, Xiu Li, Han Li, Kun Gai (Kuaishou Technology · Tsinghua University SIGS) · RecSys 2025 Full Papers 트랙</p>
+<div class="chips"><span>2025</span><span>Kuaishou</span><span>Uplift Modeling</span><span>인과 추론</span><span>Multi-treatment</span><span>숏폼 비디오</span><span>영상 길이 분포 조정</span><span>실시간 관심</span><span>MMoE</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3705328.3748070">10.1145/3705328.3748070</a> · arXiv: <a href="https://arxiv.org/abs/2410.16755">2410.16755</a> (사전 공개본 제목: "Coarse-to-fine Dynamic Uplift Modeling for Real-time Video Recommendation") · PDF: <a href="https://arxiv.org/pdf/2410.16755v1">arXiv PDF</a> · 코드: <a href="https://github.com/UpliftVideo/CDUM">GitHub</a> · 수상: 없음 · 읽기 예상 13분</p>
+
+<div class="callout">ACM 원문 PDF는 접근이 막혀 있어 해설은 arXiv v1(2024년 10월) 사전 공개본을 기준으로 썼습니다. RecSys 2025 게재본은 제목이 바뀌었고, 초록 기준으로 과제 정의가 "복잡한 응답의 인과 관계"와 "장기·실시간 선호 모델링"으로 다듬어졌으며 코드·데이터셋 공개가 추가되었습니다. 게재본에서 실험 수치나 구성이 달라졌을 수 있으니 세부는 게재본을 확인하세요. 그래프로만 나온 일별 LT 추이(Figure 4)는 최종 수치만 옮겼습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 숏폼 추천 파이프라인에서 "영상 길이별 노출 비율을 조정할지"를 유저마다 정하는 문제를 uplift modeling으로 풀되, 하루 단위로 갱신되는 장기 선호 점수(CPM)에 요청 단위로 계산되는 실시간 관심 점수(FIC)를 곱해 처치 여부를 매 요청마다 다시 정하는 CDUM을 제안합니다.</p>
+<p><b>풀려는 문제.</b> Kuaishou 파이프라인에는 영상을 길이 구간으로 나누고 구간별 노출 수를 일률적인 파라미터로 조정하는 모듈이 있습니다. 모두에게 같은 값을 쓰니 개인화가 안 되고, 규칙 기반 개선안은 일반화가 약했습니다. 마케팅의 uplift(쿠폰을 줄 사람 고르기)를 가져오고 싶지만, 영상 추천은 유저 선호가 몇 분 단위로 바뀌고 응답 지표(시청 시간, 앱 사용 시간, 조회 수)가 서로 상충한다는 점이 다릅니다.</p>
+<p><b>핵심 아이디어.</b> 처치 = "특정 길이 구간 영상의 분포 조정"으로 정의합니다. 오프라인 CPM은 처치 임베딩을 guidance(전문가 게이트 선택)와 indicator(타워 출력 마스크)로 나눠 쓰는 멀티 처치 모델로, 처치별 예상 앱 사용 시간 \(\hat y^k\)를 냅니다. 온라인 FIC는 실시간 컨텍스트와 요청 후보를 보고, 길이 구간별 "오래 본 영상 / 짧게 본 영상" 비율 \(\hat r^k\)를 예측합니다. 결정 점수 \(\hat r^k \hat y^k - \hat y^0\)가 임계값 \(\xi\)를 넘으면 그 처치를 켭니다.</p>
+<p><b>주요 결과.</b> 공개 데이터 LAZADA에서 CPM의 QINI 0.0265(최고 베이스라인 SNet 0.0238), CRITEO에서 0.0942(FlexTENet 0.0924)이고, Kuaishou 오프라인 데이터에서 평균 AUUC 0.01143(MESI 0.01053)입니다. 18일 온라인 A/B(트래픽 20% vs 20%)에서 Enter LT7 +0.048%, LT30 +0.041%, 앱 사용 시간 +0.135%, 시청 시간 +0.188%였고, FIC를 뺀 변형 대비로도 시청 시간 +0.129%가 났습니다. 현재 전체 유저에 배포됐습니다.</p>
+<p><b>한계와 남는 질문.</b> FIC의 예측값을 장기 점수에 "곱하는" 결합은 인과적 근거보다는 휴리스틱에 가깝고, 결합된 점수가 실제 ITE를 얼마나 잘 근사하는지는 오프라인에서 검증되지 않습니다. 공개 데이터 실험은 CPM만 평가하며 FIC는 온라인에서만 확인됩니다. 처치 개수 \(K\), 길이 구간 경계, 장·단 재생 기준 같은 실무 세부도 사전 공개본에는 드러나지 않습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 마케팅의 uplift를 숏폼으로 옮기기</h3>
+<p>숏폼 플랫폼의 랭킹 파이프라인에는 점수 순 정렬 외에도 "분포 관리" 모듈이 붙습니다. 예컨대 결과 목록에서 짧은 영상과 긴 영상의 비율을 맞추는 모듈입니다. 저자들에 따르면 짧은 영상 노출을 늘리면 광고 등 상업화 지표가 좋아지고, 긴 영상 노출을 늘리면 소비 지표가 좋아지는 trade-off가 있습니다. 문제는 이 조정이 모든 유저에게 같은 파라미터로 적용된다는 점입니다.</p>
+<p>Uplift modeling은 "처치를 하면 이 사람의 결과가 얼마나 달라지나"를 추정해 효과가 큰 사람에게만 처치하는 기술입니다. 마케팅에서는 과거 행동 피처만으로 충분하고 처치(쿠폰)와 응답(전환)의 연결도 단순합니다. 반면 영상 추천은 연속적으로 다양한 영상이 밀려오며 선호가 빠르게 바뀌고, 응답도 여러 지표가 서로 견제합니다. 저자들은 두 과제를 꼽습니다. (1) 상충하는 응답들 사이 균형을 맞추면서 장기 선호 학습에도 도움이 되는 <b>처치 설계</b>, (2) 일 단위 피처만 쓰는 기존 uplift가 놓치는 <b>실시간 관심 포착</b>. 장기 선호 추정에는 편향이 섞이기 마련인데, 실시간 신호로 그 편향을 동적으로 보정하자는 것이 동기입니다.</p>
+
+<h3>2. 관련 연구</h3>
+<p>Uplift 방법은 세 갈래로 정리됩니다. <b>메타 러너</b>: S-learner는 처치 변수를 피처로 넣은 단일 모델, T-learner는 처치·통제군별 두 모델의 차이, X-learner는 성향 점수(propensity)로 두 추정을 가중 결합해 그룹 크기 불균형에 강합니다. <b>트리 기반</b>: 분할 기준에 처치 효과 차이를 넣어 반응이 큰 하위 집단을 점진적으로 떼어냅니다. <b>신경망 기반</b>: TARNet·CFRNet·DragonNet 등. 마케팅 쪽 대표로 EUEN(통제군 전환 확률과 uplift를 두 서브넷으로 따로 추정), DESCN(처치 편향과 샘플 불균형을 다루는 end-to-end 멀티태스크 교차 네트워크), EFIN(처치에 민감한 비처치 피처와의 명시적 상호작용, 개입 제약 모듈)이 언급됩니다. 저자들의 비판은 이들 모두 오프라인 피처만 써서 대상 집단을 실시간으로 바꿀 수 없다는 점입니다.</p>
+
+<h3>3. 문제 정의</h3>
+<p><b>오프라인.</b> 학습 인스턴스 \(z_i=(\mathbf{x}_i,\mathbf{t}_i,y_i)\)에서 \(\mathbf{x}_i\in\mathbb{R}^{f_x}\)는 유저·컨텍스트 피처, \(\mathbf{t}_i\in\mathbb{R}^{f_t}\)는 처치 피처이며 첫 번째 원소 \(t_i^0\in[0,K]\)가 처치 ID(0은 통제)입니다. Neyman-Rubin 잠재 결과 틀에서 \(y_i^k\)는 처치 \(k\)를 받았을 때, \(y_i^0\)는 받지 않았을 때의 결과입니다. 한 사람에게서 둘을 동시에 볼 수 없으므로 개인 처치 효과(ITE)</p>
+\[\tau_k(x_i)=\mathbb{E}[y_i^k\mid x_i]-\mathbb{E}[y_i^0\mid x_i]\]
+<p>는 정답 레이블이 없는 추정 대상입니다. 여기서 이 논문의 차별점은 두 기댓값을 오프라인에서 빼서 끝내지 않고, 둘을 온라인으로 넘겨 실시간 점수와 결합한 뒤 결정한다는 것입니다.</p>
+<p><b>온라인.</b> 요청 단위 피처 \(\mathbf{s}_i=[\mathbf{s}_i^0,\dots,\mathbf{s}_i^{f_s}]\)는 실시간 컨텍스트와 요청 후보이고, 각 \(\mathbf{s}_i^j\)는 최근 상호작용한 영상 \(L_j\)개에 대한 시퀀스입니다. 학습은 "유저 요청 하나 = 샘플 하나"로 합니다. 레이블 \(r_i^k\)는 요청에서 노출된 영상을 처치와 똑같은 \(K\)개 길이 구간으로 나눈 뒤, 구간 \(k\)에서 오래 재생된 영상 수를 짧게 재생된 영상 수로 나눈 비율입니다. 즉 "지금 이 유저가 이 길이대 영상을 끝까지 보는 편인가"를 요청 단위로 측정한 값입니다.</p>
+
+<h3>4. 방법 ① CPM: 장기 선호를 거칠게</h3>
+<p><b>피처 인코딩.</b> 연속형 피처는 최댓값으로 나눠 정규화(\(x_i^{j*}=x_i^j/\max_i x_i^j\))한 뒤, 임베딩 테이블 \(E_x\in\mathbb{R}^{f_x\times d}\), \(E_t\in\mathbb{R}^{f_t\times d}\)로 피처별 \(d\)차원 임베딩을 얻습니다. 유저 쪽 임베딩은 이어붙이고(\(\mathbf{e}^*_{x_i}=\mathrm{Concat}_j\,\mathbf{e}^j_{x_i}\)), 처치 쪽은 평균 풀링(\(\mathbf{e}^*_{t_i}=\sum_j \mathbf{e}^j_{t_i}/(f_t+1)\))합니다.</p>
+<p><b>Guidance와 indicator.</b> 멀티 관심(multi-interest) 학습에서 착안해, 처치 임베딩에서 두 갈래 표현을 뽑습니다. 각각 2층 MLP입니다.</p>
+\[\mathbf{h}^{gui}_{t_i}=\mathrm{ReLU}(\mathbf{e}^*_{t_i}W^h_{gui}+b^h_{gui}),\quad \mathbf{e}^{gui}_{t_i}=\sigma(\mathbf{h}^{gui}_{t_i}W^o_{gui}+b^o_{gui})\]
+<p>\(W^h\in\mathbb{R}^{d\times d_h}\)는 은닉층, \(W^o\in\mathbb{R}^{d_h\times d^*}\)는 출력층 가중치이고 \(\sigma\)는 시그모이드입니다. indicator 임베딩 \(\mathbf{e}^{ind}_{t_i}\)도 같은 구조로 얻습니다. 역할 분담이 핵심입니다. <b>guidance</b>는 "이 처치에서는 유저 피처 중 무엇을 볼지"를 정하는 필터이고, <b>indicator</b>는 "지금 어떤 처치를 다루는지"를 출력에 각인해 여러 처치 간 일반화를 돕는 표지입니다.</p>
+<p><b>멀티 처치 전문가 구조.</b> 유저 임베딩을 같은 형태의 MLP \(M\)개에 통과시켜 전문가 표현 \(\mathbf{f}_m\)을 만들고, guidance로 게이트를 계산합니다.</p>
+\[\mathbf{g}^k_i=\mathrm{Softmax}(W_g\,\mathbf{e}^{gui}_{t_i}+b_g),\qquad \hat y_i^k=h^k\!\Big(\textstyle\sum_{m=1}^{M}\mathbf{g}^k_i(m)\,\mathbf{f}_m\Big)\]
+<p>\(\mathbf{g}^k_i\in\mathbb{R}^M\)은 처치 \(k\)에 대한 전문가 가중치, \(h^k\)는 처치 \(k\) 전용 타워입니다. 일반 MMoE에서는 게이트가 입력 피처로 계산되지만, 여기서는 <b>처치</b> 표현이 게이트를 움직인다는 점이 다릅니다. indicator 임베딩은 타워의 최종 출력 직전에 마스크처럼 곱해집니다. 결과적으로 \(\hat y_i^k\)는 "처치 \(k\)를 받으면 이 유저의 응답(Kuaishou 데이터에서는 실험 기간 평균 앱 사용 시간)이 얼마일까"의 예측입니다.</p>
+<p><b>학습과 추론.</b> 손실은 Huber loss입니다.</p>
+\[\ell=\begin{cases}\tfrac12(\hat y_i^k-y_i^k)^2 & |\hat y_i^k-y_i^k|\le\delta\\ \tfrac12\delta^2+\delta(|\hat y_i^k-y_i^k|-\delta) & \text{otherwise}\end{cases}\]
+<p>오차가 \(\delta\) 이하면 제곱, 넘으면 선형으로 늘어나 사용 시간 같은 꼬리가 긴 레이블의 이상치에 덜 휘둘립니다. 각 샘플은 실제로 받은 처치 하나의 결과만 있으므로 그 처치의 타워만 손실에 기여하고 나머지 타워는 마스킹됩니다. 추론 때는 처치 피처를 0부터 \(K\)까지 바꿔 끼우며 \(\hat y_i^0,\dots,\hat y_i^K\)를 모두 계산해 온라인으로 넘깁니다.</p>
+
+<h3>5. 방법 ② FIC와 결정 규칙: 실시간으로 미세 조정</h3>
+<p>FIC는 요청마다 들어오는 피처를 같은 방식으로 임베딩한 뒤, 시퀀스 축으로 평균 풀링하고 이어붙입니다: \(\mathbf{e}^*_{s_i}=\mathrm{Concat}_j\big(\sum_{l=1}^{L_j}\mathbf{e}^j_{s_i}(l)/L_j\big)\). 그 위에 MMoE 형태의 멀티태스크 네트워크를 얹어 타워 \(k\)가 \(\hat r_i^k\)를 출력합니다. 레이블은 앞서 본 비율로,</p>
+\[\sum_{k=1}^{K}V_k=V,\quad V_k^{long}+V_k^{short}=V_k,\quad r_i^k=\frac{V_k^{long}}{V_k^{short}}\]
+<p>\(V\)는 요청의 노출 영상 수, \(V_k\)는 그중 길이 구간 \(k\)에 속한 수입니다. 손실은 역시 Huber이고, FIC는 서빙 경로에 직접 배포되어 매 요청 호출됩니다.</p>
+<p><b>결정.</b> 처치 \(k\)의 결정 점수를 \(\hat r_i^k\cdot\hat y_i^k-\hat y_i^0\)로 두고, 이것이 \(\xi\)보다 크면 처치 \(k\)를 켭니다(기본값 \(\xi=0\)). 해석하면, 장기적으로 처치 \(k\)가 사용 시간을 늘릴 유저라도 지금 그 길이대 영상을 계속 넘기고 있다면(\(\hat r^k\)가 작음) 처치를 끄고, 반대면 증폭합니다. 하루 단위의 거친 uplift를 요청 단위 신호로 다시 저울질하는 구조이며, 제목의 "coarse-to-fine"이 바로 이것입니다.</p>
+
+<h3>6. 오프라인 실험</h3>
+<p><b>데이터.</b> CRITEO(약 1,400만 건, 피처 12개, 처치 지표 1개, 레이블 visit/conversion 중 visit 사용, 8:1:1 무작위 분할), LAZADA(바우처 배포, 피처 83개; 타기팅 정책으로 편향된 처치 데이터를 학습에, 정책 영향을 받지 않은 소수 RCT 유저를 테스트에 사용), Kuaishou(여러 RCT 실험 시작 전 14일간 수집; 지역·활동성 등 속성, 7일/30일 소비 정보, 상업적 가치 등급 등 피처, 레이블은 실험 기간 평균 앱 사용 시간; 처치 그룹당 약 850만 건, 8:1:1).</p>
+<p><b>지표·설정.</b> scikit-uplift로 계산한 정규화 AUUC, QINI, LIFT@30. Kuaishou는 처치가 여럿이라 처치별 AUUC의 평균 AUUC<sub>avg</sub>를 씁니다. TensorFlow, Adam(lr 0.001, 2 epoch 개선 없으면 0.6배 감소), 배치 4096, 임베딩 32, 전문가 3개, \(\delta=1\), \(\xi=0\).</p>
+<p><b>공개 데이터 결과(QINI / AUUC / LIFT@30).</b></p>
+<table>
+<tr><th>모델</th><th>LAZADA</th><th>CRITEO</th></tr>
+<tr><td>S-Learner</td><td>0.0207 / 0.0029 / 0.0072</td><td>0.0902 / 0.0354 / 0.0298</td></tr>
+<tr><td>CFRNet</td><td>0.0231 / 0.0033 / 0.0087</td><td>0.0901 / 0.0354 / 0.0302</td></tr>
+<tr><td>FlexTENet</td><td>0.0185 / 0.0026 / 0.0079</td><td>0.0924 / 0.0363 / 0.0298</td></tr>
+<tr><td>SNet</td><td>0.0238 / 0.0034 / 0.0076</td><td>0.0843 / 0.0331 / 0.0284</td></tr>
+<tr><td>EFIN</td><td>0.0141 / 0.0020 / 0.0077</td><td>0.0859 / 0.0337 / 0.0287</td></tr>
+<tr><td><b>CPM</b></td><td><b>0.0265 / 0.0037 / 0.0087</b></td><td><b>0.0942 / 0.0371 / 0.0310</b></td></tr>
+</table>
+<p>저자의 관찰은 세 가지입니다. 단순한 S/T-learner가 복잡한 신경망 일부보다 낫다는 점에서, 대규모 uplift에서는 복잡한 구조가 민감 피처를 빨리 찾지 못해 오히려 불리할 수 있다고 봅니다. 최고 베이스라인이 데이터셋마다 다르고(LAZADA는 SNet, CRITEO는 FlexTENet) EUEN·DESCN은 편차가 커서 기존 모델의 일반화가 약하다고 해석합니다. CPM은 모든 지표에서 최고(p&lt;0.05)입니다. 다만 LAZADA LIFT@30은 CFRNet과 0.0087로 같습니다.</p>
+<p><b>Kuaishou 멀티 처치(AUUC<sub>avg</sub>).</b> T-Learner 0.00787, CausalForestDML 0.00914, Shared Bottom 0.00798, MMOE 0.00947, PLE 0.00998, MESI 0.01053, CPM 0.01143. 멀티태스크 모델은 CPM 자리를 대체하는 형태로 비교했습니다.</p>
+<p><b>Ablation.</b> indicator를 빼면 LAZADA QINI 0.0218, guidance를 빼고 원래 피처 임베딩으로 게이트를 만들면 0.0220으로, 둘 다 0.0265에서 크게 떨어집니다. CRITEO에서는 각각 0.0922, 0.0901입니다. 두 장치가 모두 필요하다는 근거입니다.</p>
+
+<h3>7. 온라인 적용</h3>
+<p><b>시스템.</b> 요청이 오면 retrieval이 후보를 뽑고 Cascading Ranker로 넘깁니다. CDUM은 Cascading Ranker 안의 "버킷별 영상 길이 조정" 단계에 붙습니다. CPM 출력 \(\hat y^k,\hat y^0\)는 일 단위로 갱신해 캐시처럼 쓰고, FIC만 요청마다 실시간 추론해 \(\hat r^k\)를 냅니다. 두 값으로 요청 단위로 처치를 켤지 정합니다. 무거운 모델은 오프라인, 가벼운 모델은 온라인이라는 실무적 분업입니다.</p>
+<p><b>A/B 설정.</b> 유저 20%에 CDUM, 20%에 기존 온라인 방식을 2024-09-12부터 18일간 적용했습니다. 지표는 앱 사용 시간·시청 시간(소비)과 익일·7일 리텐션, Enter/Slide LT7·LT30(리텐션)입니다. Enter LT7은 기간 내 DAU 합을 기간 내 총 활성 유저 수로 나눈 값, Slide LT7은 DAU 합을 WAU로 나눈 값으로, 중장기 DAU의 비편향 추정치로 소개됩니다. 저자들은 Kuaishou 규모에서 LT가 0.01%만 올라도 유의미하다고 말합니다.</p>
+<p><b>결과.</b> Enter LT7/LT30 +0.048%/+0.041%, Slide LT7/LT30 +0.041%/+0.039%. 익일 리텐션 +0.034%, 7일 리텐션 +0.038%, 앱 사용 시간 +0.135%(1인당 +0.131%), 시청 시간 +0.188%. FIC를 빼고 \(\hat y^k-\hat y^0>\xi\)만으로 결정한 변형 대비로는 앱 사용 시간 +0.078%(1인당 +0.094%), 시청 시간 +0.129%로, 실시간 보정이 소비 지표 개선의 상당 부분을 차지함을 보여줍니다. 각 지표의 유의성 표시는 논문 표를 참조하세요.</p>
+
+<h3>8. 결론</h3>
+<p>저자들은 uplift를 숏폼 추천의 분포 관리 문제에 적용하고, 영상 길이 분포 조정을 처치로 설계했으며, 일 단위 장기 선호와 요청 단위 실시간 관심을 coarse-to-fine으로 결합해 처치 대상을 동적으로 바꾸는 CDUM을 제안했다고 정리합니다. 엔지니어 관점에서 가져갈 점은 "uplift 점수를 매일 배치로 뽑아 쓰는 것"을 넘어, 같은 결정을 요청마다 가벼운 실시간 모델로 재조정할 수 있다는 설계 패턴입니다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>Uplift modeling</b>: 처치(쿠폰, 정책 변경 등)가 개인 결과를 얼마나 바꾸는지(증분 효과)를 예측해, 효과가 큰 대상에게만 처치를 배정하는 기법입니다. "반응할 사람"이 아니라 "처치 때문에 반응이 달라질 사람"을 찾습니다.</li>
+<li><b>Neyman-Rubin 잠재 결과 / ITE</b>: 각 개인에게 처치 시·비처치 시 결과가 모두 존재한다고 가정하고, 그 차이를 개인 처치 효과(ITE)라 부릅니다. 하나만 관측되므로(인과 추론의 근본 문제) 직접 지도 학습할 레이블이 없습니다.</li>
+<li><b>S/T/X-learner</b>: 기존 예측 모델로 ITE를 추정하는 메타 러너입니다. S는 처치를 피처로 넣은 단일 모델, T는 그룹별 두 모델의 차, X는 성향 점수로 두 방향 추정을 가중 결합합니다.</li>
+<li><b>AUUC / QINI / LIFT@h</b>: uplift 점수 순으로 사람을 정렬했을 때 누적 증분 효과 곡선 아래 면적(AUUC), 처치군·통제군 크기를 보정한 Qini 곡선 면적(QINI), 상위 h% 집단의 uplift(LIFT@h)입니다. 개인 정답이 없으니 집단 단위 순위 품질을 봅니다.</li>
+<li><b>RCT 데이터</b>: 처치를 무작위로 배정한 실험 데이터로, 처치 여부와 유저 특성이 독립이어서 집단 차이를 인과 효과로 해석할 수 있습니다. uplift 학습·평가의 기본 재료입니다.</li>
+<li><b>MMoE</b>: 여러 전문가 네트워크를 공유하고 태스크별 게이트가 전문가 가중치를 정하는 멀티태스크 구조입니다. CPM은 게이트 입력을 처치 표현으로 바꾼 변형, FIC는 거의 그대로 사용합니다.</li>
+<li><b>Huber loss</b>: 작은 오차는 제곱, 큰 오차는 절댓값으로 처리하는 회귀 손실입니다. 시청·사용 시간처럼 꼬리가 긴 레이블에서 이상치 영향을 줄입니다.</li>
+<li><b>Cascading Ranker</b>: 후보를 여러 단계에 걸쳐 점점 줄이며 정렬하는 다단계 랭킹 구조입니다. 그 안에 다양성·분포 조정 같은 규칙성 모듈이 끼어 있습니다.</li>
+<li><b>LT7 / LT30</b>: 일정 기간(7일·30일) 동안 유저가 평균 며칠 활성이었는지를 보는 리텐션 계열 지표로, 단기 소비보다 유저 경험의 장기 효과를 반영합니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실) CDUM이 설계한 처치(treatment)는 무엇인가요?
+<details><summary>정답 보기</summary>영상 길이 구간별 노출 분포를 조정하는 것입니다. 길이 구간 \(k\)마다 하나의 처치가 대응하며, 통제(0)는 조정하지 않는 경우입니다.</details></li>
+<li>(사실) 온라인 FIC 모듈의 학습 레이블 \(r_i^k\)는 어떻게 정의되나요? ① 구간 \(k\) 영상의 평균 시청 시간 ② 구간 \(k\)에서 오래 재생된 영상 수 / 짧게 재생된 영상 수 ③ 구간 \(k\) 영상의 클릭률 ④ 다음 날 재방문 여부
+<details><summary>정답 보기</summary>②. 요청에서 노출된 영상을 처치와 같은 길이 구간으로 나누고, 구간별로 장(長)재생 수를 단(短)재생 수로 나눈 비율입니다.</details></li>
+<li>(사실) 온라인 A/B 테스트의 기간과 트래픽 배분, 그리고 Enter LT7 개선폭은?
+<details><summary>정답 보기</summary>2024-09-12부터 18일간, CDUM과 기존 방식에 각각 유저 20%씩 배정했습니다. Enter LT7은 +0.048%입니다.</details></li>
+<li>(원리) CPM에서 guidance 임베딩과 indicator 임베딩은 각각 어디에 쓰이고 어떤 역할을 하나요?
+<details><summary>정답 보기</summary>guidance는 softmax 게이트의 입력이 되어 처치별로 어떤 전문가(유저 피처 정보)를 뽑을지 고르는 필터 역할을 합니다. indicator는 타워 최종 출력 앞에서 마스크처럼 적용되어 현재 처치를 표시하고, 여러 처치 사이 일반화를 돕습니다.</details></li>
+<li>(원리) CPM 학습 시 한 샘플에서 왜 하나의 타워만 손실에 기여하나요? 추론 때는 어떻게 모든 처치의 점수를 얻나요?
+<details><summary>정답 보기</summary>각 샘플은 실제 받은 처치 하나의 결과만 관측되기 때문입니다(잠재 결과 중 하나만 관측). 나머지 타워 손실은 마스킹합니다. 추론 때는 처치 피처를 0~K로 바꿔 넣으며 \(\hat y^0,\dots,\hat y^K\)를 모두 계산합니다.</details></li>
+<li>(원리) 결정 점수 \(\hat r^k\hat y^k-\hat y^0>\xi\)에서 \(\hat r^k\)가 매우 작을 때 어떤 일이 생기며, 그것이 의도하는 바는?
+<details><summary>정답 보기</summary>\(\hat r^k\hat y^k\)가 작아져 장기적으로 uplift가 양수인 유저라도 처치가 꺼질 수 있습니다. 지금 이 유저가 해당 길이 영상을 짧게 넘기고 있다는 실시간 신호로 장기 선호 추정을 보정하려는 의도입니다.</details></li>
+<li>(해석) 공개 데이터에서 S/T-learner가 일부 복잡한 신경망보다 좋았던 결과를 저자들은 어떻게 해석했나요?
+<details><summary>정답 보기</summary>대규모 uplift에서는 복잡한 구조가 유저의 민감 피처를 빠르게 식별하지 못해 오히려 성능이 떨어질 수 있다고 봤습니다. 또 최고 베이스라인이 데이터셋마다 달라 기존 모델의 일반화가 약하다고 해석했습니다.</details></li>
+<li>(해석) CDUM 대 CDUM w/o FIC 온라인 비교(시청 시간 +0.129%)와, 온라인 기존 방식 대비 CDUM(시청 시간 +0.188%)을 함께 보면 무엇을 알 수 있나요?
+<details><summary>정답 보기</summary>두 실험이 따로 진행되어 단순 차감은 엄밀하지 않지만, 기존 방식 대비 시청 시간 개선 중 상당 부분이 실시간 보정(FIC)에서 나온다는 것을 시사합니다. CPM만 쓰는 개인화 uplift로도 일부 개선이 있었을 것으로 보입니다.</details></li>
+<li>(비판) \(\hat r^k\)를 \(\hat y^k\)에 곱하는 결합 방식의 이론적 약점은 무엇이고, 어떻게 검증하거나 개선할 수 있을까요?
+<details><summary>정답 보기</summary>예시 답: \(\hat r^k\)는 처치 효과가 아니라 관측된 시청 행태 비율이라, 곱한 값이 ITE라는 보장이 없습니다. 통제군 점수 \(\hat y^0\)에는 보정이 없어 비대칭이기도 합니다. 요청 단위 RCT 로그로 결합 점수의 Qini를 직접 측정하거나, 실시간 피처를 넣은 uplift 모델을 end-to-end로 학습해 비교할 수 있습니다. \(\xi\)와 결합 형태(곱/가산)도 오프라인에서 탐색해 볼 만합니다.</details></li>
+<li>(적용) 우리 서비스의 "카테고리별 노출 비율 조정"이나 "광고 슬롯 빈도" 같은 규칙 모듈에 CDUM 패턴을 적용하려면 무엇부터 준비해야 할까요?
+<details><summary>정답 보기</summary>예시 답: ① 처치를 이산적인 설정값(예: 카테고리 가중치 수준)으로 정의, ② 처치별 무작위 배정 실험으로 RCT 데이터 확보, ③ 장기 목표(사용 시간·리텐션)를 레이블로 한 일 단위 멀티 처치 모델, ④ 처치와 같은 구간 분할로 정의한 요청 단위 실시간 레이블과 가벼운 온라인 모델, ⑤ 결합 규칙과 임계값을 A/B로 튜닝하고 상충 지표(광고 매출 등)도 함께 모니터링.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#41</b> <a href="041-e3ir-budget-incentive-uplift.html">End-to-End Cost-Effective Incentive Recommendation under Budget Constraint with Uplift Modeling</a> (Tencent): 같은 토픽의 uplift 논문입니다. 마케팅식 uplift에 예산 제약을 더한 경우라, 이 논문이 "마케팅과 다르다"고 말하는 지점을 대조해 보기 좋습니다.</li>
+<li><b>#12</b> <a href="012-progressive-layered-extraction.html">Progressive Layered Extraction (PLE)</a> (Tencent): Kuaishou 오프라인 실험에서 CPM 대체 베이스라인으로 쓰인 멀티태스크 구조입니다.</li>
+<li><b>#39</b> <a href="039-douyin-interference-dq.html">Correcting for Interference in Experiments: A Case Study at Douyin</a>: 숏폼 플랫폼 A/B 실험의 간섭 문제를 다룹니다. 0.0x% 단위 LT 개선을 믿으려면 실험 설계가 얼마나 중요한지 함께 생각해 볼 수 있습니다.</li>
+<li><b>#73</b> Towards Reliable Social A/B Testing: Spillover-Contained Clustering with Robust ... (Kuaishou): 같은 회사의 A/B 신뢰성 연구입니다(미발송).</li>
+<li><b>#70</b> MoR: An Adaptive Retrieval Allocation Balancing Long-Term Interest and Short-Term ... (Amazon): 장기 관심과 단기 관심을 섞어 배분을 조정한다는 문제의식이 CDUM의 coarse-to-fine과 닮았습니다(미발송).</li>
+</ul>
+</main>
+</body>
+</html>
