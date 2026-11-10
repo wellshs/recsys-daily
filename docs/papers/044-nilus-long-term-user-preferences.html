@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#44 Large Scale E-Commerce Model for Learning and Analyzing Long-Term User Preferences</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-11</span></div>
+<h1>Large Scale E-Commerce Model for Learning and Analyzing Long-Term User Preferences</h1>
+<p class="meta">Yonatan Hadar, Yotam Eshel, Tal Franji, Michelle Hwang, Guy Feigenblat (eBay) · Bracha Shapira (Ben-Gurion University) · RecSys 2025 Short Papers 트랙 (pp. 621–625)</p>
+<div class="chips"><span>2025</span><span>eBay</span><span>장기 선호</span><span>User Embedding</span><span>Contrastive Learning</span><span>Transformer</span><span>Sentence Encoder</span><span>Content-based</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3705328.3748027">10.1145/3705328.3748027</a> · arXiv: 없음(공개 사전본 확인 안 됨) · PDF: ACM DL(비공개) · 수상: 없음 · 읽기 예상 9분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성. arXiv·Semantic Scholar(openAccessPdf=CLOSED)·ACM DL(접근 차단)·웹 검색 어디에서도 공개 PDF를 찾지 못했습니다. 아래 내용은 초록, Semantic Scholar TLDR, 서지 정보에 이 분야 일반 지식을 더해 정리했습니다. 초록에 없는 구체 수치·하이퍼파라미터는 모두 "논문 참조"로 두었고, 추정한 설계는 <b>[해석]</b>으로 표시했습니다.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 최대 1년 치 행동 이력을 보고 "앞으로 K일 동안 이 사용자가 무엇과 상호작용할지"를 맞히도록 학습한 콘텐츠 기반 Transformer(NILUS)가, 짧은 세션 신호로는 잡히지 않는 <b>오래가는 관심사</b>를 사용자 임베딩에 담을 수 있다는 주장입니다.</p>
+<p><b>풀려는 문제.</b> 대형 이커머스 추천은 보통 최근 클릭·조회처럼 단기 신호에 크게 의존합니다. 그러면 추천이 "방금 본 물건" 쪽으로 쏠리고, 몇 달에 걸쳐 이어지는 취미나 수집 분야 같은 꾸준한 선호는 놓치기 쉽습니다. eBay처럼 카테고리가 아주 넓고 상품이 대부분 일회성 리스팅인 플랫폼에서는 ID 기반 임베딩을 쓰기도 어렵습니다.</p>
+<p><b>핵심 아이디어.</b> (1) 아이템을 ID가 아닌 <b>텍스트(제목 등)를 fine-tuned sentence encoder로 인코딩한 벡터</b>로 표현해, 새 리스팅과 롱테일에도 표현이 생기게 합니다. (2) 1년 치 이력을 Transformer로 요약해 사용자 임베딩을 만들고, (3) "다음 클릭 하나"가 아니라 <b>K일 미래 구간</b>의 행동을 맞히도록 contrastive learning으로 end-to-end 학습합니다. 맞혀야 할 대상이 넓은 시간 구간이라서, 모델이 순간적인 소음 대신 지속적인 관심을 배우게 됩니다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 수백만 사용자와 여러 상품 버티컬에 걸친 대규모 오프라인 데이터에서 강한 베이스라인보다 정확도가 높았고, 단기 신호와 합치면 정확도와 <b>다양성</b>이 함께 좋아졌습니다. 다국적 이커머스 플랫폼에서 대규모 온라인 A/B 테스트를 했고 사용자 engagement가 통계적으로 유의하게 올랐습니다. 구체 수치(상승률, 베이스라인 이름, K 값)는 논문 참조입니다.</p>
+<p><b>한계와 남는 질문.</b> 4쪽 short paper라 아키텍처와 ablation의 깊이가 제한적일 가능성이 큽니다. 또 "장기 선호를 잘 잡는다"를 어떻게 평가하느냐가 논문의 기여 중 하나인 만큼, 그 평가 틀이 단기 정확도와 실제로 얼마나 구분되는지는 원문으로 확인해야 합니다. 텍스트만 쓰는 콘텐츠 기반 설계가 협업 신호를 얼마나 잃는지도 남는 질문입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구성을 확인하지 못해, 초록이 밝힌 기여 단위(동기 → 모델 → 학습 목표 → 평가 틀 → 오프라인 실험 → 단기 신호 결합 → 온라인 A/B)로 나눠 설명합니다.</p>
+
+<h3>1. 동기: 단기 신호 편향과 이커머스의 특수성</h3>
+<p>세션 기반·순차 추천 모델(GRU4Rec, SASRec 계열)은 보통 최근 수십 개 이벤트를 입력으로 다음 아이템을 예측합니다. 클릭률을 올리는 데는 효과적이지만, 사용자가 방금 운동화를 봤다면 운동화만 계속 보여주는 식의 <b>근시안</b>이 생깁니다. 이 논문은 이런 단기 신호를 보완하는 <b>장기 사용자 신호(Long-Term User Signals)</b>를 따로 학습하는 것을 목표로 합니다. 모델 이름 NILUS도 여기서 왔습니다(Neural Inference for Long-Term User Signals).</p>
+<p>eBay의 사정은 이렇습니다. 상품 대부분이 개인 판매자의 일회성 리스팅이라 같은 아이템 ID가 다시 나오는 일이 드물고, 카테고리 폭(패션·전자제품·수집품·자동차 부품 등)이 매우 넓습니다. 그래서 아이템 ID 임베딩 테이블은 희소하고 금방 낡습니다. 저자들이 <b>콘텐츠 기반</b>을 택한 것도 이런 맥락에서 자연스럽습니다 <b>[해석]</b>.</p>
+
+<h3>2. 아이템 표현: fine-tuned sentence encoder</h3>
+<p>각 아이템은 텍스트(제목 등)를 sentence encoder에 넣어 얻은 고정 길이 벡터 \( \mathbf{e}_i \in \mathbb{R}^d \)로 표현됩니다. 초록은 이 인코더를 "fine-tuned"라고만 밝힙니다. 이커머스 도메인 데이터로 미세조정해, 예컨대 "같은 사용자가 함께 보는 상품" 같은 신호를 반영하도록 만들었을 가능성이 있지만, 미세조정 방식과 백본 모델은 논문 참조입니다.</p>
+<p>이 선택의 장점은 처음 보는 리스팅도 텍스트만 있으면 바로 벡터를 얻는다는 점(cold-start 대응)이고, 단점은 순수 협업 필터링이 잡는 "텍스트로는 드러나지 않는 연관성"을 일부 잃을 수 있다는 점입니다.</p>
+
+<h3>3. 사용자 인코더: 1년 이력을 읽는 Transformer</h3>
+<p>사용자 \(u\)의 과거 상호작용 시퀀스 \( H_u = (i_1, i_2, \dots, i_T) \)는 최대 1년 치로, 각 원소는 위의 아이템 벡터로 바뀌어 Transformer에 들어갑니다. 출력은 사용자 임베딩 \( \mathbf{z}_u = f_\theta(H_u) \)이며, 여기서 \( f_\theta \)는 학습 가능한 Transformer 인코더입니다. 이벤트 종류(조회·관심목록·구매 등), 시간 정보 인코딩 방식, 시퀀스 최대 길이, pooling 방식은 초록에 없어 논문 참조입니다.</p>
+<p>1년 치 이력은 시퀀스가 수천 개 이벤트까지 길어질 수 있으므로, 실제 서비스에서는 샘플링·집계·절단이 필요했을 것입니다 <b>[해석]</b>. 임베딩을 배치로 미리 계산해 두고 다른 시스템이 가져다 쓰는 구조라면 서빙 지연 부담이 줄어듭니다. 장기 선호는 매 요청마다 바뀔 필요가 없기 때문입니다.</p>
+
+<h3>4. 학습 목표: K일 미래 구간에 대한 contrastive learning</h3>
+<p>이 논문의 핵심 설계입니다. 기준 시점 \(t_0\) 이전 이력으로 \( \mathbf{z}_u \)를 만들고, \( (t_0, t_0+K] \) 구간에 사용자가 실제로 상호작용한 아이템 집합 \( F_u \)를 정답(positive)으로 둡니다. 정답이 "바로 다음 아이템"이 아닌 "미래 K일 전체"라서, 모델은 하루짜리 변덕보다 일정 기간 이어지는 관심을 맞히는 쪽으로 보상받습니다.</p>
+<p>contrastive 목표의 일반형(InfoNCE)은 다음과 같습니다. 논문이 쓴 정확한 손실 형태·음성 샘플링·온도 값은 논문 참조입니다.</p>
+\[ \mathcal{L} = -\frac{1}{|F_u|}\sum_{p \in F_u} \log \frac{\exp\big(\mathrm{sim}(\mathbf{z}_u, \mathbf{e}_p)/\tau\big)}{\exp\big(\mathrm{sim}(\mathbf{z}_u, \mathbf{e}_p)/\tau\big) + \sum_{n \in N_u} \exp\big(\mathrm{sim}(\mathbf{z}_u, \mathbf{e}_n)/\tau\big)} \]
+<p>기호 설명: \( \mathbf{z}_u \)는 사용자 임베딩, \( \mathbf{e}_p \)는 미래 K일 안에 실제로 상호작용한 아이템(양성)의 벡터, \( N_u \)는 음성 아이템 집합(보통 같은 배치의 다른 사용자 양성을 재활용하는 in-batch negative), \( \mathrm{sim} \)은 코사인 유사도나 내적, \( \tau \)는 분포의 날카로움을 조절하는 온도입니다. 이 손실을 줄이면 사용자 벡터는 미래에 실제로 볼 상품들 근처로, 무관한 상품들에서는 멀어지게 됩니다.</p>
+<p>"end-to-end"라는 표현으로 보아 사용자 인코더뿐 아니라 아이템 쪽 인코더(또는 그 위의 projection)까지 함께 갱신했을 수 있습니다. 어느 범위까지 같이 학습했는지는 논문 참조입니다. 결과적으로 사용자와 아이템이 <b>같은 벡터 공간</b>에 놓이므로, 사용자 임베딩으로 바로 근접 이웃 검색(retrieval)을 할 수 있습니다.</p>
+
+<h3>5. 새 평가 틀: "오래가는 관심"을 어떻게 재는가</h3>
+<p>저자들은 장기 관심 포착 능력을 평가하는 <b>새 평가 프레임워크</b>를 제안했다고 밝힙니다. 기존 next-item Recall@k는 바로 다음 클릭을 맞히는지만 보기 때문에 장기 모델의 장점을 드러내지 못합니다. 예를 들면 미래 구간을 길게 잡고, 최근 이력에서 이미 본 카테고리를 빼거나, 과거와 미래에 꾸준히 나타나는 관심만 따로 떼어 평가하는 방식을 생각할 수 있지만 <b>[해석]</b>, 논문이 실제로 정한 프로토콜과 지표는 논문 참조입니다. 실무 관점에서는 이 평가 틀이 모델보다 더 가져다 쓰기 좋은 기여일 수 있습니다. 장기 선호 모델은 단기 지표로만 재면 늘 저평가되기 때문입니다.</p>
+
+<h3>6. 오프라인 실험</h3>
+<p>데이터: 수백만 사용자, 여러 상품 버티컬에 걸친 eBay의 대규모 오프라인 로그(초록 기준). 정확한 사용자 수·기간·K 값은 논문 참조입니다.</p>
+<p>베이스라인: 초록은 "strong baselines"라고만 합니다. 이런 문제에서 흔히 비교하는 대상은 인기도 기반, 이력 아이템 벡터의 평균 pooling, 순차 추천 모델(SASRec 류) 등이지만, 실제로 쓴 목록은 논문 참조입니다.</p>
+<p>결과: NILUS가 베이스라인보다 정확도가 높았다고 보고합니다. 수치는 논문 참조입니다.</p>
+
+<h3>7. 단기 신호와의 결합</h3>
+<p>NILUS를 단기 신호(최근 세션 행동 기반 모델이나 특성)와 함께 쓰면 정확도와 <b>다양성</b>이 둘 다 좋아졌다고 합니다. 정확도와 다양성은 보통 한쪽을 얻으면 다른 쪽을 잃는 관계로 여겨지는데, 여기서 함께 오른 이유는 직관적으로 설명됩니다. 단기 신호는 "지금 보고 있는 것"에 집중하고, 장기 임베딩은 "요즘은 안 봤지만 원래 좋아하던 분야"를 다시 꺼내 줍니다. 두 신호가 서로 겹치지 않는 영역을 맡으므로 추천 목록 범위가 넓어지면서도 적중이 늘어납니다. 결합 방식(특성 concat, 후보 생성 채널 추가, 점수 가중합)과 다양성 지표 정의는 논문 참조입니다.</p>
+
+<h3>8. 온라인 A/B 테스트와 결론</h3>
+<p>다국적 이커머스 플랫폼(eBay)에서 대규모 온라인 A/B 테스트를 진행했고, 사용자 engagement 지표가 <b>통계적으로 유의하게</b> 개선됐습니다. 어떤 지표가 몇 % 올랐는지, 어떤 지면(홈피드, 상품 상세 추천 등)에 적용했는지는 논문 참조입니다.</p>
+<p>결론적으로 이 논문은 (a) 콘텐츠 기반 아이템 표현, (b) 긴 이력 Transformer, (c) K일 미래 구간 contrastive 목표의 조합으로 장기 선호용 사용자 임베딩을 만들고, (d) 이를 제대로 재는 평가 틀을 제시한 산업 사례로 정리할 수 있습니다. 제목에 "Analyzing"이 들어간 만큼 학습된 임베딩으로 사용자 선호를 분석하는 내용도 있을 것으로 보이나, 구체 내용은 논문 참조입니다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>장기 vs 단기 선호.</b> 단기 선호는 현재 세션의 의도(지금 노트북을 사려 함)이고, 장기 선호는 수개월 단위로 유지되는 취향(빈티지 카메라 수집)입니다. 산업 추천 시스템은 둘을 별도 모듈로 모델링한 뒤 합치는 경우가 많습니다.</li>
+<li><b>Content-based 아이템 표현.</b> 아이템 ID 대신 텍스트·이미지 같은 속성으로 벡터를 만드는 방식입니다. 처음 보는 아이템에도 표현이 생겨 cold-start와 일회성 리스팅에 강합니다.</li>
+<li><b>Sentence encoder.</b> 문장을 고정 길이 벡터로 바꾸는 모델(Sentence-BERT 계열 등)입니다. 의미가 비슷한 문장이 가까운 벡터가 되도록 학습되며, 도메인 데이터로 fine-tuning하면 상품 제목 같은 짧고 특수한 텍스트에 더 잘 맞습니다.</li>
+<li><b>Contrastive learning / InfoNCE.</b> 양성 쌍은 가깝게, 음성 쌍은 멀게 만드는 학습입니다. 추천에서는 사용자–상호작용 아이템을 양성으로 두는 two-tower 학습이 대표적입니다.</li>
+<li><b>In-batch negative.</b> 같은 미니배치 안 다른 샘플의 양성을 내 음성으로 재활용하는 기법입니다. 비용이 싸지만 인기 아이템이 음성으로 과하게 뽑히는 편향이 있어 logQ 보정을 함께 쓰곤 합니다.</li>
+<li><b>K-day future window 예측.</b> 다음 한 아이템 대신 미래 K일 동안의 상호작용 전체를 정답으로 두는 학습 설정입니다. K가 클수록 지속적 관심에, 작을수록 단기 의도에 가까워집니다.</li>
+<li><b>User embedding의 재사용.</b> 한 번 학습한 사용자 벡터를 retrieval, 랭킹 특성, 세그먼트 분석 등 여러 시스템이 공유하는 방식입니다. 장기 임베딩은 자주 갱신하지 않아도 되므로 배치로 계산하기 좋습니다.</li>
+<li><b>정확도–다양성 트레이드오프.</b> 정확도만 최적화하면 추천이 비슷한 아이템으로 몰리는 경향이 있습니다. 서로 다른 시간 척도의 신호를 섞으면 이 트레이드오프를 완화할 수 있습니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실, 객관식) NILUS가 입력으로 쓰는 과거 이력의 최대 길이는? ① 최근 50개 이벤트 ② 최근 30일 ③ 최대 1년 ④ 전체 가입 기간
+<details><summary>정답 보기</summary>③ 최대 1년 치 상호작용 이력을 씁니다(초록 기준).</details></li>
+<li>(사실) NILUS의 아이템 표현은 무엇으로 만들어지나요?
+<details><summary>정답 보기</summary>아이템 ID 임베딩이 아니라, 아이템 텍스트를 fine-tuned sentence encoder로 인코딩한 벡터입니다. 그래서 "content-based" 모델로 불립니다.</details></li>
+<li>(사실, 객관식) 논문이 온라인 검증에서 보고한 것은? ① 매출 감소 없이 지연 시간 절감 ② engagement의 통계적으로 유의한 상승 ③ 다양성만 상승하고 정확도는 하락 ④ 온라인 실험 없음
+<details><summary>정답 보기</summary>② 다국적 이커머스 플랫폼에서 대규모 A/B 테스트로 engagement가 유의하게 상승했다고 보고합니다. 구체 수치는 논문 참조입니다.</details></li>
+<li>(원리, 서술) 학습 목표를 "다음 아이템"이 아닌 "K일 미래 구간"으로 잡으면 왜 장기 선호가 더 잘 잡히나요?
+<details><summary>정답 보기</summary>정답이 일정 기간 동안의 여러 상호작용 전체이므로, 한 번의 우연한 클릭보다 구간 내내 반복해서 나타나는 관심사를 맞혀야 손실이 줄어듭니다. 그래서 모델은 순간적 소음보다 지속적 패턴을 사용자 벡터에 담게 됩니다.</details></li>
+<li>(원리, 서술) eBay 같은 플랫폼에서 ID 기반 대신 콘텐츠 기반 아이템 표현을 쓰는 이유는?
+<details><summary>정답 보기</summary>리스팅 다수가 일회성이고 계속 새로 올라와 ID 임베딩이 희소하고 금방 낡습니다. 텍스트 인코더를 쓰면 처음 보는 아이템에도 바로 의미 있는 벡터가 생기고, 장기 이력 속 오래된(이미 팔린) 아이템도 의미 공간에서 현재 아이템과 이어집니다.</details></li>
+<li>(원리, 서술) InfoNCE 식에서 온도 \( \tau \)를 아주 작게 하면 학습에 어떤 영향이 있나요?
+<details><summary>정답 보기</summary>softmax가 날카로워져 유사도가 높은 소수 음성(hard negative)에 손실이 집중됩니다. 구분력은 세질 수 있지만 false negative(실제로는 관심 있는 아이템이 음성으로 뽑힌 경우)에 과민해지고 학습이 불안정해질 수 있습니다.</details></li>
+<li>(결과 해석, 서술) 장기 임베딩을 단기 신호와 합쳤더니 정확도와 다양성이 함께 올랐습니다. 어떻게 해석할 수 있나요?
+<details><summary>정답 보기</summary>두 신호가 서로 다른 시간 척도의 관심을 맡기 때문입니다. 단기 신호는 현재 세션 의도를, 장기 신호는 최근에 드러나지 않은 꾸준한 관심을 담습니다. 겹치지 않는 관심 영역을 추가로 맞히므로 적중과 범위가 함께 늘어납니다.</details></li>
+<li>(결과 해석, 객관식) 저자들이 새 평가 틀을 따로 제안한 가장 그럴듯한 이유는? ① 기존 지표 계산 비용이 너무 커서 ② next-item 지표가 장기 관심 포착 능력을 제대로 반영하지 못해서 ③ 온라인 실험을 대체하려고 ④ 공개 데이터셋이 없어서
+<details><summary>정답 보기</summary>② 바로 다음 클릭만 보는 지표에서는 최근 행동을 복사하는 단기 모델이 유리해서, 장기 모델의 장점이 가려집니다.</details></li>
+<li>(비판, 서술) 콘텐츠(텍스트) 기반 설계의 잠재적 약점과 보완책을 제시하세요.
+<details><summary>정답 보기</summary>텍스트로 드러나지 않는 협업 신호(같이 사는 이질적 상품, 판매자 신뢰도, 가격대 선호)를 놓칠 수 있고, 제목 품질이 낮은 리스팅에 약합니다. 카테고리·가격·이미지 특성을 함께 넣거나, 인기 아이템에 한해 ID 임베딩을 더하는 하이브리드 방식으로 보완할 수 있습니다.</details></li>
+<li>(적용, 서술) 여러분의 서비스에 NILUS 같은 장기 사용자 임베딩을 도입한다면 K와 갱신 주기는 어떻게 정하겠습니까?
+<details><summary>정답 보기</summary>예시 답: 재방문·재구매 주기에 맞춰 K를 정합니다(예: 일상 소비재는 짧게, 취미·고관여 카테고리는 길게). 여러 K로 학습해 장기 지표와 온라인 지표의 상관을 비교합니다. 장기 선호는 천천히 변하므로 일 단위 배치 갱신으로 시작하고, 단기 반응성은 별도 실시간 모델에 맡깁니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#70</b> MoR: An Adaptive Retrieval Allocation Balancing Long-Term Interest and Short-Term Evidence — 장기 관심과 단기 증거를 retrieval 단계에서 어떻게 배분하는지 다룹니다.</li>
+<li><b>#98</b> User Long-Term Multi-Interest Retrieval Model for Recommendation — 장기 이력에서 다중 관심을 뽑아 retrieval에 쓰는 접근입니다.</li>
+<li><b>#333</b> TransAct V2: Production System for Lifelong User Sequence Modeling at Scale — 평생 단위의 긴 시퀀스를 프로덕션에서 다루는 Pinterest 사례입니다.</li>
+<li><b>#324</b> Mosaic: A Fleet of User Embedding Specialists for Recommendation at Meta — 재사용 가능한 사용자 임베딩을 산업 규모로 운영하는 사례입니다.</li>
+<li><b>#28</b> <a href="028-interpretable-user-retention.html">Interpretable User Retention Modeling in Recommendation</a> — 단기 클릭을 넘어 장기 사용자 행동(리텐션)을 모델링하는 관점입니다.</li>
+</ul>
+
+</main>
+</body>
+</html>
