@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#48 Probabilistic Residual Learning for Online Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-16</span></div>
+<h1>Probabilistic Residual Learning for Online Recommendations</h1>
+<p class="meta">Wenyuan Wang*, Yusong Zhao*†, Zihao Xu*, Hengyi Wang*, Qi Xu*, Zhigang Hua*†, Yan Xie, Yi Wang, Zihao Zhao, Bo Long, Chengzhi Mao, Shuang Yang, Hengguan Huang†, Hao Wang† (Rutgers University · Meta · University of Copenhagen · UIUC) · *공동 1저자, †교신저자 · RecSys 2026 Long Papers 트랙 · 수상 없음</p>
+<div class="chips"><span>2026</span><span>Meta</span><span>Cross-Domain</span><span>Cold-Start</span><span>Bayesian Deep Learning</span><span>Causal Inference</span><span>Residual Learning</span><span>Plug-and-Play</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3773078.3831754">10.1145/3773078.3831754</a> · arXiv: <a href="https://arxiv.org/abs/2607.20863">2607.20863</a> · PDF: <a href="https://arxiv.org/pdf/2607.20863v1">arXiv PDF</a> (CC BY 4.0) · 읽기 예상 시간: 약 15분</p>
+<p class="meta">※ 목록에서는 01-evaluation-offpolicy-bandit 토픽으로 분류돼 있지만, 내용은 OPE·밴딧보다는 <b>교차 도메인 콜드스타트 + 인과적 디바이어싱</b>에 가깝습니다. 제목의 "Online"과 달리 실험은 모두 오프라인 공개 데이터셋입니다.</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 이미 학습된 추천 모델은 그대로 두고, 그 모델이 틀린 만큼(정답 − 예측 = 잔차)만 따로 학습하는 계층적 베이지안 모델 PRL을 붙이면, 사용자 군집별 보정과 도메인 교란변수 제거를 통해 교차 도메인 콜드스타트 성능을 크게 끌어올릴 수 있다는 논문입니다.</p>
+<p><b>풀려는 문제.</b> 운영 중인 딥러닝 추천 모델은 블랙박스이고 다시 학습하기 비쌉니다. 특히 새 국가 시장이나 새 연령대처럼 사용자·아이템이 겹치지 않는 도메인으로 옮겨 갈 때, 기존 교차 도메인 기법은 대개 "공유 사용자/아이템"을 다리로 쓰므로 쓸 수 없습니다. 게다가 시장마다 노출·인기 편향이 달라 생기는 가짜 상관(spurious correlation)이 도메인 간에 잘 옮겨지지 않습니다.</p>
+<p><b>핵심 아이디어.</b> 세 가지를 하나의 확률 그래프 모델에 묶습니다. ① 잔차 \(\tilde R = R - \hat R\)만 모델링하므로 어떤 기반 모델에도 꽂을 수 있습니다. ② 사용자 잠재벡터를 가우시안 혼합(GMM) 사전분포로 두어 사용자를 \(K\)개 군집으로 확률적으로 묶고, 군집마다 별도 보정 모델을 둡니다. ③ 도메인 수준 교란변수 \(\mathbf{s}_m\)이 사용자·아이템 벡터와 잔차에 동시에 영향을 준다고 보고, 예측 시 do-연산으로 \(\mathbf{s}_m\)에 대해 주변화(marginalize)해 도메인 특유의 지름길 신호를 걷어 냅니다.</p>
+<p><b>주요 결과.</b> XMRec(18개 국가 시장)과 MovieLens(연령대를 도메인으로)에서 CDL·DLRM·PerK·NCF·LightGCN 다섯 기반 모델에 PRL을 붙였습니다. XMRec 콜드스타트 분할에서 Recall@20이 예컨대 NCF 0.0096→0.1558, DLRM 0.0756→0.2017, PerK 0.1443→0.2750처럼 크게 오릅니다. 인과 부분을 뺀 버전보다 Full이 일관되게 좋고, 사례 분석에서 국가 간 "카메라 상품 추천 비율" 격차가 1.75배→1.14배로 줄었습니다.</p>
+<p><b>한계와 남는 질문.</b> 비교 대상이 "기반 모델 단독"뿐이라 다른 교차 도메인·디바이어싱 기법과의 우열은 알 수 없습니다. MovieLens에서는 DLRM·PerK 위에서 효과가 미미하거나 일부 지표는 약간 떨어집니다. 교란변수를 "제품 생산국", "영화 개봉 연도"로 둔 선택이 얼마나 타당한지, 실제 온라인 서비스 환경에서의 비용·지연은 다루지 않습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 블랙박스 모델을 갈아엎지 않고 고치기</h3>
+<p>현업 추천 시스템은 큰 딥러닝 인코더로 사용자와 아이템을 표현합니다. 성능은 좋지만 내부가 불투명하고 재학습 비용이 커서, "특정 사용자군에서 성능이 나쁘다"는 것을 알아도 그 부분만 정밀하게 손보기가 어렵습니다. 저자들은 이 문제가 가장 심하게 드러나는 장면으로 <b>도메인 이동을 동반한 콜드스타트</b>를 꼽습니다. 예를 들어 프랑스·이탈리아·인도 시장 데이터로 학습한 모델을 일본·멕시코 시장에 적용하는 경우입니다.</p>
+<p>기존 교차 도메인 추천은 두 도메인에 공통으로 등장하는 사용자나 아이템을 매개로 지식을 옮기는 경우가 많습니다. 하지만 국가별 쇼핑몰처럼 사용자와 상품 카탈로그가 아예 분리된 상황이 흔합니다. 또 하나의 문제는 시장마다 다른 노출·인기 구조가 만들어 내는 상관입니다. 어떤 시장에서 우연히 함께 팔리는 상품 조합을 모델이 "취향"으로 오해하면, 다른 시장으로 옮겼을 때 그 패턴은 통하지 않습니다. 마지막으로 기존 방법은 사용자 안에 숨은 하위 집단을 활용하지 않는다는 점도 지적합니다.</p>
+<p>제안하는 PRL은 저자들의 이전 작업인 계층적 베이지안 딥러닝(CDL 계열)을 인과적으로 확장한 프레임워크입니다. 학습 단계에서는 ① 고정된 기반 모델의 예측과 잔차를 계산하고, ② 잔차 패턴을 바탕으로 사용자를 잠재 군집으로 나누고, ③ 군집별 하위 모델을 학습합니다. 추론 단계에서는 ① 새 사용자의 군집을 추정해 하위 모델을 고르고, ② 그 하위 모델로 교란변수를 보정한 잔차를 예측하고, ③ 이를 기반 예측에 더해 최종 점수를 만듭니다. 기여는 (1) 교차 도메인 적응을 "고정 기반 모델에 대한 확률적 잔차 보정" 문제로 정식화, (2) 확률적 사용자 군집화와 도메인 교란변수의 인과적 보정을 결합한 계층 베이지안 모델, (3) 여러 데이터셋·기반 모델에서의 콜드스타트 개선입니다.</p>
+
+<h3>2.1 문제 설정과 기호</h3>
+<p>사용자 \(I\)명, 아이템 \(J\)개가 있고, 아이템 \(j\)의 원시 특징 \(\mathbf{x}^v_j\in\mathbb{R}^d\)(예: 상품 설명 텍스트)를 인코더 \(f_v:\mathbb{R}^d\to\mathbb{R}^h\)가 \(h\)차원으로 바꿉니다. 사용자 \(i\)와 아이템 \(j\)에 대해 실제 평점 \(R_{ij}\), 기반 모델 예측 \(\hat R_{ij}\), 그리고 잔차 \(\tilde R_{ij}=R_{ij}-\hat R_{ij}\)가 있습니다. 각 사용자는 잠재 군집 번호 \(k\in\{1,\dots,K\}\)에 속하고, 사용자 잠재벡터 \(\mathbf{u}_i\), 아이템 잠재벡터 \(\mathbf{v}_j\)(둘 다 \(\mathbb{R}^h\))는 저차원 교란변수 \(\mathbf{s}\in\mathbb{R}^g\) (\(g\ll h\))의 영향을 받는다고 가정합니다. 도메인은 \(M\)개이며 \(m_i, m_j\)는 각각 사용자·아이템의 도메인입니다.</p>
+<p>핵심은 단순합니다. 최종 예측은 \(R=\hat R+\tilde R\)이고, 기반 모델이 주어지면 \(\hat R\)은 고정이므로 <b>학습해야 할 것은 \(\tilde R\) 하나뿐</b>입니다. 부스팅에서 이전 모델이 남긴 오차를 다음 모델이 맞히는 것과 같은 발상입니다.</p>
+
+<h3>2.2 생성 과정과 모델 분해</h3>
+<p>PRL이 데이터를 "만들어 낸다고" 가정하는 순서는 다음과 같습니다.</p>
+<ul>
+<li>각 도메인 \(m\)마다 교란변수 \(\mathbf{s}_m\sim\mathcal{N}(\mathbf{0},\mathbf{I})\)를 뽑습니다.</li>
+<li>각 아이템 \(j\)의 잠재벡터는 두 정보원을 곱한 가우시안 곱(Product of Gaussians, PoG)에서 뽑습니다. 하나는 콘텐츠 인코딩 \(f_v(\mathbf{x}^v_j)\), 다른 하나는 도메인에서 오는 \(\mathbf{W}_v\mathbf{s}_m\)입니다.</li>
+<li>각 사용자 \(i\)는 군집 \(\pi_i\sim p(\pi_i\mid\theta)\)를 고르고, 그 군집 중심에 도메인 효과를 더한 곳에서 \(\mathbf{u}_i\sim\mathcal{N}(\boldsymbol{\mu}_{\pi_i}+\mathbf{W}_u\mathbf{s}_m,\ \boldsymbol{\Sigma}_{\pi_i})\)를 뽑습니다.</li>
+<li>잔차는 \(\tilde R_{ij}\sim\mathcal{N}(\mathbf{u}_i^\top\mathbf{v}_j+\mathbf{w}_R^\top\mathbf{s}_m,\ \lambda_{\tilde R_{ij}}^{-1})\)에서 나옵니다.</li>
+</ul>
+<p>여기서 \(\boldsymbol{\mu}_k,\boldsymbol{\Sigma}_k\)는 군집 \(k\)의 평균과 공분산, \(\mathbf{W}_u,\mathbf{W}_v,\mathbf{w}_R\)는 모든 도메인이 공유하는 "교란변수가 각 변수에 미치는 영향" 행렬/벡터, \(\lambda_{\tilde R_{ij}}\)는 잔차 관측의 정밀도(분산의 역수)입니다. 즉 교란변수 \(\mathbf{s}_m\)은 사용자 벡터, 아이템 벡터, 잔차 세 곳 모두에 화살표를 보내는 공통 원인입니다. 이 구조 때문에 \(\mathbf{u}_i,\mathbf{v}_j\)와 \(\tilde R\) 사이에 "도메인을 통한 뒷문 경로(back-door path)"가 생깁니다.</p>
+<p>가우시안 두 개를 곱하면 다시 가우시안이 되며, PoG의 평균과 정밀도는</p>
+\[ \boldsymbol{\mu}_{pog}=\frac{\Lambda_v f_v(\mathbf{x}^v_j)+\lambda_v\mathbf{W}_v\mathbf{s}_m}{\Lambda_v+\lambda_v},\qquad \lambda_{pog}=\Lambda_v+\lambda_v \]
+<p>입니다. \(\Lambda_v\)와 \(\lambda_v\)는 각 정보원에 대한 신뢰도(정밀도)로, 평균은 두 추정치를 신뢰도 가중평균한 값이 됩니다. 콘텐츠 정보가 확실하면 \(f_v\) 쪽으로, 도메인 정보가 확실하면 \(\mathbf{W}_v\mathbf{s}_m\) 쪽으로 끌려갑니다.</p>
+<p>결합분포는 \(p(\tilde R\mid\mathbf{u},\mathbf{v},\mathbf{s})\,p(\mathbf{u}\mid\{\boldsymbol\mu_k,\boldsymbol\Sigma_k\},\mathbf{s},\pi)\,p(\mathbf{v}\mid\mathbf{x}^v,\mathbf{s})\,p(\pi)\)의 네 조건부로 쪼개지고, 사후분포는 평균장 근사 \(q(\mathbf{u}_i)=\mathcal{N}(\boldsymbol\mu_{\mathbf{u}_i},\Lambda_u^{-1}\mathbf{I})\), \(q(\mathbf{v}_j)=\mathcal{N}(\boldsymbol\mu_{\mathbf{v}_j},\Lambda_v^{-1}\mathbf{I})\), 범주형 \(q(\pi)\)로 근사합니다.</p>
+
+<h3>2.2 학습 목표: ELBO의 네 항</h3>
+<p>증거 하한(ELBO)을 최대화하며, 이는 네 항으로 정리됩니다.</p>
+\[ \mathcal{L}= -D_{KL}\big(q(\mathbf{u}_i)\,\|\,p(\mathbf{u}_i\mid\cdot)\big) + \mathbb{E}_q\big[\log p(\tilde R_{ij}\mid\mathbf{u}_i,\mathbf{v}_j,\mathbf{s}_m,\pi)\big] - D_{KL}\big(q(\mathbf{v}_j)\,\|\,p(\mathbf{v}_j\mid\mathbf{x}^v_j,\mathbf{s}_m)\big) - D_{KL}\big(q(\pi)\,\|\,p(\pi\mid\theta)\big) \]
+<ol>
+<li><b>사용자 정규화</b>: \(\mathbf{u}_i\)를 자기 군집 중심(+도메인 효과) 근처로 당깁니다. 같은 군집 사용자끼리 비슷한 벡터를 갖게 되는 이유입니다. 군집별로 펼치면 마할라노비스 거리 \((\mathbf{u}_i-\boldsymbol\mu_k-\mathbf{W}_u\mathbf{s}_m)^\top\boldsymbol\Sigma_k^{-1}(\cdot)\)와 \(\log|\boldsymbol\Sigma_k|\)의 합에 음수를 붙인 형태입니다.</li>
+<li><b>잔차 재구성</b>: \(\tilde R_{ij}\)와 \(\mathbf{u}_i^\top\mathbf{v}_j+\mathbf{w}_R^\top\mathbf{s}_m\) 사이의 정밀도 가중 제곱오차입니다. 잠재벡터가 잔차를 맞히는 데 필요한 정보를 담도록 압박합니다.</li>
+<li><b>아이템 정규화</b>: \(\boldsymbol\mu_{\mathbf{v}_j}\)가 콘텐츠 인코딩 \(f_v(\mathbf{x}^v_j)\)와 도메인 항 \(\mathbf{W}_v\mathbf{s}_m\) 모두에서 너무 멀어지지 않게 하는 두 개의 제곱거리 항으로 전개됩니다. 콘텐츠가 있으니 상호작용이 거의 없는 아이템도 표현을 얻습니다.</li>
+<li><b>군집 정규화</b>: 군집 배정 분포가 사전분포에서 지나치게 벗어나지 않게 합니다.</li>
+</ol>
+
+<h3>2.3 추론과 학습: EM 스타일 교대 갱신</h3>
+<p>저자들은 대부분의 파라미터에 대해 기울기를 0으로 두고 닫힌 형태의 갱신식을 유도한 뒤, 신경망 인코더만 경사 상승으로 학습합니다.</p>
+<ul>
+<li><b>군집 파라미터(M-step)</b>: \(\boldsymbol\mu_k=\frac{1}{|I_k|}\sum_{i\in I_k}(\mathbf{u}_i-\mathbf{W}_u\mathbf{s}_m)\), \(\boldsymbol\Sigma_k\)는 같은 군집 사용자들의 도메인 효과를 뺀 편차의 표본 공분산. GMM의 M-step과 동일한 모양입니다.</li>
+<li><b>군집 배정</b>: 균등 사전분포 \(p(\pi_i=k)=1/K\)에서 \(q(\pi_i=k)\propto\mathcal{N}(\mathbf{u}_i;\boldsymbol\mu_k+\mathbf{W}_u\mathbf{s}_{m_i},\boldsymbol\Sigma_k)\)로 계산하고, 실제로는 가장 확률이 높은 군집 하나로 하드 배정합니다(hard EM).</li>
+<li><b>사용자·아이템 벡터(E-step)</b>: \(\boldsymbol\mu_{\mathbf{u}_i}\)는 "군집 사전 평균"과 "그 사용자가 평가한 아이템들로부터 본 잔차 정보"를 정밀도로 섞은 릿지 회귀 해 형태입니다. 사용자가 평가한 아이템만 쓰므로 비용이 전체 카탈로그가 아니라 평가 수에 비례한다는 점을 저자들은 효율성 근거로 듭니다. \(\boldsymbol\mu_{\mathbf{v}_j}\)도 대칭적으로 콘텐츠 항·도메인 항·잔차 항을 결합합니다.</li>
+<li><b>교란 영향 파라미터</b>: \(\mathbf{W}_u,\mathbf{W}_v,\mathbf{w}_R\)은 각각 "군집 평균을 뺀 사용자 벡터", "아이템 벡터", "\(\mathbf{u}^\top\mathbf{v}\)로 설명되지 않은 잔차"를 \(\mathbf{s}_m\)에 회귀한 최소제곱 해입니다.</li>
+<li><b>인코더</b>: \(f_v\)(및 사용자 특징 인코더)는 ELBO의 기울기로 갱신합니다.</li>
+</ul>
+<p>알고리즘 1은 에폭마다 도메인을 돌며 위 갱신을 반복합니다. 부록에 따르면 CDL을 따라 은닉 차원 \(h=50\), 아이템 특징을 복원하는 디코더를 정규화 항으로 추가, AdamW(학습률 \(10^{-3}\), 배치 256)를 쓰고, 기반 모델은 100 에폭, PRL은 150 에폭 학습했습니다.</p>
+
+<h3>2.4 플러그인 PRL: 교란변수를 어떻게 제거하나</h3>
+<p><b>교란변수 \(\mathbf{s}_m\) 추정.</b> 데이터에 따라 관측된 대리변수(proxy)를 쓰거나, 저자들의 이전 연구인 변분 도메인 인덱싱(VDI)으로 도메인 임베딩을 학습합니다. XMRec에서 VDI를 쓰면 \(\mathbf{s}_m\)은 일종의 "국가 임베딩"이 되며, 예비 결과에서 비슷한 나라끼리 비슷한 임베딩을 얻었다고 합니다.</p>
+<p><b>do-연산을 통한 디바이어싱.</b> 군집 \(k\)의 하위 모델로 잔차를 예측할 때, 관측 조건부가 아니라 개입 분포를 씁니다.</p>
+\[ p^{(k)}\big(\tilde R_{ij}\mid do(\mathbf{u}_i),do(\mathbf{v}_j)\big)=\sum_{m=1}^{M}p^{(k)}\big(\tilde R_{ij}\mid\mathbf{u}_i,\mathbf{v}_j,\mathbf{s}_m\big)\,p(\mathbf{s}_m) \]
+<p>이는 Pearl의 뒷문 조정(back-door adjustment) 공식입니다. 특정 사용자가 속한 도메인의 \(\mathbf{s}_{m_i}\)만 넣지 않고, 모든 도메인의 교란값에 대해 사전확률로 가중평균하므로, "이 시장이라서 생긴" 효과가 평균되어 사라지고 사용자–아이템 관계 자체에서 오는 잔차 신호만 남습니다. 그림으로 보면 \(\mathbf{s}\)에서 \(\mathbf{u},\mathbf{v}\)로 가는 화살표를 끊는 것과 같습니다. 저자들의 예시는 이해하기 쉽습니다. 어떤 시장에서 볼리우드 영화와 크리켓 용품이 함께 팔린다고 해서 그것이 개인 취향의 연관은 아닌데, 도메인에 조건화된 예측기는 이런 지름길을 학습하기 쉽습니다.</p>
+<p>정리하면 추론은 ① 사용자 군집 추정 → ② 그 군집 하위 모델로 교란변수에 대해 주변화한 잔차 예측 → ③ \(R=\hat R+\tilde R\) 순서입니다.</p>
+
+<h3>3.1 데이터셋</h3>
+<ul>
+<li><b>XMRec</b>: 18개 국가 시장, 16개 상품 카테고리, 5,250만 건 상호작용. 아이템 특징은 상품 설명, 구매 3건 미만 사용자 제외. 분할은 ① 프랑스·이탈리아·인도 → 일본·멕시코, ② 멕시코·스페인·인도 → 일본·독일, ③ 독일·이탈리아·일본 → 미국·인도. 교란변수로는 상품 생산국을 사용합니다.</li>
+<li><b>MovieLens</b>: 연령대를 도메인으로 보고, 영화 제목·줄거리를 아이템 특징으로, 사용자가 처음 평가한 영화 3편으로 사용자 특징을 만듭니다. 평가 5건 미만이거나 3점 초과 평가가 없는 사용자를 빼서 사용자 6,034명, 아이템 3,705개. 분할은 ① 25–35세를 제외한 전 연령 → 25–35세, ② 25–35세 → 나머지 연령. 교란변수는 정규화한 영화 개봉 연도입니다.</li>
+</ul>
+<p>모든 실험은 테스트 도메인 사용자가 학습 세트에 <b>평가 단 1건</b>만 가진 극단적 콜드스타트 설정입니다.</p>
+
+<h3>3.2 기반 모델·지표</h3>
+<p>기반 모델이자 베이스라인은 CDL(콘텐츠 기반 계층 베이지안), DLRM(Meta의 산업용 모델), PerK(사용자별 추천 개수 조정), NCF, LightGCN 다섯 개입니다. 지표는 Recall/Precision/F1/MAP/NDCG@20을 사용자 평균으로 계산합니다.</p>
+
+<h3>3.3 결과</h3>
+<p><b>XMRec(표 1).</b> 다섯 모델 모두에서 PRL이 대부분의 지표를 크게 올립니다. 핵심 Recall@20만 추리면 다음과 같습니다.</p>
+<table>
+<tr><th>기반 모델</th><th>분할① Base→PRL</th><th>분할② Base→PRL</th></tr>
+<tr><td>CDL</td><td>0.0143 → 0.1091</td><td>0.1127 → 0.1761</td></tr>
+<tr><td>DLRM</td><td>0.0044 → 0.0295</td><td>0.0756 → 0.2017</td></tr>
+<tr><td>PerK</td><td>0.1098 → 0.1635</td><td>0.1443 → 0.2750</td></tr>
+<tr><td>NCF</td><td>0.0131 → 0.1137</td><td>0.0096 → 0.1558</td></tr>
+<tr><td>LightGCN</td><td>0.0182 → 0.1003</td><td>0.0165 → 0.1064</td></tr>
+</table>
+<p>기반 모델의 절대 성능이 낮은 경우(NCF, LightGCN 등)에는 배수로 몇 배씩 오릅니다. 다만 분할①의 NCF는 표에서 F1@20이 Base 0.0148, PRL 0.0137로 오히려 낮게 적혀 있어 다른 지표와 방향이 어긋납니다(원문 그대로 옮김).</p>
+<p><b>MovieLens(표 2).</b> 개선 폭이 훨씬 작습니다. NCF·LightGCN·CDL은 뚜렷이 오르지만(예: 분할② NCF NDCG@20 0.0633→0.1639), 분할①의 DLRM은 Recall@20 0.0714→0.0716처럼 사실상 변화가 없고 MAP·NDCG가 소폭 하락하며, PerK도 NDCG@20이 0.2224→0.2190으로 낮아집니다. 저자들은 개봉 연도가 XMRec의 시장 요인보다 약한 교란 신호이기 때문이라고 해석합니다.</p>
+<p><b>Recall@N 확장(그림 4).</b> 세 XMRec 분할 전부, N을 키워도 Full PRL이 인과 부분을 뺀 버전보다 일관되게 높았다고 보고합니다(구체 수치는 그림, 논문 참조).</p>
+<p><b>군집 시각화(그림 5·6).</b> 다섯 기반 모델 모두에서 사용자 잠재벡터의 t-SNE가 3개 군집으로 뚜렷이 갈리며, CDL 기반 PRL에서 사용자별 최고 평점 아이템을 찍어 보면 군집마다 선호 아이템 분포가 다르다고 합니다(예: 군집 1은 소수 특정 아이템에 강하게 몰림). 군집 수는 그림상 \(K=3\)입니다.</p>
+<p><b>디바이어싱 사례.</b> 분할①에서 CDL 단독 top-20 추천 중 'Camera &amp; Photo' 비율은 이탈리아 사용자 3.70%(920건 중 34), 인도 사용자 6.46%(13,600건 중 878)로 1.75배 차이였습니다. PRL 적용 후 각각 3.59%(33건), 3.14%(427건)로 격차가 1.14배로 줄었고, 저자들은 이를 국가 특유 편향 38.5% 감소로 표현합니다.</p>
+<p><b>Ablation(표 3, 부록).</b> 분할①에서 "PRL w/o Causality"는 이미 기반 모델보다 크게 좋고(군집화 효과), Full은 다시 그보다 좋습니다. 예컨대 CDL MAP@20은 0.0028 → 0.0333 → 0.0463, PerK Recall@20은 0.1098 → 0.1376 → 0.1635입니다. 부록에서는 세 가지 추가 점검을 합니다. ① 사용자 특징으로 단순 군집화 후 군집별 잔차 모델을 학습하는 간단한 베이스라인은 개선이 제한적이었다. ② CDL을 512→550→400→50 구조(약 105만 파라미터)로 키워 PRL(약 90만 파라미터)과 용량을 맞춰도 PRL이 대부분 지표에서 크게 앞섰다, 즉 이득이 단순히 파라미터 수 때문이 아니다. ③ 테스트 사용자의 학습 기록을 1·2·3건으로 늘린 실험(표 S14·S15, 수치 논문 참조)도 수행했습니다.</p>
+
+<h3>4. 관련 연구</h3>
+<p>도메인 내 추천(PMF, BPR, GRU4Rec, SASRec, UniSRec, CauseRec, CDL)과, 공유 사용자/아이템에 기대는 교차 도메인 기법, 그리고 PDA·DICE 같은 인과 추론 기반 디바이어싱을 정리합니다. 저자들의 차별점은 (1) 공유 엔티티 없이 군집과 교란변수를 먼저 추론한다는 점, (2) 기존 인과 추천이 SCM 안에서 사용자 그룹을 고려하지 않았다는 점입니다.</p>
+
+<h3>5. 결론</h3>
+<p>PRL은 군집 추정 → 인과적으로 보정된 잔차 추정 → 기반 예측 보정의 세 단계로, 어떤 기반 모델에도 플러그인 형태로 붙어 성능을 높이고 의미 있는 사용자 군집을 드러낸다고 정리합니다. 향후 과제로 텍스트 외 모달리티로의 확장을 듭니다.</p>
+
+<div class="callout"><b>읽으며 짚어 둘 점.</b> ① 잔차 학습이라 기반 모델의 표현을 재사용하지 않고 별도 잠재공간을 다시 학습합니다. 사실상 "기반 모델 + CDL형 베이지안 모델"의 가산 앙상블에 가깝습니다. ② 기반 모델 단독 성능이 매우 낮은(Recall@20 ≈ 0.01) 설정이 많아, 상대 향상 배수는 과장돼 보일 수 있습니다. ③ 본문에서는 \(\mathbf{s}_m\)을 국가 임베딩처럼 설명하지만 실험 절에서는 "상품 생산국"을 교란변수로 쓴다고 해, 정확한 구현은 원문·부록 확인이 필요합니다.</div>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>잔차 학습(Residual Learning)</b>: 기존 예측기가 틀린 만큼(정답 − 예측)을 추가 모델이 맞히게 하는 방식. 그래디언트 부스팅이나 ResNet의 스킵 연결과 같은 발상으로, 기존 시스템을 건드리지 않고 덧붙일 수 있다는 운영상 장점이 있습니다.</li>
+<li><b>계층적 베이지안 딥러닝 / CDL</b>: 신경망(콘텐츠 인코더)과 확률 그래프 모델(행렬분해)을 한 모델로 결합해, 콘텐츠로 아이템 잠재벡터의 사전분포를 만들고 상호작용으로 사후분포를 다듬는 프레임워크. PRL의 뼈대가 됩니다.</li>
+<li><b>가우시안 혼합 모델(GMM)과 hard EM</b>: 데이터가 \(K\)개 가우시안 중 하나에서 나왔다고 보고, E-step(군집 책임도 계산)과 M-step(평균·공분산 갱신)을 반복하는 방법. hard EM은 책임도 대신 가장 유력한 군집 하나만 고릅니다.</li>
+<li><b>ELBO와 변분 추론</b>: 계산 불가능한 사후분포를 단순한 분포 \(q\)로 근사하고, 로그 증거의 하한인 ELBO(재구성 기대값 − KL 정규화)를 최대화하는 방식.</li>
+<li><b>가우시안 곱(Product of Gaussians)</b>: 같은 변수에 대한 두 가우시안 "의견"을 곱하면 정밀도는 더해지고 평균은 정밀도 가중평균이 되는 성질. 여러 정보원을 신뢰도에 따라 합칠 때 씁니다.</li>
+<li><b>교란변수(Confounder)와 뒷문 조정</b>: 처치와 결과에 동시에 영향을 주는 공통 원인. 교란변수 값별 조건부 결과를 교란변수의 주변분포로 가중평균하면 \(p(y\mid do(x))\)를 관측 데이터만으로 추정할 수 있습니다(Pearl의 back-door adjustment).</li>
+<li><b>do-연산</b>: 변수를 "관측해서 그 값이었던" 경우가 아니라 "외부에서 강제로 그 값으로 정한" 경우의 분포를 나타내는 표기. 그래프에서 해당 변수로 들어오는 화살표를 끊는 것과 같습니다.</li>
+<li><b>교차 도메인 콜드스타트</b>: 학습에 쓰인 도메인(국가, 연령대 등)과 다른 도메인의 신규 사용자에게 추천하는 문제. 이 논문은 사용자·아이템이 도메인 간에 겹치지 않는 가장 어려운 형태를 다룹니다.</li>
+<li><b>변분 도메인 인덱싱(VDI)</b>: 도메인 ID만 있고 도메인 간 관계는 모를 때, 각 도메인의 연속 임베딩(도메인 인덱스)을 잠재변수로 추론하는 도메인 적응 기법. 같은 연구 그룹의 선행 연구입니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실·객관식) 이 논문의 실험에서 PRL과 비교된 대상은? ① 다른 교차 도메인 추천 기법들 ② 다섯 기반 모델 단독 성능과 PRL w/o Causality ③ 온라인 A/B 테스트의 대조군 ④ LLM 기반 추천기
+<details><summary>정답 보기</summary>② CDL·DLRM·PerK·NCF·LightGCN을 기반 모델이자 베이스라인으로 쓰고, ablation으로 인과 부분을 뺀 PRL과 비교합니다. 부록에서 단순 군집화 베이스라인과 용량을 키운 CDL도 비교하지만, 다른 교차 도메인 기법과의 직접 비교는 없습니다.</details></li>
+<li>(사실·단답) XMRec과 MovieLens에서 교란변수 \(\mathbf{s}_m\)으로 무엇을 사용했나?
+<details><summary>정답 보기</summary>XMRec은 상품 생산국, MovieLens는 정규화된 영화 개봉 연도입니다. 도메인 자체는 각각 국가 시장과 사용자 연령대입니다.</details></li>
+<li>(사실·단답) 실험의 콜드스타트 설정은 구체적으로 어떻게 정의되나?
+<details><summary>정답 보기</summary>테스트 도메인의 각 사용자가 학습 세트에 평가를 단 1건만 가지는 설정입니다. 부록에서는 1·2·3건으로 늘린 n-shot 실험도 합니다.</details></li>
+<li>(원리·서술) PRL이 "플러그 앤 플레이"일 수 있는 구조적 이유는?
+<details><summary>정답 보기</summary>기반 모델의 예측 \(\hat R\)을 고정된 입력으로만 쓰고, 학습 대상을 잔차 \(\tilde R=R-\hat R\)로 한정하기 때문입니다. 기반 모델의 내부 구조·파라미터에 접근하거나 재학습할 필요가 없고, 최종 점수는 \(\hat R+\tilde R\)로 더하기만 하면 됩니다.</details></li>
+<li>(원리·서술) 아이템 잠재벡터의 사전분포를 가우시안 곱(PoG)으로 둔 의미를 설명하라.
+<details><summary>정답 보기</summary>콘텐츠 인코딩 \(f_v(\mathbf{x}^v_j)\)와 도메인 효과 \(\mathbf{W}_v\mathbf{s}_m\)라는 두 정보원을 각각의 정밀도 \(\Lambda_v,\lambda_v\)로 가중평균해 하나의 가우시안 사전분포를 만듭니다. 상호작용이 거의 없는 콜드 아이템도 콘텐츠와 도메인 정보로 합리적인 위치에서 출발할 수 있습니다.</details></li>
+<li>(원리·객관식) 식 (28)에서 모든 도메인의 \(\mathbf{s}_m\)에 대해 \(p(\mathbf{s}_m)\)로 가중합하는 이유로 가장 적절한 것은? ① 계산량을 줄이려고 ② 사용자의 도메인을 모를 때 대비하려고 ③ 뒷문 조정으로 교란변수가 만든 가짜 상관을 제거하려고 ④ 군집 수를 자동 결정하려고
+<details><summary>정답 보기</summary>③ \(\mathbf{s}\)가 \(\mathbf{u},\mathbf{v},\tilde R\)에 동시에 영향을 주므로, 특정 도메인 값에 조건화하면 그 도메인의 노출·인기 지름길이 섞입니다. 교란변수의 주변분포로 평균하면 \(p(\tilde R\mid do(\mathbf{u}),do(\mathbf{v}))\)를 얻어 도메인 간에 더 잘 옮겨지는 신호만 남습니다.</details></li>
+<li>(해석·서술) MovieLens에서의 개선 폭이 XMRec보다 훨씬 작고, DLRM·PerK에서는 일부 지표가 떨어지기까지 한 이유를 저자 해석과 본인 생각으로 설명하라.
+<details><summary>정답 보기</summary>저자들은 개봉 연도가 시장 요인보다 약한 교란 신호라 인과 보정의 이득이 작다고 봅니다. 추가로 생각해 볼 점: MovieLens에서 DLRM·PerK는 기반 성능이 이미 높아(NDCG@20 0.2 이상) 남은 잔차가 작고 잡음에 가까울 수 있으며, 연령대 간 도메인 차이 자체가 국가 시장보다 작아 군집·도메인 보정이 끌어낼 신호가 적습니다.</details></li>
+<li>(해석·서술) 디바이어싱 사례의 "1.75배 → 1.14배"를 어떻게 읽어야 하며, 무엇을 추가로 확인하고 싶은가?
+<details><summary>정답 보기</summary>국가 간 'Camera &amp; Photo' 추천 비율의 최대/최소 비가 줄었다는 뜻으로, 주로 인도 사용자 쪽 비율(6.46%→3.14%)이 내려가서 생긴 변화입니다. 다만 이것이 "편향 감소"인지 "실제 수요 반영 감소"인지는 해당 카테고리의 실제 구매 비율과 비교해야 판단할 수 있고, 한 카테고리·한 분할만의 사례라 일반화하려면 다른 카테고리·분할 결과가 필요합니다.</details></li>
+<li>(비판·서술) 이 논문의 실험 설계가 "PRL이 교차 도메인 추천의 좋은 해법"이라는 주장을 얼마나 뒷받침하는지 비판적으로 평가하라.
+<details><summary>정답 보기</summary>예시 답: 다양한 기반 모델 위에서 일관된 향상과 용량 통제 실험은 설득력이 있습니다. 그러나 비교 대상에 공유 엔티티 없는 교차 도메인 기법이나 다른 인과 디바이어싱 기법(PDA, DICE 등)이 없어 상대적 위치를 알 수 없고, 다수 기반 모델의 콜드스타트 성능이 매우 낮아 개선 배수가 커 보입니다. 반복 실험 분산·유의성 검정도 없으며, 분할①의 NCF F1처럼 지표 간 방향이 엇갈리는 수치도 있습니다. 제목과 달리 온라인 실험도 없습니다.</details></li>
+<li>(적용·서술) 국내 이커머스가 새 해외 시장(예: 일본)에 진출하면서 기존 랭킹 모델을 유지한 채 PRL을 붙이려 한다. 무엇을 교란변수로 두고, 운영에서 어떤 점을 점검하겠는가?
+<details><summary>정답 보기</summary>예시 답: 국가·지역(또는 VDI로 학습한 시장 임베딩), 프로모션 노출 정책, 판매자 국적 등 노출·인기를 함께 좌우하는 요인을 교란변수 후보로 둡니다. 운영 측면에선 ① 군집 수 \(K\)와 신규 사용자의 군집 배정 안정성(평가 1건으로 배정이 흔들리지 않는지), ② 사용자·아이템 잠재벡터를 기반 모델과 별도로 유지하는 저장·서빙 비용, ③ 기반 모델이 재학습될 때 잔차 분포가 바뀌므로 PRL 재학습 주기, ④ 교란 제거 후 실제 현지 수요(진짜 시장 특성)까지 지워지지 않는지 A/B로 확인해야 합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#5</b> <a href="005-causal-embeddings.html">Causal Embeddings for Recommendation</a> — 추천에서 관측 편향과 개입 효과를 구분하는 인과적 표현 학습의 고전. PRL의 do-연산 보정과 문제의식을 비교해 볼 만합니다.</li>
+<li><b>#3</b> <a href="003-assimilation-contrast-effects.html">Modeling the Assimilation-Contrast Effects in Online Product Rating Systems</a> — 확률 모델로 평점 편향을 분리·제거하고 추천에 활용하는 접근.</li>
+<li><b>#209</b> Bridge the Unseen Gap: Enhancing Non-overlapping Cross-domain CTR Prediction via Profile Retrieval — PRL처럼 사용자·아이템이 겹치지 않는 교차 도메인 문제를 다른 방식으로 풉니다(아직 미발송).</li>
+<li><b>#242</b> Towards Source-Aligned Variational Models for Cross-Domain Recommendation — 변분 추론 기반 교차 도메인 추천으로, PRL의 베이지안 정식화와 직접 대비됩니다(아직 미발송).</li>
+<li><b>#364</b> Mitigating Confounding Bias in Recommendation via Information Bottleneck — 교란 편향을 정보 병목으로 다루는 대안적 디바이어싱(아직 미발송).</li>
+</ul>
+
+</main>
+</body>
+</html>
