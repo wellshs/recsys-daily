@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#49 There’s Something About You: Epistemic Recommendation for Latent Interest Discovery</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-17</span></div>
+<h1>There’s Something About You: Epistemic Recommendation for Latent Interest Discovery</h1>
+<p class="meta">Daniel Nemirovsky, Priya Khokher, Adarsh Jois, Marco Zagha, Joaquin Delgado (Disney/Hulu) · RecSys 2026 Long Papers 트랙</p>
+<div class="chips"><span>2026</span><span>Disney/Hulu</span><span>탐색(Exploration)</span><span>Epistemic Gain</span><span>Jensen-Shannon Divergence</span><span>Contextual Bandit</span><span>Regret 분석</span><span>Sequential Recommendation</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3773078.3831822">10.1145/3773078.3831822</a> · arXiv: 없음(공개 사전본 확인 안 됨) · PDF: <a href="https://doi.org/10.1145/3773078.3831822">ACM DL(Open Access, CC BY-NC-ND)</a> · 수상: 없음 · 읽기 예상 12분</p>
+
+<div class="callout warn">원문 미확보: 초록 기반 작성. Semantic Scholar는 이 논문을 Open Access(CC BY-NC-ND)로 표시하지만, 이 루틴의 실행 환경에서는 ACM DL이 403으로 막혔고 arXiv·웹 검색에서도 공개 사본을 찾지 못했습니다. 아래 내용은 초록, Semantic Scholar TLDR, RecSys 2026 세션 페이지 소개문에 이 분야 일반 지식을 더해 정리했습니다. 수식의 구체 형태처럼 초록으로 확정할 수 없는 부분은 <b>[해석]</b>으로 표시했고, 확인하지 못한 수치는 "논문 참조"로 두었습니다. 원문은 ACM DL에서 무료로 받을 수 있으니 함께 보세요.</div>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 추천을 "사용자가 가장 클릭할 것 같은 아이템 고르기"가 아니라 "이 사용자에 대해 가장 많이 배울 수 있는 아이템 고르기"로도 볼 수 있다는 주장입니다. 이를 위해 아이템마다 <b>epistemic gain(EG)</b>, 즉 그 아이템에 대한 반응을 보면 시스템의 사용자 이해가 얼마나 바뀌는지를 점수로 매깁니다.</p>
+<p><b>풀려는 문제.</b> 추천 모델은 사용자가 이미 보여 준 행동(클릭·시청)의 "실루엣"만 보고 학습합니다. 그래서 아직 노출된 적 없는 잠재 관심사(latent interest)는 계속 보이지 않고, 탐욕적(greedy)으로 relevance만 쫓을수록 이 맹점이 굳어집니다. 기존 탐색 기법인 UCB·Thompson Sampling은 "이 아이템의 보상을 얼마나 모르는가"를 재지만, "이 사용자에 대해 무엇을 모르는가"를 직접 겨누지는 않습니다.</p>
+<p><b>핵심 아이디어.</b> 후보 아이템마다 두 가지 가상 시나리오를 만듭니다. 사용자가 그 아이템에 반응한 경우와 반응하지 않은 경우입니다. 각 시나리오에서 모델이 예측하는 <b>전체 카탈로그의 relevance 분포</b>를 구하고, 두 분포가 얼마나 다른지를 Jensen-Shannon divergence로 잽니다. 결과에 따라 사용자 모델이 크게 흔들리는 아이템일수록 "답을 들으면 많이 배우는 질문"입니다. 비용 문제는 frozen embedding 위에 가벼운 예측 헤드를 붙여 EG를 forward 한 번으로 근사해 해결합니다.</p>
+<p><b>주요 결과.</b> KuaiRec과 MovieLens-1M에서 두 가지 sequential 모델 위에 실험했습니다. 비교 대상은 greedy relevance, UCB, Thompson Sampling, MMR, 그리고 카테고리 novelty 기반 방법입니다. EG와 bandit(UCB)을 결합한 구성이 대부분 설정에서 관심사 coverage와 정확도 모두 앞섰고, 세션 소개문에 따르면 가장 강한 탐색 베이스라인 대비 α-NDCG가 9~19% 올랐고 calibration은 최대 20% 개선됐습니다. 이론적으로는 구조적 조건 아래 EGRec의 coverage regret이 시간 지평 \(T\)와 무관한 \(O(1)\)로 유한하고, greedy는 \(\Omega(T)\), 즉 선형 regret을 겪는다고 증명합니다.</p>
+<p><b>한계와 남는 질문.</b> EG는 기반 모델이 사용자를 얼마나 풍부하게 표현하느냐에 달려 있습니다. 저자들도 이 점을 인정하고, 오히려 "이 방법이 언제 잘 통하는지" 판단하는 진단 도구로 씁니다. 평가는 오프라인 데이터셋 시뮬레이션이라, 실제 서비스에서 탐색 노출이 단기 지표를 얼마나 깎는지, 사용자가 "왜 이걸 보여 주지?"라고 느끼는 비용은 얼마인지는 남는 질문입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구성을 확인하지 못해, 초록에 드러난 논리 흐름(동기 → EG 정의 → 활용 방식 → 근사 → 이론 → 실험 → 결론)을 따라 재구성했습니다.</p>
+
+<h3>1. 서론: 추천 시스템은 당신을 얼마나 알까</h3>
+<p>제목의 "There’s Something About You"는 "시스템이 아직 모르는 당신의 무언가"를 가리킵니다. 저자들의 문제의식은 이렇습니다. 추천 모델은 즉각적인 engagement를 맞히도록 학습되는데, 그 학습 데이터는 사용자 전체가 아니라 시스템이 보여 준 것에 대한 반응이라는 좁은 단면입니다. 정확도를 높이려고 이미 아는 선호 쪽으로 더 몰아갈수록, 아직 확인하지 못한 관심사는 계속 노출되지 않아 데이터에도 남지 않습니다. 예측 정확도가 높다는 사실이 오히려 사용자 지식이 얼마나 불완전한지를 가린다는 역설입니다.</p>
+<p>그래서 논문은 관점을 바꿉니다. 추천을 이미 아는 선호의 소비 수단으로만 보지 않고, <b>사용자 지식을 넓히는 수단</b>으로도 봅니다. 이를 epistemic recommendation이라고 부르고, 저자들은 epistemic gain을 추천의 일급 목적으로 명시적으로 최적화한 선행 연구는 없다고 주장합니다.</p>
+
+<h3>2. 배경: 기존 탐색과 무엇이 다른가</h3>
+<p>추천의 탐색은 크게 세 갈래였습니다. (1) <b>Bandit 계열</b>(UCB, Thompson Sampling)은 아이템 보상 추정치의 불확실성을 보고 덜 확실한 쪽을 시도합니다. (2) <b>다양성 재랭킹</b>(MMR 등)은 이미 고른 아이템과 비슷하지 않은 아이템을 섞어 목록을 넓힙니다. (3) <b>Novelty·serendipity</b>는 사용자가 덜 본 카테고리를 우대합니다.</p>
+<p>논문이 말하는 차이는 "불확실성의 단위"입니다. Bandit은 <b>아이템 단위 보상</b>의 불확실성을 다루고, EG는 <b>사용자 잠재 관심 단위</b>에서 어디로 배울지 방향을 줍니다. 저자들은 두 신호가 보완적이라고 보고, 실험에서도 결합이 가장 좋았다고 보고합니다. novelty와 달리 EG는 "새 카테고리인가"가 아니라 "그 반응이 모델의 사용자 그림을 얼마나 바꾸는가"를 보므로, 같은 카테고리 안에서도 정보량이 다른 아이템을 구별할 수 있습니다.</p>
+
+<h3>3. 방법: Epistemic Gain 정의</h3>
+<p>사용자 \(u\)의 현재 상태(시퀀스 모델의 입력 이력)를 \(h_u\)라 하고, 모델이 카탈로그 \(\mathcal{I}\) 전체에 대해 내놓는 relevance 점수를 softmax로 정규화한 분포를 \(P(\cdot \mid h_u)\)라고 둡니다. 후보 아이템 \(i\)에 대해 두 가상 이력을 만듭니다.</p>
+<ul>
+<li>\(h_u^{+i}\): \(u\)가 \(i\)에 반응(engage)했다고 가정하고 이력에 덧붙인 상태</li>
+<li>\(h_u^{-i}\): \(u\)가 \(i\)에 반응하지 않았다고 가정한 상태</li>
+</ul>
+<p>[해석] 초록과 세션 소개문의 설명(두 시나리오 → 카탈로그 전체 relevance 분포 → Jensen-Shannon divergence)을 수식으로 옮기면 다음과 같은 꼴이 자연스럽습니다.</p>
+\[ \mathrm{EG}(u,i) = \mathrm{JSD}\big(P(\cdot \mid h_u^{+i}) \,\|\, P(\cdot \mid h_u^{-i})\big) \]
+<p>여기서 \(\mathrm{JSD}(P\|Q) = \tfrac12 \mathrm{KL}(P\|M) + \tfrac12 \mathrm{KL}(Q\|M)\), \(M=\tfrac12(P+Q)\)입니다. JSD는 대칭이고 0과 \(\log 2\) 사이로 유계라서, KL보다 점수 스케일이 안정적입니다. 해석은 직관적입니다. 반응하든 안 하든 카탈로그 전체 예측이 거의 같다면 그 아이템을 보여 줘도 배울 게 없고(EG≈0), 결과에 따라 예측이 크게 갈라진다면 그 아이템의 반응이 사용자에 대한 큰 정보를 담고 있습니다. 비교 기준이 "두 가상 결과끼리"인지 "각 가상 결과와 현재 분포"인지는 원문 확인이 필요합니다.</p>
+<p>세션 소개문에 따르면 두 가지 변형이 있습니다. <b>EG</b>는 어떤 결과로든 생기는 학습량을 그대로 보고, <b>EEG(expected epistemic gain)</b>는 각 결과가 일어날 확률로 학습량에 가중치를 줍니다. [해석] 예측 반응 확률을 \(\hat p_{ui}\)라 하면 EEG는 대략</p>
+\[ \mathrm{EEG}(u,i) = \hat p_{ui}\, D\big(P(\cdot\mid h_u^{+i}),\, P(\cdot\mid h_u)\big) + (1-\hat p_{ui})\, D\big(P(\cdot\mid h_u^{-i}),\, P(\cdot\mid h_u)\big) \]
+<p>같은 꼴일 것입니다(\(D\)는 divergence). 정보이론의 "기대 정보 이득"과 같은 구조로, 거의 확실히 안 볼 아이템은 결과가 극적이어도 기대 학습량이 작아집니다.</p>
+
+<h3>4. EG를 쓰는 네 가지 방식</h3>
+<p>저자들은 EG를 특정 알고리즘이 아니라 여러 패러다임에 꽂을 수 있는 <b>범용 탐색 신호</b>로 내세웁니다.</p>
+<ol>
+<li><b>혼합 점수(blended scoring)</b>: [해석] \(s(u,i) = \hat r_{ui} + \lambda\,\mathrm{EG}(u,i)\)처럼 relevance \(\hat r_{ui}\)에 EG를 가중합합니다. \(\lambda\)가 탐색 강도입니다.</li>
+<li><b>engagement 가중 자기조절 점수</b>: EG에 반응 확률을 곱해, 사용자가 볼 법한 아이템에서만 탐색 보너스가 커지도록 스스로 조절합니다. EEG와 같은 정신입니다.</li>
+<li><b>bandit의 context feature</b>: EG를 contextual bandit의 입력 특징으로 넣어, bandit이 아이템 보상 불확실성과 사용자 지식 이득을 함께 고려하게 합니다. 실험에서 가장 강했던 EG+UCB가 이 계열입니다.</li>
+<li><b>RL 보상 항</b>: 강화학습 추천에서 보상 함수에 EG를 넣어, 장기적으로 사용자 이해를 넓히는 정책을 유도합니다.</li>
+</ol>
+
+<h3>5. 확장성: 한 번의 forward로 EG 근사</h3>
+<p>정의대로 계산하면 후보마다 가상 이력 두 개로 모델을 다시 돌리고 카탈로그 전체 분포를 비교해야 하므로 비용이 큽니다. 후보가 \(N\)개면 forward가 \(2N\)번, 각각 \(|\mathcal{I}|\)차원 분포입니다. 그래서 저자들은 기반 모델의 임베딩을 고정(frozen)한 채 그 위에 <b>가벼운 예측 헤드</b>를 학습시켜, 정확히 계산한 EG를 타깃으로 회귀하게 합니다. 서빙 때는 이 헤드가 한 번의 forward로 EG 근사값을 냅니다. distillation과 같은 발상이고, 정확한 EG는 오프라인 학습 데이터 생성에만 씁니다. 헤드 구조와 근사 오차는 논문 참조입니다.</p>
+
+<h3>6. 이론: 이중 regret 프레임워크</h3>
+<p>보통 bandit 분석은 보상 regret 하나만 봅니다. 이 논문은 두 가지를 동시에 봅니다.</p>
+<ul>
+<li><b>Reward regret</b>: 매 시점 최적 아이템을 골랐을 때와 비교한 누적 보상 손실.</li>
+<li><b>Coverage regret</b>: 사용자의 잠재 관심사 중 아직 발견하지 못한 것 때문에 쌓이는 손실. "알아야 할 관심사를 얼마나 늦게, 혹은 영영 못 찾는가"입니다.</li>
+</ul>
+<p>세션 소개문에 정리된 결과는 다음과 같습니다. EG 신호에 대한 구조적 조건(초록 표현으로 "structural conditions on the EG signal", 구체 조건은 논문 참조) 아래에서 EGRec은 reward regret이 \(O(T_{\text{explore}})\), 즉 탐색에 쓴 시간만큼으로 제한되고, coverage regret은 \(O(1)\), 즉 시간 지평 \(T\)와 무관하게 유한합니다. 반면 greedy relevance는 coverage regret이 \(\Omega(T)\)로 선형으로 늘어납니다.</p>
+<p>직관은 이렇습니다. greedy는 한 번도 확인하지 않은 관심사의 relevance를 낮게 추정하고, 낮으니 보여 주지 않고, 보여 주지 않으니 추정이 갱신되지 않습니다. 이 자기강화 루프 때문에 놓친 관심사는 매 시점 손실을 계속 만듭니다. EG는 바로 그 "결과에 따라 판도가 바뀌는" 아이템을 우선하므로, 유한한 횟수 안에 숨은 관심사를 드러내고 그 뒤로는 손실이 더 쌓이지 않습니다.</p>
+
+<h3>7. 실험</h3>
+<p><b>데이터셋.</b> KuaiRec(Kuaishou 짧은 영상, 일부 하위 행렬이 거의 완전 관측되어 반사실적 반응을 실제 값으로 평가할 수 있음)과 MovieLens-1M(영화 평점). 둘 다 탐색 정책이 "보여 줬다면 반응했을까"를 시뮬레이션하기에 흔히 쓰입니다.</p>
+<p><b>기반 모델.</b> 두 가지 sequential 아키텍처를 썼습니다(구체 모델명은 논문 참조). EG는 기반 모델의 사용자 표현에서 계산되므로, 아키텍처를 바꿔 신호 품질이 어떻게 달라지는지도 봅니다.</p>
+<p><b>베이스라인.</b> Greedy relevance, UCB, Thompson Sampling, MMR, 카테고리 novelty 기반 방법.</p>
+<p><b>지표.</b> 관심사 coverage(사용자의 숨은 관심사를 얼마나 찾았나), 정확도, α-NDCG(중복을 깎는 다양성 반영 NDCG), calibration(추천 분포가 사용자 관심 분포와 얼마나 맞는가).</p>
+<p><b>주요 결과.</b></p>
+<ul>
+<li>EG와 bandit 탐색을 결합한 구성이 평가한 설정 대부분에서 coverage와 정확도 모두 앞섰습니다.</li>
+<li>가장 강한 탐색 베이스라인 대비 α-NDCG 9~19% 향상, calibration 최대 20% 개선(세션 소개문 기준). 데이터셋·모델별 세부 수치는 논문 참조.</li>
+<li>novelty 베이스라인과 비교해, EG가 카테고리 새로움만으로는 설명되지 않는 정보를 담고 있음을 보였습니다.</li>
+<li>EG 신호 품질은 기반 모델의 표현력에 따라 달라졌습니다. 사용자 표현이 빈약하면 가상 결과가 바뀌어도 예측 분포가 별로 움직이지 않아 EG가 변별력을 잃습니다.</li>
+</ul>
+<p><b>저자의 해석.</b> bandit은 아이템 보상 수준의 불확실성 보정을, EG는 잠재 관심 수준의 학습 방향을 줍니다. 즉 "무엇을 모르는가"와 "어디로 배워야 하는가"는 다른 질문이고, 둘을 합칠 때 가장 효과적이라는 것입니다. 기반 모델 의존성은 약점이기도 하지만, 실무에서 이 방법을 쓸지 판단하는 진단 기준으로 바꿔 제시합니다.</p>
+
+<h3>8. 결론</h3>
+<p>마지막 메시지는 이렇게 요약됩니다. 가장 가치 있는 추천은 사용자가 클릭할 확률이 가장 높은 것이 아니라, 시스템이 그 사용자에 대해 가장 많이 배울 수 있는 것일지도 모른다. 실무 관점에서는 EG를 기존 랭킹 점수에 더하는 가벼운 헤드로 붙일 수 있다는 점, 그리고 bandit 탐색과 경쟁하지 않고 보완한다는 점이 도입 근거가 됩니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Epistemic vs. aleatoric 불확실성.</b> Epistemic은 지식 부족에서 오는 불확실성이라 데이터를 더 모으면 줄어듭니다. Aleatoric은 본질적인 무작위성이라 줄지 않습니다. EG는 이 중 줄일 수 있는 쪽, 사용자에 대한 무지를 겨냥합니다.</p>
+<p><b>Jensen-Shannon divergence.</b> 두 분포와 그 평균 분포 사이 KL의 평균입니다. 대칭이고 유계(자연로그 기준 최대 \(\log 2\))라서 점수로 쓰기 안정적입니다. 제곱근을 취하면 거리 공리를 만족합니다.</p>
+<p><b>기대 정보 이득(Expected Information Gain).</b> 관측 결과의 확률로 가중한 사후분포 변화량입니다. 능동 학습·베이지안 실험 설계에서 "어떤 질문을 던질지" 고르는 표준 기준이고, EEG가 같은 구조입니다.</p>
+<p><b>UCB / Thompson Sampling.</b> UCB는 추정 보상에 불확실성 보너스를 더한 상한으로 고르고, TS는 사후분포에서 샘플을 뽑아 그 값으로 고릅니다. 둘 다 아이템 보상 불확실성 기반 탐색입니다.</p>
+<p><b>MMR(Maximal Marginal Relevance).</b> 관련도와 이미 고른 아이템과의 유사도를 저울질해 목록을 하나씩 채우는 다양성 재랭킹입니다.</p>
+<p><b>α-NDCG.</b> 같은 관심사(subtopic)를 반복해서 다룰 때마다 이득을 \((1-\alpha)\) 비율로 깎는 NDCG 변형입니다. 여러 관심사를 고르게 덮는 목록이 높은 점수를 받습니다.</p>
+<p><b>Calibration(추천).</b> 사용자의 과거 관심 비율(예: 드라마 70%, 다큐 30%)과 추천 목록의 장르 비율이 얼마나 비슷한지입니다. 보통 KL 같은 divergence로 잽니다.</p>
+<p><b>Regret과 \(O(1)\) vs \(\Omega(T)\).</b> Regret은 최적 정책 대비 누적 손실입니다. \(O(1)\)은 시간이 지나도 상수로 묶인다는 뜻이고, \(\Omega(T)\)는 최소한 시간에 비례해 계속 늘어난다는 뜻이라 사실상 학습하지 못하는 상태입니다.</p>
+<p><b>KuaiRec.</b> Kuaishou가 공개한 짧은 영상 데이터셋으로, 일부 사용자×아이템 하위 행렬이 거의 완전히 관측되어 있습니다. 탐색 정책이 실제로는 노출되지 않은 아이템을 골라도 반응을 알 수 있어 오프라인 탐색 평가에 적합합니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] EGRec이 후보 아이템마다 만드는 두 가상 시나리오는 무엇인가요?
+<details><summary>정답 보기</summary>사용자가 그 아이템에 반응(engage)한 경우와 반응하지 않은 경우입니다. 각 시나리오에서 카탈로그 전체 relevance 분포를 구해 divergence를 잽니다.</details></li>
+<li>[사실·객관식] EG 계산에 쓰는 divergence는? (a) KL (b) Wasserstein (c) Jensen-Shannon (d) Hellinger
+<details><summary>정답 보기</summary>(c) Jensen-Shannon divergence. 대칭이고 유계라서 점수로 쓰기 안정적입니다.</details></li>
+<li>[사실] 실험에 쓴 두 데이터셋과 가장 좋은 결과를 낸 결합 구성은?
+<details><summary>정답 보기</summary>KuaiRec과 MovieLens-1M입니다. EG와 bandit 탐색(특히 UCB)을 결합한 구성이 대부분 설정에서 coverage와 정확도 모두 앞섰습니다.</details></li>
+<li>[원리] EG와 EEG의 차이는 무엇이고, EEG가 필요한 이유는?
+<details><summary>정답 보기</summary>EG는 결과가 어떻든 생기는 학습량을 그대로 보고, EEG는 각 결과의 발생 확률로 가중합니다. 거의 반응하지 않을 아이템은 "만약 반응한다면" 시나리오가 극적이어도 실제로는 그 정보를 얻기 어렵기 때문에, 기대 학습량으로 보정하는 것입니다.</details></li>
+<li>[원리] UCB 같은 bandit 탐색과 EG가 겨누는 "불확실성"은 어떻게 다른가요?
+<details><summary>정답 보기</summary>Bandit은 아이템 단위 보상 추정의 불확실성을 줄이려 하고, EG는 사용자 잠재 관심이라는 수준에서 시스템의 사용자 모델이 얼마나 바뀔지를 봅니다. 저자들은 이를 "보상 수준 불확실성 보정 vs. 잠재 관심 수준 학습 방향"으로 구분하고 둘이 보완적이라고 봅니다.</details></li>
+<li>[원리] greedy relevance의 coverage regret이 \(\Omega(T)\)인 이유를 직관적으로 설명하세요.
+<details><summary>정답 보기</summary>확인하지 못한 관심사는 relevance가 낮게 추정되고, 그래서 노출되지 않고, 노출되지 않으니 추정이 영영 갱신되지 않습니다. 이 자기강화 루프 때문에 놓친 관심사가 매 시점 손실을 만들어 누적 손실이 시간에 비례해 늘어납니다.</details></li>
+<li>[해석] novelty 베이스라인과 비교한 실험은 무엇을 보이려는 것인가요?
+<details><summary>정답 보기</summary>EG가 단순히 "사용자가 안 본 카테고리를 우대하는" 신호와 같지 않고, 카테고리 새로움만으로 설명되지 않는 정보(그 반응이 사용자 모델을 얼마나 바꾸는가)를 담는다는 점입니다.</details></li>
+<li>[해석] "EG 신호 품질이 기반 모델 표현력에 의존한다"는 결과가 실무에 주는 함의는?
+<details><summary>정답 보기</summary>사용자 표현이 빈약하면 가상 결과에 따라 예측 분포가 거의 안 움직여 EG가 변별력을 잃습니다. 따라서 도입 전에 기반 모델에서 EG 분포의 분산·변별력을 보고 이 방법이 효과적일지 진단할 수 있고, 표현력이 부족하면 기반 모델 개선이 먼저입니다.</details></li>
+<li>[비판] 오프라인 KuaiRec·ML-1M 평가만으로 실서비스 효과를 단정하기 어려운 이유를 두 가지 드세요.
+<details><summary>정답 보기</summary>예: (1) ML-1M은 완전 관측이 아니어서 미관측 반응을 시뮬레이션 가정에 의존합니다. (2) 실서비스에서는 탐색 노출이 단기 engagement를 깎는 비용, 사용자 이탈·피로, 추천 신뢰 하락 같은 효과가 있는데 오프라인에서는 잘 드러나지 않습니다. (3) 사용자 관심 자체가 시간에 따라 변하는 비정상성도 반영이 제한적입니다.</details></li>
+<li>[적용] 여러분의 서비스 홈 피드에 EG를 도입한다면 어떤 형태(네 가지 활용 방식 중)로, 어떤 가드레일과 함께 시작하겠습니까?
+<details><summary>정답 보기</summary>예시 답: 이미 bandit 슬롯이 있다면 EG를 context feature로 넣는 방식이 가장 저위험입니다. 없다면 EEG 형태의 engagement 가중 점수를 소수 슬롯(예: 10번째 이후)에만 혼합합니다. 가드레일로는 세션 이탈률·단기 CTR 하한, 탐색 노출 비율 상한을 두고, coverage·calibration을 장기 지표로 추적합니다. 서빙 비용은 frozen embedding 위 근사 헤드로 해결합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#36</b> Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy: 탐색 자체를 목적으로 둔 bandit 설계.</li>
+<li><b>#40</b> Online Matching: A Real-time Bandit System for Large-scale Recommendations: EG를 context feature로 넣을 대규모 bandit 인프라의 예.</li>
+<li><b>#56</b> Navigating the Feedback Loop in Recommender Systems: greedy 추천의 자기강화 루프 문제를 산업 관점에서.</li>
+<li><b>#57</b> Nonlinear Bandits Exploration for Recommendations: 신경망 기반 표현 위에서의 탐색(기반 모델 표현력 의존성과 연결).</li>
+<li><b>#54</b> An Industrial Framework for Personalized Serendipitous Recommendation in E-commerce: novelty·serendipity 계열 탐색과의 비교.</li>
+</ul>
+
+</main>
+</body>
+</html>
