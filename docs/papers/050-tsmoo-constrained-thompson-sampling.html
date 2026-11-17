@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#50 TSMOO: Solving Multi-Objective Experimentation with Constrained Thompson Sampling</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-18</span></div>
+<h1>TSMOO: Solving Multi-Objective Experimentation with Constrained Thompson Sampling</h1>
+<p class="meta">Krishna Chaitanya Kalagarla, Yi Liu, Lin Chai, Wenyang Liu (Amazon) · RecSys 2026 Long Papers 트랙</p>
+<div class="chips"><span>2026</span><span>Amazon</span><span>적응형 실험(Adaptive Experimentation)</span><span>Thompson Sampling</span><span>Best Feasible Arm Identification</span><span>Top-Two TS</span><span>Uplift</span><span>Novelty Effect</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3773078.3831812">10.1145/3773078.3831812</a> · arXiv: 없음 · PDF: <a href="https://cdn.amazon.science/77/1c/14cf7a8743ce953e6c8bda3a8129/scipub-approval152129-47054617-tsmoo-solving-multiobjective-experimentation-with-constrained-thompson-sampling.pdf">Amazon Science 공개본</a> (CC BY-NC-ND) · 수상: 없음 · 읽기 예상 13분</p>
+
+<h2>3분 요약</h2>
+<p><b>한 문장 핵심.</b> 처치(treatment) 수십 개를 동시에 돌리는 적응형 실험에서, 트래픽 배분을 "주 지표는 최대화하고 나머지 지표는 기준만 넘기게" 하는 제약 Thompson Sampling으로 바꾸면 기존 두 계열 방법의 장점을 함께 얻을 수 있다는 주장입니다.</p>
+<p><b>풀려는 문제.</b> 일반 A/B 테스트는 통계 검정력 때문에 처치를 4~6개 정도밖에 못 넣습니다. bandit 기반 적응형 실험은 최대 40개까지 넣고 트래픽을 유망한 쪽으로 옮겨 줍니다. 그런데 기존 방법은 둘 중 하나를 포기합니다. 단일 지표 TS는 모든 처치를 끝까지 유지해 novelty effect에 강하지만 지표 하나만 봅니다. 순차 제거(SE-MOO)는 여러 지표 기준을 다루지만, 초반에 부진한 처치를 일찍 버리는 위험이 있습니다.</p>
+<p><b>핵심 아이디어.</b> 문제를 "모든 지표가 기준을 넘는 처치 중 주 지표가 가장 높은 것 찾기", 즉 Best Feasible Arm Identification(BFAI)으로 둡니다. 사후분포에서 샘플을 뽑아 "이 처치가 실행 가능(feasible)하면서 최적일 확률"을 Monte Carlo로 추정하고, 이를 Top-Two TS 규칙으로 하루 단위 트래픽 비율로 바꿉니다. 보상은 절대값이 아니라 같은 시간대 대조군과의 차이(uplift)를 버킷 단위로 계산해 요일 효과를 지우고 정규성 가정을 맞춥니다. 처치를 제거하지 않으니 초반 부진에서 회복할 기회도 남습니다.</p>
+<p><b>주요 결과.</b> 처치 12개, 지표 2개, 14일 탐색으로 실제 실험 데이터를 재표집한 시뮬레이션에서 비교했습니다. 승자가 여럿인 정상(stationary) 시나리오에서 성공률 93~94%(Uplift-TS 84~90%, SE-MOO 89~94%)를 기록했습니다. novelty effect가 있는 다중 승자 시나리오에서는 63~66%로 두 baseline(49~58%)보다 높았습니다.</p>
+<p><b>한계와 남는 질문.</b> 주 지표에 승자가 없거나 보조 지표 위반이 심한 시나리오에서는 baseline보다 낮은 경우가 있습니다. 배치(batch) 버전에 대한 이론 보장은 아직 없고, 평가는 실제 데이터를 재표집한 시뮬레이션뿐이며 실서비스 A/B 결과는 제시되지 않았습니다. 지표도 2개(둘 다 매출 계열)만 실험했습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론: 적응형 실험과 다중 출시 기준</h3>
+<p>대형 플랫폼은 1년에 수천 건의 온라인 실험을 돌립니다. 랭킹 모델이나 개인화 전략 후보가 많은 추천 시스템에서, 한 번에 처치 4~6개만 시험할 수 있다는 제약은 큰 병목입니다. 적응형 실험 플랫폼은 두 단계로 동작합니다. 먼저 약 2주의 <b>탐색 단계</b>에서 트래픽을 계속 재배분하고, 이어서 약 4주의 <b>검증 단계</b>에서 상위 후보만 대조군과 일반 A/B로 비교합니다.</p>
+<p>저자들이 설계 원칙으로 강조하는 점은, 탐색 알고리즘의 목표가 "탐색 기간에 경험적으로 1등인 처치"가 아니라 <b>"검증을 통과할 가능성이 큰 처치"</b>여야 한다는 것입니다. 검증 기준은 지표마다 posterior probability requirement(PPR)로 정해집니다. 예를 들어 "처치 효과가 양수일 사후확률이 66% 이상"이어야 하고, 모든 지표가 이 기준을 넘어야 출시 대상이 됩니다. 그중 주 지표(예: 매출)는 최대화 대상이고, 나머지(참여도, 만족도 등)는 기준만 넘으면 됩니다. 결국 제약이 있는 최적화 문제입니다.</p>
+<p>탐색 단계에서는 하루 안에 귀속되는 지표(매출, 가입, 클릭)를 쓰고, 그보다 늦게 나오는 파생 지표는 검증 단계에서 가드레일로 씁니다.</p>
+
+<h3>2. 운영 환경의 네 가지 난제</h3>
+<p><b>(1) 시간 변동.</b> 시간대, 요일, 세일 이벤트에 따라 보상이 크게 흔들립니다. 그렇다고 시간 공변량을 모델에 넣을 수는 없습니다. 최종적으로는 요일과 상관없이 늘 같은 처치 하나를 배포해야 하기 때문입니다. 시간 효과는 처치와 대조군에 비슷하게 작용하므로, 둘의 <b>차이(uplift)</b>만 보면 효과적으로 상쇄됩니다.</p>
+<p><b>(2) 비정규 보상.</b> 대부분의 사용자는 구매나 클릭을 하지 않으니 0이 넘쳐 나고(zero-inflated), 분포의 꼬리도 깁니다. 개별 관측값을 버킷 평균으로 묶으면 중심극한정리에 따라 정규 근사가 성립합니다. 논문은 개별 관측은 정규와 거리가 멀지만 버킷 단위 uplift는 정규에 가깝다는 것을 그림으로 보여 줍니다.</p>
+<p><b>(3) Novelty effect.</b> 새 추천 전략에 대한 초기 반응은 진짜 선호보다 호기심의 영향을 받습니다. 그 크기와 지속 기간은 처치마다 다르고 미리 알 수 없습니다. 첫 주에 부진하던 처치가 둘째 주에 회복할 수 있는데, 제거 기반 알고리즘은 그 처치를 이미 버린 뒤입니다.</p>
+<p><b>(4) 다중 지표 출시 기준.</b> 주 지표가 좋아도 다른 지표 하나를 해치면 출시할 수 없으므로, 탐색 단계부터 모든 기준을 고려해야 합니다.</p>
+
+<h3>3. 문제 정식화: BFAI</h3>
+<p>처치 집합을 \( \mathcal{A}=\{1,\dots,k\} \)로 둡니다. 처치 \(i\)를 시점 \(t\)에 고르면 \(m\)차원 보상 \(X_{t,i}=[X_{t,i,1},\dots,X_{t,i,m}]\)을 관측하고, 첫 번째 성분이 주 지표입니다. 각 성분은 \(N(\mu_{i,j},\sigma_{i,j}^2)\)를 따르고, 시간·처치·지표 사이에 독립이라고 가정합니다. 목표는 다음과 같습니다.</p>
+\[ i^*=\arg\max_{i\in\mathcal{A}} \mu_{i,1}\quad \text{s.t.}\quad \mu_{i,j}\ge \gamma_j,\ \ \forall j=1,\dots,m \]
+<p>\(\gamma_j\)는 지표 \(j\)의 PPR 요구치 \(1-q_j\)에서 유도한 임계값입니다. 여기서 \(X\)는 절대 보상이 아니라 <b>스케일링한 uplift</b>입니다.</p>
+<p><b>Uplift 변환.</b> 처치마다 받는 트래픽이 달라서 개별 관측 단위로 차이를 계산하면 불안정합니다. 그래서 대조군과 처치의 관측을 각각 같은 개수씩 버킷으로 묶습니다. 버킷 수 \(B\)는 대조군 트래픽을 기본 버킷 크기로 나눈 값이고, 모든 처치가 같은 \(B\)를 씁니다. 따라서 트래픽을 많이 받든 적게 받든 각 처치는 사후분포 갱신에 같은 수의 uplift 샘플을 넣습니다. uplift는 대응하는 처치 버킷 평균과 대조군 버킷 평균의 차이입니다.</p>
+<p><b>Bayesian 갱신.</b> 처치-지표 쌍마다 정규 사전분포를 두고 켤레(conjugate) 갱신을 합니다. 처치 \(i\)가 \(t\)일에 버킷 관측 \(N_{t,i}\)개를 얻고 표본평균이 \(\bar X_{t,i,j}\)이면 다음과 같습니다.</p>
+\[ \mu_{t+1,i,j}=\frac{\sigma_{t,i,j}^{-2}\mu_{t,i,j}+N_{t,i}\sigma_{i,j}^{-2}\bar X_{t,i,j}}{\sigma_{t,i,j}^{-2}+N_{t,i}\sigma_{i,j}^{-2}},\qquad \sigma_{t+1,i,j}^{2}=\frac{1}{\sigma_{t,i,j}^{-2}+N_{t,i}\sigma_{i,j}^{-2}} \]
+<p>사후평균은 이전 믿음과 새 데이터를 정밀도(분산의 역수)로 가중평균한 값이고, 데이터가 쌓일수록 사후분산이 줄어듭니다. 선택되지 않은 처치는 값이 그대로입니다. 전체 사후분포 \(\Pi_t\)는 처치×지표 \(k\cdot m\)개 정규분포의 곱입니다.</p>
+
+<h3>4. TSMOO 알고리즘</h3>
+<p><b>기반: BFAI-TS (Yang et al., 2025).</b> 순차 알고리즘으로, 매 단계 \(\Pi_t\)에서 \(\theta\)를 뽑아 실행 가능 집합 \(F=\{i:\theta_{i,j}\ge\gamma_j\ \forall j\}\)를 만듭니다. \(F\)가 비어 있지 않으면 그 안에서 주 지표 샘플이 가장 큰 처치를 1순위 후보로 삼고, 비어 있으면 무작위로 고릅니다. 확률 \(\beta\)로 1순위를 실행하고, 확률 \(1-\beta\)로는 1순위와 다른 처치가 나올 때까지 다시 샘플링해 그 2순위를 실행합니다. 이것이 Top-Two 구조이고, 현재 선두와 도전자 사이의 경쟁을 유지해 탐색을 이어 가게 합니다. 논문은 기본값 \(\beta=0.5\)를 씁니다.</p>
+<p><b>검증 기준을 임계값으로 번역.</b> TSMOO만의 기여 중 하나입니다. 검증 단계에서 처치 \(I\)를 독립 uplift 샘플 \(T_v\)개로 평가하고, 효과에 사전분포 \(N(0,\chi_j^2)\)를 둔다고 모델링합니다. 검증 사후확률이 \(P(\mu^{raw}_{I,j}>0)\ge 1-q_j\)를 만족하는 조건을 정리하면 다음과 같습니다.</p>
+\[ \bar\mu^{raw}_{I,j}\ \ge\ -\frac{\sigma^{v}_{I,j}\,\Phi^{-1}(q_j)}{\sqrt{T_v}}\sqrt{1+\frac{\sigma^{2,v}_{I,j}}{T_v\chi_j^2}} \]
+<p>\(\Phi^{-1}\)은 표준정규 분위함수, \(\sigma^{v}_{I,j}\)는 검증 샘플의 표준편차, \(\chi_j\)는 사전분포의 폭입니다. 저자들은 \(T_v\)가 크면 경험평균을 참값으로 보고 신뢰도 \(1-\delta\) 보정항을 생략합니다. 원시 uplift를 \(\frac{\sigma^v}{\sqrt{T_v}}\sqrt{1+\cdot}\)로 나눈 값을 스케일링한 uplift \(\mu_{I,j}\)로 정의하면, 제약은 \(\mu_{I,j}\ge\gamma_j=-\Phi^{-1}(q_j)\)라는 z-score 형태로 깔끔하게 정리됩니다. 예를 들어 PPR 66%이면 \(q_j=0.34\)이고, \(\gamma_j\)는 약 0.41입니다(직접 계산한 값). 이렇게 탐색 단계의 feasibility 판단이 검증 통과 조건과 정렬됩니다.</p>
+<p><b>배치 배분: 확률을 트래픽 비율로.</b> 운영 시스템은 요청마다 처치를 고르지 않고 하루에 한 번 트래픽 비율을 정합니다. 그래서 순차 알고리즘이 각 처치를 고를 확률을 그대로 그날의 트래픽 비율로 씁니다.</p>
+\[ \phi_{t,i}=\beta A_i+(1-\beta)\sum_{j\ne i}A_j\frac{A_i}{1-A_j} \]
+<p>\(A_i\)는 한 번의 TS 샘플에서 처치 \(i\)가 1순위로 뽑힐 확률입니다. 이론식에서는 \(A_i=c_t/k+P_{t,i}\)이고, \(P_{t,i}\)는 "실행 가능하면서 최적일 확률", \(c_t\)는 실행 가능한 처치가 하나도 없을 확률입니다(이때 무작위 선택이라 \(1/k\)씩 나눠 가집니다). 첫째 항은 1순위로 뽑힐 몫이고, 둘째 항은 다른 처치 \(j\)가 1순위일 때 재샘플링에서 \(i\)가 2순위로 뽑힐 몫입니다. 한 처치의 \(A_i\)가 1에 아주 가까우면 분모 \(1-A_j\) 때문에 수치가 불안정해지므로, 그 처치에 \(\beta\)를 주고 나머지 \(1-\beta\)를 다른 처치들에 \(A\)에 비례해(또는 균등하게) 나누는 예외 처리가 있습니다.</p>
+<p><b>"가장 덜 불가능한" 처치.</b> 이론 BFAI-TS는 실행 가능한 처치가 늘 존재한다고 가정하지만, 실제로는 모든 처치가 어떤 기준을 못 넘을 수 있습니다. 이때 TSMOO는 무작위로 고르지 않습니다. 각 샘플에서 처치-지표별 격차 \(\theta_{i,j}-\gamma_j\)를 계산하고, 처치마다 지표 중 최솟값을 취한 뒤 그 최솟값이 가장 큰 처치를 고릅니다. 가장 약한 지표가 기준에 가장 가까운 처치라는 뜻입니다. 실제 구현(알고리즘 2)에서는 \(c_t/k\) 대신 이 확률 \(P^{inf}_{t,i}\)를 \(A_i\)에 더합니다.</p>
+<p><b>확률 추정.</b> \(c_t, P_t, P^{inf}_t\)는 사후분포에서 \(10^6\)개를 Monte Carlo로 뽑아 셉니다. 샘플마다 \(F\)를 만들고, 비어 있으면 least-infeasible 처치에, 아니면 \(F\) 안의 주 지표 최대 처치에 1을 더합니다.</p>
+<p><b>전체 흐름(일 단위).</b> ① 첫날은 처치 간 균등 배분, 대조군은 고정 비율(예: 10%). ② 하루치 데이터를 모아 처치마다 버킷 uplift를 계산하고 사후분포를 갱신. ③ 확률을 추정해 다음 날 \(\phi_{t+1}\)을 정함. ④ 탐색이 끝나면 \(P_n\) 기준 상위 3개 처치를 검증 단계로 보냅니다. 어떤 처치도 제거되지 않는다는 점이 SE-MOO와의 결정적 차이입니다.</p>
+
+<h3>5. 실험 설계</h3>
+<p><b>데이터와 설정.</b> 대규모 실제 실험에서 균등 배분 기간인 첫 3일의 데이터를 뽑아 서로 다른 기준 분포 3개(Version 1~3)를 만들었습니다. 이 분포에서 복원추출해 실제 보상 분포 모양을 유지합니다. 처치 12개, 지표 2개(주 매출 지표와 보조 매출 지표), 탐색 14일이며, 시나리오별로 정상 환경 300회, 비정상 환경 200회 반복했습니다.</p>
+<p><b>효과 크기 조절.</b> 처치 관측에 곱셈 계수 \(\alpha_i\)를 곱해 목표 PPR을 맞춥니다.</p>
+\[ \text{PPR}_{target}=\Phi\!\left(\frac{\alpha\mu_t-\mu_c}{\sqrt{(\sigma_c^2+\alpha^2\sigma_t^2)/n}}\right) \]
+<p>\(\mu_t,\sigma_t\)는 처치, \(\mu_c,\sigma_c\)는 대조군의 평균과 표준편차이고 \(n\)은 표본 수입니다. 이 식을 \(\alpha\)에 대한 2차방정식으로 정리해 풉니다. 곱셈 방식이라 분산 구조를 유지하면서 지표별 효과 크기를 따로 조절할 수 있습니다.</p>
+<p><b>Novelty 시뮬레이션.</b> 1~3일에는 승자 처치에 \(1-2\varepsilon_i\), 비승자 처치에 \(1+2\varepsilon_i\)를 곱해 승자가 일부러 부진하고 비승자가 부풀어 보이게 합니다. 4일째는 3일과 5일 계수의 평균으로 이어 주고, 5일부터는 \(1+\varepsilon_i\)로 정상 상태에 수렴합니다.</p>
+<p><b>검증 기간 보정.</b> \(\gamma_j\)는 \(T_v\)에 따라 달라집니다. 저자들은 과거 실험에서 1일과 28일 z-score의 비율을 구했습니다. 실험 A~E의 비율은 3.22~3.79였고, 그 제곱인 "유효 검증 일수"는 10.36~14.42일이었습니다. 이를 근거로 12일을 채택하고 \(T_v=\)(유효 일수 × 일일 트래픽 추정) ÷ (검증 처치 수)로 둡니다.</p>
+<p><b>8개 시나리오.</b> 승자는 두 지표 모두 PPR 66%를 넘는 처치입니다. 단일 승자(주 지표도 1등 / 주 지표 1등은 아님), 다중 승자 2종(Type 1, 2), 승자 없음 3종(주 지표 1등의 보조 지표 성적이 보통 / 매우 나쁨 / 가장 좋음), 뚜렷한 승자 없음으로 구성됩니다.</p>
+<p><b>Baseline과 판정.</b> Uplift-TS는 uplift 기반 단일 지표 TS를 일 배치로 바꾼 것이고, 주 지표 사후분포의 \(\mu/\sigma\)(ICV)로 상위 3개를 고릅니다. SE-MOO(Zhang et al., 2025)는 다중 PPR 기준의 순차 제거 방법으로, 끝까지 살아남은 처치가 추천 결과입니다. 정답 집합은 PPR을 넘는 처치 전체이고, 그런 처치가 없으면 주 지표 1등입니다. 상위 3개 추천이 정답 집합과 하나라도 겹치면 성공입니다.</p>
+
+<h3>6. 결과</h3>
+<p>정상 환경 Version 1의 핵심 행입니다(성공률 %, TSMOO / Uplift-TS / SE-MOO).</p>
+<table>
+<tr><th>시나리오</th><th>TSMOO</th><th>Uplift-TS</th><th>SE-MOO</th></tr>
+<tr><td>단일 승자(주 지표 1등)</td><td>62.2</td><td>40.3</td><td>61.1</td></tr>
+<tr><td>다중 승자 Type 1</td><td>93.4</td><td>84.0</td><td>89.2</td></tr>
+<tr><td>다중 승자 Type 2</td><td>94.1</td><td>89.6</td><td>92.0</td></tr>
+<tr><td>승자 없음(심각)</td><td>26.0</td><td>47.6</td><td>11.8</td></tr>
+</table>
+<p>비정상(novelty) 환경 Version 1에서는 다중 승자 Type 1이 66.2 / 58.3 / 62.0, 단일 승자(주 지표 1등)가 32.3 / 23.4 / 24.5였습니다. Version 2에서는 다중 승자가 63.5 / 53.1 / 49.0으로 차이가 더 벌어졌습니다.</p>
+<p><b>저자들의 해석.</b></p>
+<ul>
+<li><b>Novelty 강건성:</b> 비정상 환경 전체에서 TSMOO는 27~66%, Uplift-TS는 22~58%, SE-MOO는 17~62%였고, 다중 승자 시나리오에서 차이가 가장 컸습니다. 처치를 제거하지 않고 사후분포를 계속 갱신하기 때문이라고 봅니다.</li>
+<li><b>다중 승자 정상 환경:</b> TSMOO 93~94%, Uplift-TS 84~90%, SE-MOO 89~94%였습니다. SE-MOO도 정상 환경에서는 강합니다.</li>
+<li><b>단점이 드러나는 경우:</b> 주 지표 1등이 아닌 단일 승자 시나리오에서는 SE-MOO가 약간 앞섰습니다(48~56% vs 46~50%). TSMOO가 주 지표를 우선하도록 설계됐기 때문입니다. 보조 지표 위반이 심한 승자 없음 시나리오에서는 주 지표만 보는 Uplift-TS가 47~53%로, 다중 목표 알고리즘(TSMOO 26~27%)보다 높았습니다. 이 시나리오의 정답이 "주 지표 1등"으로 정의돼 있기 때문이며, 저자들은 TSMOO가 보조 지표가 나쁜 처치를 피하는 것을 오히려 적절한 행동으로 봅니다.</li>
+</ul>
+
+<h3>7. 관련 연구와 결론</h3>
+<p>Top-Two TS(Russo, 2016)는 원래 regret 최소화용이던 TS를 순수 탐색(best-arm identification)으로 옮긴 틀입니다. Sequential Halving 같은 제거 방식과 달리 후보를 끝까지 유지합니다. 비정상 bandit용 sliding window나 discounting 기법은 점진적 변화를 다루는 방법이고, 초반에만 반짝 다르다가 안정되는 novelty 패턴과는 맞지 않는다고 저자들은 봅니다. Pareto front 식별은 지표 사이에 우선순위를 두지 않고, scalarization은 가중치를 미리 정해야 합니다. 반면 "주 지표 + 보조 지표 하한"이라는 제약형 정식화는 실제 출시 결정 방식과 맞습니다. TSMOO는 BFAI-TS(순차, 절대 보상)를 배치 배분, uplift 기반 대조군 비교, least-infeasible 선택으로 확장했다는 점이 다릅니다.</p>
+<p>결론에서 저자들은 이 알고리즘이 추천 시스템을 지원하는 산업용 적응형 실험 플랫폼에 배포하도록 설계됐다고 밝힙니다. 향후 과제는 배치 버전의 이론 보장, Monte Carlo 추정의 분산 감소, 비정규 분포로의 확장입니다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>적응형 실험(Adaptive Experimentation):</b> 실험 도중 관측 결과에 따라 처치별 트래픽을 바꾸는 실험 방식입니다. 처치를 더 많이 시험할 수 있지만, 배분이 데이터에 의존하므로 추정과 검정에 주의해야 합니다.</li>
+<li><b>Best-Arm Identification(BAI):</b> 누적 보상(regret)을 최소화하는 대신, 정해진 예산 안에서 가장 좋은 arm을 정확히 찾는 것이 목표인 bandit 문제입니다. 실험 플랫폼의 목표에 더 잘 맞습니다.</li>
+<li><b>BFAI(Best Feasible Arm Identification):</b> BAI에 확률적 제약을 더한 문제로, 모든 제약 지표의 평균이 임계값을 넘는 arm 중 목표 지표가 가장 높은 arm을 찾습니다.</li>
+<li><b>Thompson Sampling:</b> 각 arm의 사후분포에서 샘플을 하나 뽑아 가장 좋은 arm을 고르는 방법입니다. 불확실한 arm도 가끔 뽑히므로 탐색과 활용이 자연스럽게 섞입니다.</li>
+<li><b>Top-Two Thompson Sampling:</b> TS의 1순위와, 재샘플링으로 뽑은 다른 1순위(도전자)를 확률 \(\beta\)로 섞는 방식입니다. TS가 선두 arm에만 몰리는 것을 막아 BAI에 적합하게 만듭니다.</li>
+<li><b>PPR(posterior probability requirement):</b> Bayesian A/B 테스트의 판정 기준으로, "처치가 대조군보다 나을 사후확률"이 정해진 값을 넘어야 합니다. p-value보다 실무자가 해석하기 쉽습니다.</li>
+<li><b>Uplift:</b> 같은 조건(여기서는 같은 시간대)의 대조군 대비 처치 효과입니다. 처치와 대조군에 똑같이 작용하는 요인(요일, 이벤트)이 차이를 구하는 과정에서 상쇄됩니다.</li>
+<li><b>Novelty effect:</b> 새 기능이나 콘텐츠에 대한 초기 반응이 호기심 때문에 장기 반응과 다르게 나타나는 현상입니다. 반대로 낯설어서 초반에 반응이 떨어지는 경우(primacy)도 있습니다.</li>
+<li><b>켤레 정규 갱신:</b> 사전분포와 관측 가능도가 모두 정규분포이면 사후분포도 정규분포가 됩니다. 사후평균은 정밀도로 가중한 평균이라 계산이 닫힌 형태로 끝납니다.</li>
+<li><b>Sequential Elimination / Halving:</b> 여러 라운드에 걸쳐 성적이 나쁜 arm을 잘라 내고 남은 arm에 예산을 몰아주는 BAI 방식입니다. 효율적이지만, 한번 제거한 arm은 되살릴 수 없습니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 논문이 말하는 적응형 실험 플랫폼의 두 단계와 각 단계의 일반적인 기간은?
+<details><summary>정답 보기</summary>약 2주의 탐색 단계(트래픽 동적 재배분)와 약 4주의 검증 단계(상위 후보와 대조군의 일반 A/B)입니다.</details></li>
+<li>[사실, 객관식] 실험에서 TSMOO가 쓴 설정이 아닌 것은? (a) 처치 12개 (b) 지표 2개 (c) 탐색 28일 (d) \(\beta=0.5\)
+<details><summary>정답 보기</summary>(c) 탐색은 14일입니다. 28일은 운영 환경의 검증 기간 예시로, 유효 검증 일수 보정에 쓰였습니다.</details></li>
+<li>[사실] 시뮬레이션에서 "성공"의 판정 기준은?
+<details><summary>정답 보기</summary>14일 후 알고리즘이 추천한 상위 3개가 정답 집합(두 지표 모두 PPR 66%를 넘는 처치 전체, 그런 처치가 없으면 주 지표 1등)과 하나 이상 겹치면 성공입니다.</details></li>
+<li>[원리] 절대 보상 대신 버킷 단위 uplift를 쓰면 어떤 두 문제가 해결되나요? 처치마다 같은 버킷 수 \(B\)를 쓰는 이유는?
+<details><summary>정답 보기</summary>① 처치와 대조군에 공통으로 작용하는 시간 변동이 차이 계산에서 상쇄됩니다. ② 버킷 평균은 중심극한정리로 정규에 가까워져 0이 많고 꼬리가 긴 분포에서도 정규 켤레 갱신이 타당해집니다. 같은 \(B\)를 쓰면 트래픽을 많이 받은 처치든 적게 받은 처치든 사후분포 갱신에 같은 수의 샘플을 넣게 되고, 트래픽 불균형 아래에서 개별 관측 단위로 차이를 계산할 때의 불안정성을 피할 수 있습니다.</details></li>
+<li>[원리] 배분식 \(\phi_{t,i}=\beta A_i+(1-\beta)\sum_{j\ne i}A_j\frac{A_i}{1-A_j}\)에서 둘째 항의 의미는?
+<details><summary>정답 보기</summary>다른 처치 \(j\)가 1순위로 뽑힌 상황(확률 \(A_j\))에서, \(j\)가 아닌 결과가 나올 때까지 재샘플링하면 \(i\)가 뽑힐 조건부 확률은 \(A_i/(1-A_j)\)입니다. 이를 모든 \(j\)에 대해 더한 값에 2순위를 실행할 확률 \(1-\beta\)를 곱한 것으로, \(i\)가 도전자로 트래픽을 받는 몫입니다.</details></li>
+<li>[원리] PPR 요구치를 \(\gamma_j=-\Phi^{-1}(q_j)\)라는 단순한 임계값으로 만들 수 있었던 핵심 조작은 무엇이고, 무엇을 근사했나요?
+<details><summary>정답 보기</summary>원시 uplift를 검증 표준오차와 사전분포 보정항 \(\frac{\sigma^v}{\sqrt{T_v}}\sqrt{1+\sigma^{2,v}/(T_v\chi^2)}\)로 나눠 z-score 형태로 스케일링했습니다. 근사한 부분은 \(T_v\)가 크다고 보고 검증 경험평균을 참값으로 취한 것, 즉 신뢰도 \(1-\delta\) 보정항을 생략한 것입니다. \(T_v\) 자체는 과거 실험의 1일 대 28일 z-score 비율로 유효 일수 12일을 정해 계산했습니다.</details></li>
+<li>[해석] Novelty 환경에서 SE-MOO의 성능이 특히 떨어지는 이유를 논문 설계에 비춰 설명하세요.
+<details><summary>정답 보기</summary>시뮬레이션은 1~3일에 승자를 일부러 부진하게, 비승자를 부풀려 보이게 만듭니다. 순차 제거 방식은 초반 라운드 성적으로 처치를 잘라 내므로, 진짜 승자를 회복 전에 제거할 수 있습니다. TSMOO와 Uplift-TS는 모든 처치를 유지하며 사후분포를 갱신하므로 5일 이후 정상 상태 데이터로 판단을 바꿀 수 있습니다. 예를 들어 Version 2 다중 승자에서 SE-MOO는 49.0%, TSMOO는 63.5%였습니다.</details></li>
+<li>[해석] "승자 없음(심각)" 시나리오에서 TSMOO(약 26%)가 Uplift-TS(약 48%)보다 낮은 결과를 실패로 봐야 할까요?
+<details><summary>정답 보기</summary>꼭 그렇지는 않습니다. 이 시나리오의 정답은 "주 지표 1등"으로 정의돼 있는데, 그 처치는 보조 지표가 매우 나쁩니다. 주 지표만 보는 Uplift-TS는 당연히 그 처치를 고르고, 제약을 고려하는 TSMOO는 피합니다. 저자들은 실제 출시 관점에서는 이 회피가 적절하다고 해석합니다. 다만 이는 평가 지표 정의에 따라 결론이 달라지는 사례이기도 합니다.</details></li>
+<li>[비판] 이 논문의 실험 설계에서 실서비스 성능을 판단하기에 부족한 점 두 가지를 들어 보세요.
+<details><summary>정답 보기</summary>예: ① 실제 데이터를 재표집한 시뮬레이션뿐이고 온라인 A/B 결과가 없습니다. ② 지표가 2개(둘 다 매출 계열)라 상관된 지표 사이의 독립 가정이나 지표 수 증가 시의 행동을 검증하지 못했습니다. ③ novelty를 ±2ε 형태의 대칭 계수로 단순화했습니다. ④ 배치 버전의 이론 보장이 없습니다. ⑤ 다중 승자가 아닌 시나리오에서는 성공률이 50% 안팎에 그칩니다.</details></li>
+<li>[적용] 여러분 팀의 추천 실험 플랫폼에 TSMOO를 도입한다면, 어떤 지표를 주 지표와 제약으로 나누고 대조군 비율·\(\gamma\) 보정은 어떻게 하겠습니까?
+<details><summary>정답 보기</summary>예시 답: 주 지표는 세션당 GMV나 시청 시간, 제약은 CTR, 이탈률(부호를 뒤집어 사용), 신고율 같은 가드레일로 둡니다. 대조군은 uplift 기준이 흔들리지 않게 고정 비율(예: 10%)로 두고, 과거 실험의 짧은 기간 대 긴 기간 z-score 비율로 유효 검증 일수를 보정해 \(T_v\)를 정합니다. 지표 사이 상관이 크면 독립 가정이 깨지므로, 다변량 사후분포나 보수적인 \(q_j\)를 검토합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#53</b> AdaptEx: a self-service contextual bandit platform: 이 논문이 인용한 적응형 실험 플랫폼 사례(Booking/Expedia).</li>
+<li><b>#36</b> Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy: regret이 아니라 순수 탐색(best-arm 식별)을 목표로 한 bandit.</li>
+<li><b>#39</b> Correcting for Interference in Experiments: A Case Study at Douyin: 온라인 실험 추정의 또 다른 함정인 간섭(interference) 문제.</li>
+<li><b>#63</b> A Framework for Value-Aligned Modeling and Robust Experimentation: 다중 지표 정렬과 강건한 실험 설계(Google).</li>
+<li><b>#73</b> Towards Reliable Social A/B Testing: Spillover-Contained Clustering with Robust Post-Experiment Analysis: 실험 신뢰성을 위한 사후 분석 기법.</li>
+</ul>
+</main>
+</body>
+</html>
