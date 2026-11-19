@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two-Layer Bandit Optimization for Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-20</span></div>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM DL 본문이 비공개(CLOSED)이고 arXiv 사본이 없어, 초록과 Apple ML Research 소개 페이지, 그리고 학회 참관 후기(Eugene Yan의 RecSys 2022 리캡)에 전해진 내용을 바탕으로 썼습니다. 리캡 출처 내용은 본문에서 따로 표시했으며, 원문 수식·수치는 "논문 참조"로 남겨 두었습니다.</div>
+<h1>Two-Layer Bandit Optimization for Recommendations</h1>
+<p class="meta">Siyong Ma, Puja Das, Sofia Maria Nikolakaki, Aaron (Qifeng) Chen, Humeyra Topcu Altintas (Apple) · RecSys 2022 Industry 트랙 (proceedings pp. 509–511, 3쪽 분량의 짧은 논문)</p>
+<div class="chips"><span>2022</span><span>Apple</span><span>App Store</span><span>Contextual Bandit</span><span>Thompson Sampling</span><span>LCB</span><span>Cannibalization</span><span>User Cohort</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3523227.3547396">10.1145/3523227.3547396</a> · arXiv: 없음 · 소개 페이지: <a href="https://machinelearning.apple.com/research/two-layer-bandit">Apple Machine Learning Research</a> · 참고 후기: <a href="https://eugeneyan.com/writing/recsys2022/">eugeneyan.com/writing/recsys2022</a> · 수상: 없음 · 읽기 예상 10분</p>
+
+<h2>3분 요약</h2>
+<p><b>핵심 주장.</b> 한 화면 안에서 여러 추천 컴포넌트가 사용자 관심을 두고 경쟁할 때, 한 컴포넌트만 bandit으로 최적화하면 다른 컴포넌트 성과를 갉아먹는 "카니발리제이션"이 생긴다. 보상에 컴포넌트 간 상호작용을 넣고, 취향이 비슷한 사용자 코호트 단위로 동작하는 2층 bandit을 쓰면 이 문제를 줄이면서 참여도를 크게 높일 수 있다.</p>
+<p><b>풀려는 문제.</b> 앱 마켓처럼 카탈로그가 끊임없이 바뀌는 환경에서는 교과서식 bandit을 그대로 적용하기 어렵습니다. 특히 App Store 검색 탭처럼 "추천 항목(Suggested)"과 "검색창(Search bar)"이 한 화면에 있으면, 추천을 공격적으로 밀어 다운로드를 늘렸을 때 검색을 통한 다운로드가 줄어드는 식의 상충이 생깁니다.</p>
+<p><b>핵심 아이디어.</b> (1) 보상을 추천 컴포넌트 자체의 성과뿐 아니라 경쟁 컴포넌트의 참여까지 함께 반영하도록 설계하고, (2) 사용자 개인이 아닌 취향 코호트 단위로 보상을 모아 희소성을 줄이며, (3) 후보를 고르는 층과 순위를 매기는 층을 서로 다른 bandit으로 나눕니다. 후기에 따르면 앞단은 보수적인 LCB, 뒷단은 Thompson Sampling입니다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 온라인 A/B 테스트에서 제안 시스템의 사용자 참여(engagement)가 두 배 이상 늘었습니다. 세부 지표 정의, 실험 기간, 오프라인 평가 수치는 원문을 확보하지 못해 확인할 수 없었습니다(논문 참조).</p>
+<p><b>한계와 남는 질문.</b> 3쪽짜리 산업 논문이라 알고리즘 세부와 ablation이 제한적일 가능성이 큽니다. 코호트 단위 보상은 개인화를 희생하고, 보상 가중치를 어떻게 정했는지, "두 배"가 어떤 기준선 대비인지도 재현 관점에서 열린 질문입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<div class="callout">원문 섹션 구조를 직접 볼 수 없어서, 초록이 제시하는 흐름(문제 → 방법 → 평가 → 결과)에 따라 재구성했습니다. "[리캡]" 표시는 학회 후기에서 온 내용이고, "[배경]" 표시는 논문 내용이 아니라 이해를 돕기 위한 일반 설명입니다.</div>
+
+<h3>1. 서론 — 앱 마켓에서 bandit을 쓴다는 것</h3>
+<p>대형 앱 마켓은 수백만 개의 앱을 수십억 명에게 보여 줍니다. 무엇이 잘 먹히는지 처음부터 알 수 없으니, 노출하면서 배우는 explore–exploit 구조인 bandit이 자연스러운 선택입니다. 시간이 지나면 가장 성과 좋은 콘텐츠로 수렴하도록 만드는 것이 목적입니다.</p>
+<p>하지만 저자들은 실서비스 적용이 간단하지 않다고 말합니다. 첫째, 카탈로그가 동적이라 새 앱이 계속 들어오고 기존 앱 성과도 변합니다. 둘째, 더 근본적인 문제로 한 플랫폼 안에 서로 경쟁하는 콘텐츠 노출 컴포넌트가 여러 개 있습니다. 대규모 추천 시스템에서는 흔한 구조입니다.</p>
+<p>이때 한 컴포넌트의 추천을 개선하면 다른 컴포넌트 성과가 떨어질 수 있습니다. 저자들은 이를 <i>cannibalization</i>이라고 부릅니다. 사용자의 주의와 다운로드 의도는 한정되어 있으니, 한쪽이 가져가면 다른 쪽이 잃는 제로섬에 가까운 구조가 생기는 것이죠.</p>
+
+<h3>2. 배경 — 문제 상황을 구체적으로</h3>
+<p>[리캡] 대상 화면은 App Store의 Suggested 영역입니다. 목표는 "Suggested 항목을 통한 다운로드를 늘리되 검색창 참여를 줄이지 않는 것"으로 소개되었습니다. 사용자는 검색창에 직접 입력할 수도, 제안된 앱을 바로 누를 수도 있습니다. 두 경로가 같은 다운로드 의도를 나눠 갖기 때문에 카니발리제이션이 쉽게 생깁니다.</p>
+<p>[배경] 표준 multi-armed bandit에서는 매 라운드 \(t\)에 팔(arm) \(a_t\)를 고르고 보상 \(r_t\)를 받으며, 누적 보상 \(\sum_t r_t\)를 최대화합니다(같은 말로, 최적 팔 대비 손실인 regret을 최소화). 여기서 팔은 노출 후보 앱, 보상은 클릭·다운로드 같은 반응입니다. contextual bandit은 맥락 \(x_t\)(사용자·상황 정보)를 보고 팔을 고르는 확장입니다. 이 논문에서는 사용자 코호트가 그 맥락 역할을 합니다.</p>
+
+<h3>3. 방법 — 2층 bandit</h3>
+<p><b>3.1 코호트로 맥락화.</b> 초록은 bandit이 "취향이 비슷한 사용자 코호트"에 맞춰 맥락화된다고 밝힙니다. [리캡] 코호트는 k-means 군집화로 만들고, 게임·스포츠처럼 취향 단위로 묶이며, 보상을 사용자 단위가 아니라 코호트 단위로 집계합니다. 효과는 두 가지입니다. 사용자 한 명의 반응은 매우 희소하지만 코호트로 모으면 팔마다 통계가 빠르게 쌓이고, 코호트별로 서로 다른 최적 팔을 학습할 수 있습니다. 대가로 코호트 안 개인 차이는 무시됩니다.</p>
+<p><b>3.2 두 개의 층.</b> 제목의 "two-layer"는 bandit을 두 단계로 쌓은 구조를 말합니다. [리캡] 앞단 recall 층에서는 <i>LCB(Lower Confidence Bound)</i> 기준으로 후보를 고르고, 뒷단 ranking 층에서는 그 후보들을 Thompson Sampling으로 정렬합니다. 여기에 차가운(cold) 아이템을 균등 샘플링으로 끼워 넣어 확증 편향(confirmation bias)을 줄인다고 합니다.</p>
+<p>[배경] 각 팔 \(a\)의 평균 보상 추정치를 \(\hat\mu_a\), 관측 횟수를 \(n_a\)라 하면, 흔히 쓰는 신뢰 구간 형태는</p>
+<p>\[ \mathrm{UCB}_a=\hat\mu_a+c\sqrt{\tfrac{\ln t}{n_a}},\qquad \mathrm{LCB}_a=\hat\mu_a-c\sqrt{\tfrac{\ln t}{n_a}} \]</p>
+<p>입니다. \(c\)는 탐색 강도, \(t\)는 전체 라운드 수입니다. UCB는 "잘하면 얼마나 좋을 수 있는가"(낙관)로 고르고, LCB는 "최악이라도 이 정도는 된다"(비관)로 고릅니다. 관측이 적은 팔은 구간이 넓어서 LCB가 낮게 나오니, LCB로 후보를 거르면 근거가 충분히 쌓인 안전한 앱이 recall 단계를 통과합니다. 이 논문이 위 공식을 그대로 썼는지는 확인하지 못했습니다(논문 참조).</p>
+<p>[배경] Thompson Sampling은 팔마다 보상 분포의 사후분포를 두고, 매번 거기서 하나씩 뽑아 가장 큰 값을 고릅니다. 클릭처럼 0/1 보상이면 보통 Beta–Bernoulli 모델을 씁니다.</p>
+<p>\[ \theta_a\sim\mathrm{Beta}(\alpha_a+s_a,\ \beta_a+f_a),\qquad a_t=\arg\max_a\theta_a \]</p>
+<p>\(s_a,f_a\)는 팔 \(a\)의 성공·실패 횟수, \(\alpha_a,\beta_a\)는 사전분포 파라미터입니다. 불확실한 팔은 분포가 넓어 가끔 높은 값이 뽑히고, 그 덕에 자연스럽게 탐색이 됩니다.</p>
+<p><b>왜 두 층인가.</b> 해석하면, 보수적인 LCB가 후보 풀의 품질을 지켜 주고, 그 안에서 Thompson Sampling이 순위를 탐색하는 분업입니다. 별도로 넣은 cold 아이템은 새 앱이 LCB 필터에 영원히 걸리는 문제를 막는 안전장치로 볼 수 있습니다. [리캡] 발표자와의 비공식 대화로 전해진 바로는, Thompson Sampling ranker만 쓰면 인기도 편향이 생겨 A/B 결과가 나빴고, recall 단계에 LCB bandit을 더한 것이 긍정적 결과의 열쇠였다고 합니다. 원문에서 확인한 내용은 아닙니다.</p>
+<p><b>3.3 컴포넌트 간 상호작용을 반영한 보상.</b> 초록의 두 번째 축은 "cross-component interactions를 bandit 보상에 포함"하는 것입니다. [리캡] 보상이 Suggested 경유 다운로드와 검색창 참여를 함께 최대화하도록 정의되었고, 후자를 빼면 A/B 테스트에서 검색 경유 다운로드가 줄었다고 합니다. [배경] 개념적으로는</p>
+<p>\[ r = r_{\text{suggested}} + \lambda\, r_{\text{search}} \]</p>
+<p>처럼 쓸 수 있습니다. \(r_{\text{suggested}}\)는 추천 컴포넌트 자체 성과, \(r_{\text{search}}\)는 경쟁 컴포넌트 참여, \(\lambda\)는 둘 사이의 교환 비율입니다. 실제 결합 방식과 가중치는 원문을 확인하지 못했습니다(논문 참조). 핵심은 bandit이 "내 컴포넌트 클릭"만 보면 다른 컴포넌트 성과를 빼앗는 행동도 보상받는다는 점입니다. 상대 컴포넌트의 신호를 보상에 넣어야 플랫폼 전체 관점의 최적화가 됩니다.</p>
+
+<h3>4. 오프라인 평가 지표</h3>
+<p>초록은 카니발리제이션을 런타임에 완화하는 수단으로 "관련 오프라인 평가 지표의 정식화"를 듭니다. 온라인 실험 전에 카니발리제이션 정도를 오프라인에서 측정할 수 있어야 보상 설계와 하이퍼파라미터를 빠르게 비교할 수 있기 때문입니다. 지표의 정확한 정의(예: 컴포넌트별 다운로드 분해 방식)는 원문을 확보하지 못해 확인할 수 없습니다(논문 참조).</p>
+
+<h3>5. 실험과 결과</h3>
+<p><b>온라인 A/B.</b> 초록이 밝힌 결과는 하나입니다. 제안 시스템에서 사용자 참여가 온라인 A/B 테스트 기준 "두 배 이상(more than doubled)" 늘었습니다. 비교 기준선(기존 휴리스틱인지, 단일층 bandit인지), 실험 기간과 트래픽 규모, 참여 지표의 정의는 확인하지 못했습니다.</p>
+<p><b>리캡이 전하는 교훈.</b> [리캡] (1) 보상 설계가 결과를 바꾼다. 검색 참여를 보상에서 빼면 검색 다운로드가 줄었습니다. (2) 사용자와 맥락을 영리하게 묶는 것이 효과가 크다. 코호트 단위 집계로 희소성을 풀었습니다. (3) 관련성과 인기도를 지나치게 좇으면 오히려 해롭다. TS만으로는 인기도 편향이 생겼다는 이야기입니다.</p>
+
+<h3>6. 결론과 시사점</h3>
+<p>이 논문의 가치는 새 알고리즘보다 "실서비스 bandit을 성공시키는 설계 요소"를 짚은 데 있습니다. 멀티 컴포넌트 화면에서는 보상의 경계를 컴포넌트가 아니라 화면·플랫폼 단위로 그어야 하고, 희소한 신호는 코호트로 모으고, 탐색은 단계마다 다른 성향(보수적 recall + 확률적 ranking)으로 나누는 것이 실무적으로 효과적이라는 메시지입니다. 국내 서비스로 옮기면 홈 피드의 여러 캐러셀이나 검색 결과 상단 추천 모듈처럼 서로 트래픽을 나눠 갖는 구좌를 최적화할 때 바로 참고할 만한 설계입니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Multi-armed bandit.</b> 여러 선택지(팔) 중 하나를 반복해서 고르며 보상을 최대화하는 문제입니다. 모르는 팔을 시도하는 탐색과 아는 최선을 고르는 활용 사이의 균형이 핵심입니다.</p>
+<p><b>Contextual bandit.</b> 매 선택 전에 맥락(사용자 특성 등)을 보고, 맥락별로 다른 최적 팔을 학습하는 확장입니다. 이 논문에서는 사용자 코호트가 맥락입니다.</p>
+<p><b>Thompson Sampling.</b> 팔별 보상 사후분포에서 표본을 뽑아 최댓값 팔을 고르는 베이지안 방법입니다. 구현이 쉽고, 불확실성에 비례해 탐색합니다.</p>
+<p><b>UCB / LCB.</b> 추정 평균에 신뢰 구간 폭을 더하거나(UCB, 낙관) 빼서(LCB, 비관) 팔을 고르는 기준입니다. LCB는 관측이 적은 팔을 불리하게 다루므로 위험 회피적입니다.</p>
+<p><b>Cannibalization.</b> 같은 사용자 의도를 두고 경쟁하는 두 경로 중 하나를 키우면 다른 하나가 줄어드는 현상입니다. 컴포넌트별 지표만 보면 개선처럼 보여도 전체로는 이득이 없거나 손해일 수 있습니다.</p>
+<p><b>Reward sparsity.</b> 다운로드처럼 드문 사건을 보상으로 쓰면 팔별 관측이 너무 적어 추정이 불안정해집니다. 코호트 집계, 보조 보상 등으로 완화합니다.</p>
+<p><b>k-means 코호트.</b> 사용자 표현 벡터를 k개 군집으로 나누는 단순한 방법입니다. 군집 수가 개인화 정도와 통계적 안정성 사이의 균형을 결정합니다.</p>
+<p><b>Recall–Ranking 2단계 구조.</b> 큰 카탈로그에서 후보를 추리는 단계와 후보 안에서 순위를 정하는 단계로 나누는 추천 파이프라인의 표준 구조입니다. 이 논문은 두 단계 모두를 bandit으로 구성했습니다.</p>
+<p><b>Popularity bias.</b> 이미 많이 노출·소비된 아이템이 더 많은 관측을 얻어 계속 선택되는 자기강화 현상입니다. 새 아이템이 기회를 얻지 못해 카탈로그 다양성이 줄어듭니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문이 다루는 서비스 환경은? (a) 동영상 스트리밍 (b) 상용 앱 마켓 (c) 뉴스 피드 (d) 온라인 광고 경매
+<details><summary>정답 보기</summary>(b). 초록이 수백만 앱을 수십억 사용자에게 제공하는 상용 앱 마켓을 배경으로 명시합니다(Apple App Store).</details></li>
+<li>[사실] 저자들이 "cannibalization"이라 부르는 현상을 한 문장으로 설명하세요.
+<details><summary>정답 보기</summary>한 콘텐츠 노출 컴포넌트의 추천을 개선하면 같은 플랫폼의 다른 컴포넌트 성과가 떨어지는 현상입니다.</details></li>
+<li>[사실] 초록이 보고한 온라인 A/B 테스트의 주요 결과는?
+<details><summary>정답 보기</summary>사용자 참여가 두 배 이상 증가했습니다. 기준선·지표 정의 등 세부는 초록에 없습니다.</details></li>
+<li>[원리] 사용자 단위가 아닌 코호트 단위로 보상을 집계하면 얻는 것과 잃는 것은?
+<details><summary>정답 보기</summary>얻는 것: 팔별 관측이 빠르게 쌓여 보상 희소성이 줄고 추정이 안정됩니다. 잃는 것: 같은 코호트 안 개인 간 취향 차이를 반영하지 못해 개인화 해상도가 떨어집니다.</details></li>
+<li>[원리] 후보를 고르는 단계에 UCB 대신 LCB를 쓰면 어떤 성향의 앱이 통과하기 쉬운가요? 그 부작용을 보완하는 장치는?
+<details><summary>정답 보기</summary>관측이 충분하고 평균 성과가 확실한 "안전한" 앱이 통과하기 쉽습니다. 신규 앱은 신뢰 구간이 넓어 LCB가 낮게 나와 배제되기 쉬운데, 이를 cold 아이템 균등 샘플링 삽입으로 보완한다고 전해집니다.</details></li>
+<li>[원리] 추천 컴포넌트의 bandit이 자기 클릭·다운로드만 보상으로 받으면 왜 카니발리제이션을 키우나요?
+<details><summary>정답 보기</summary>검색으로 갈 사용자를 가로채 추천에서 다운로드하게 만드는 행동도 높은 보상을 받기 때문입니다. 플랫폼 전체로는 이득이 없어도 bandit은 그 방향으로 수렴합니다. 경쟁 컴포넌트 참여를 보상에 넣어야 이 유인이 사라집니다.</details></li>
+<li>[해석] 리캡에 따르면 검색 참여 항목을 보상에서 뺐을 때 A/B 테스트에서 무엇이 관찰되었나요? 이것이 시사하는 바는?
+<details><summary>정답 보기</summary>검색 경유 다운로드가 줄었습니다. 컴포넌트 단위 지표 개선이 플랫폼 전체 개선과 같지 않으며, 보상 설계가 결과를 좌우한다는 뜻입니다.</details></li>
+<li>[해석] "참여가 두 배 이상 증가"라는 결과를 해석할 때 확인해야 할 정보 두 가지를 드세요.
+<details><summary>정답 보기</summary>예: 비교 기준선이 무엇인지(기존 휴리스틱 vs 단일층 bandit), 참여 지표가 Suggested 경유만인지 화면 전체인지, 실험 기간과 novelty 효과, 검색 다운로드 등 다른 지표의 변화.</details></li>
+<li>[비판] 3쪽짜리 산업 논문의 결과를 자사 서비스에 적용하려 할 때 가장 큰 재현성 위험은?
+<details><summary>정답 보기</summary>보상 가중치, 코호트 수, LCB 신뢰 폭, cold 아이템 비율 같은 핵심 하이퍼파라미터와 ablation이 충분히 공개되지 않았을 가능성이 큽니다. 어떤 구성 요소가 개선을 만들었는지 분리하기 어렵습니다.</details></li>
+<li>[적용] 홈 화면에 "추천 캐러셀"과 "카테고리 바로가기"가 함께 있는 서비스에서 이 방법을 응용한다면, 보상을 어떻게 설계하겠습니까?
+<details><summary>정답 보기</summary>예시 답: 캐러셀 클릭·전환에 더해 바로가기 경유 전환을 보상에 포함하고(가중치 \(\lambda\)), 세션 단위 총 전환을 상위 지표로 둡니다. 오프라인에서 두 경로 간 전환 이동을 측정하는 카니발리제이션 지표를 먼저 정의하고, 코호트 단위로 보상을 집계해 희소성을 줄입니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#40</b> Online Matching: A Real-time Bandit System for Large-scale Recommendations — 대규모 실서비스 bandit 시스템 설계를 비교해 볼 수 있습니다.</li>
+<li><b>#50</b> TSMOO: Solving Multi-Objective Experimentation with Constrained Thompson Sampling — 여러 목표를 동시에 다루는 Thompson Sampling으로, 다중 컴포넌트 보상 설계와 맞닿아 있습니다.</li>
+<li><b>#36</b> Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit Strategy — 동적 카탈로그에서 새 아이템을 탐색하는 문제를 다룹니다.</li>
+<li><b>#38</b> Adversarial Sleeping Bandit Problems with Multiple Plays: Algorithm and Ranking Application — 가용 팔이 바뀌는 환경에서의 랭킹 bandit 이론입니다.</li>
+<li><b>#35</b> Evaluating Off-Policy Evaluation: Sensitivity and Robustness — bandit 정책을 오프라인에서 평가하는 방법론입니다.</li>
+</ul>
+</main>
+</body>
+</html>
