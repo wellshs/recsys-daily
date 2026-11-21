@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An Industrial Framework for Personalized Serendipitous Recommendation in E-commerce</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-22</span></div>
+<h1>An Industrial Framework for Personalized Serendipitous Recommendation in E-commerce</h1>
+<p class="meta">Zongyi Wang, Yanyan Zou(교신저자), Linfang Hou, Anyu Dai, Nan Qiao, Luobao Zou, Mian Ma, Zhuoye Ding, Sulong Xu (JD.com) · RecSys 2023 Industry 트랙 (6쪽, 참고문헌 포함)</p>
+<div class="chips"><span>2023</span><span>JD.com</span><span>Serendipity</span><span>Filter Bubble</span><span>Uplift Modeling</span><span>Potential Outcome</span><span>Multi-interest</span><span>재정렬(Re-ranking)</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3610234">10.1145/3604915.3610234</a> · PDF: <a href="https://zoezou2015.github.io/papers/recsys23_uplift.pdf">저자 공개본</a> · arXiv: 없음 · 수상: 없음 · 읽기 예상 10분</p>
+
+<h2>3분 요약</h2>
+<p><b>핵심 주장.</b> 낯선 상품을 섞어 보여 주는 세렌디피티 추천은 "모두에게 같은 비율로" 넣으면 클릭이 떨어집니다. 사용자마다, 그리고 같은 세션 안에서도 요청마다 "지금 새로운 걸 원하는지, 얼마나 원하는지"를 uplift 모델로 판단해 섞어야 노출 깊이·클릭·신규 카테고리 지표가 함께 오른다는 것이 이 논문의 주장입니다.</p>
+<p><b>풀려는 문제.</b> CF나 CTR 예측 기반 추천은 피드백 루프 때문에 이미 본 것과 비슷한 상품만 계속 보여 주고(필터 버블), 결국 사용자가 지루해집니다. 기존 세렌디피티 연구는 복잡하거나 규모를 키우기 어려워 실서비스에 잘 들어가지 못했습니다. 게다가 JD의 무한 스크롤 피드처럼 짧은 시간에 아이템을 많이 훑는 환경에서는 새로움에 대한 선호가 한 세션 안에서도 계속 바뀝니다.</p>
+<p><b>핵심 아이디어.</b> 2단계 구조입니다. ① <b>Category Novelty Scorer</b>는 행동 이력에서 뽑은 다중 관심 벡터들과 카테고리의 최대 코사인 유사도를 구하고, 1에서 그 값을 빼서 "이 카테고리가 이 사용자에게 얼마나 새로운가"를 점수로 만듭니다. ② <b>Novelty Intention Detector</b>는 요청 단위로 "새로움 비율 \(D\)를 적용했을 때 기본 추천보다 클릭이 늘어날까"를 potential outcome 관점의 분류 문제로 예측합니다. 마지막으로 ranking 결과를 목표 분포 \(D\)에 KL divergence로 맞추도록 재정렬합니다.</p>
+<p><b>주요 결과.</b> 오프라인에서 이진 처치 설정의 AUC 0.663, AUUC 0.226으로 Single/Two/Cross-Learner(최고 AUC 0.571, AUUC 0.131)보다 높았습니다. 한 달간 온라인 A/B(기존 PURS 구현 대비)에서 Impression Depth +0.54%, UCTR +0.80%, 신규 카테고리 노출 수 +3.23%, 신규 카테고리 클릭 수 +1.38%를 얻었습니다(모두 p&lt;0.01). 개인화 없이 Scorer만 쓰면 노출·신규 지표는 더 크게 오르지만 UCTR이 −0.80% 떨어졌습니다.</p>
+<p><b>한계와 남는 질문.</b> 4쪽 분량의 짧은 응용 논문이라 신규성 등급 경계(0.5/0.7/0.9), 분류 임계값 \(\delta\), 요청 크기 \(N\), 처치 데이터의 수집 방식(무작위 배정 여부) 같은 핵심 세부가 빠져 있습니다. 오프라인 실험도 처치 하나뿐인 이진 설정으로만 했고, 다중 처치에서 \(D\)를 실제로 어떻게 고르는지는 서술이 거의 없습니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+
+<h3>1. 서론 — 왜 "개인화된" 세렌디피티인가</h3>
+<p>전자상거래 추천은 수십억 개 후보 중에서 고르는데, 업계에서 오래 써 온 CF와 CTR 모델(DIN 등)은 사용자가 반응한 것과 비슷한 것을 더 보여 주는 쪽으로 학습됩니다. 그 결과 과도한 특화(over-specialization), 필터 버블, 사용자 권태가 생기고 이것이 다시 학습 데이터가 되는 피드백 루프가 만들어집니다.</p>
+<p>세렌디피티 추천은 사용자 예상에서 일부러 벗어난, 그러면서도 만족스러운 아이템을 보여 줘서 이 루프를 끊으려는 시도입니다. 저자들은 이전 연구들이 만족도 향상을 보였지만 복잡도와 확장성 때문에 실서비스 적용이 드물었다고 지적합니다.</p>
+<p>또 하나의 문제의식은 <b>이질성</b>입니다. 새로운 것을 즐기는 "variety-seeker"가 있는 반면 익숙한 것만 보는 사용자도 있고, 같은 사람도 상황에 따라 달라집니다. 동영상 추천에서 개인화된 unexpectedness 모듈을 세션 기반 랭킹에 넣은 PURS(Li et al., 2020)가 대표 선행 연구인데, 저자들은 전자상거래 피드는 더 까다롭다고 봅니다. 사용자가 빠르게 스크롤하며 많은 아이템을 보기 때문에, 처음엔 기존 관심사 상품을 보다가 익숙한 것을 몇 개 본 뒤에는 새로운 걸 원하게 되는 식으로 선호가 세션 안에서도 바뀝니다. 그래서 "언제(타이밍)"와 "얼마나(정도)"를 더 촘촘한 단위로 결정하자는 것이 출발점입니다.</p>
+
+<h3>2.1 Category Novelty Scorer — 카테고리 단위 신규성 점수</h3>
+<p>먼저 짚을 점은 새로움을 <b>아이템이 아니라 카테고리 단위</b>로 잰다는 것입니다. 사용자 \(u\)의 행동 이력을 시간순으로 본 카테고리 시퀀스 \(E_u = (c^{(u)}_1, \dots, c^{(u)}_n)\)로 둡니다. \(c^{(u)}_i\)는 \(i\)번째 상호작용한 아이템의 카테고리, \(n\)은 고려하는 행동 수입니다.</p>
+<p>사용자의 관심은 한 방향이 아니므로, MIND(Tmall의 다중 관심 네트워크)와 비슷하게 캡슐 네트워크의 dynamic routing으로 이력을 여러 클러스터 \(M_u\)로 묶습니다. 각 클러스터 벡터 \(m_{ui}\)가 관심사 하나를 나타냅니다. 그다음 카테고리 \(c\)에 대한 "관측된 선호"를 이렇게 정의합니다.</p>
+\[ \mathrm{prefer}_{uc} = \max_{m_{ui} \in M_u} f(m_{ui}, c) \]
+<p>\(f\)는 코사인 유사도입니다. 가장 가까운 관심 클러스터 하나만 가까워도 "익숙한" 카테고리로 봅니다. 평균이 아니라 최댓값을 쓰기 때문에, 관심사가 여럿인 사용자에게 그중 하나와 겹치는 카테고리가 새롭다고 잘못 판정되는 일을 막습니다. 신규성(세렌디피티 점수)은 그 보수입니다.</p>
+\[ S_{uc} = 1 - \mathrm{prefer}_{uc} \]
+<p>\(S_{uc}\)가 클수록 \(c\)는 \(u\)에게 낯선 카테고리입니다. 즉 새로움을 "알려진 관심과 특징 공간에서 떨어진 거리"로 정의한 셈입니다. 카테고리 임베딩을 어떻게 학습하는지는 논문에 따로 설명되어 있지 않습니다(요약에서는 "DNN 기반 scorer"라고만 함).</p>
+
+<h3>2.2 Novelty Intention Detector — 언제, 얼마나</h3>
+<p><b>"언제"의 정의.</b> 저자들은 새로움에 대한 수요를 <b>추천 목록 전체(익숙한 것 + 새로운 것)의 클릭 수</b>로 측정합니다. 새 상품 클릭만 세면 새로움을 늘릴수록 좋아 보이는 착시가 생기므로, 전체 만족도를 기준으로 잡은 것입니다. 그리고 세션 내 변화를 잡기 위해 \(N\)개 노출마다(대략 요청 한 번) 예측을 새로 합니다.</p>
+<p><b>"얼마나"의 정의.</b> \(S_{uc}\)를 네 등급으로 나눕니다. Group-1 익숙함(\(S \le 0.5\)), Group-2 약간 새로움(0.5~0.7), Group-3 중간(0.7~0.9), Group-4 매우 새로움(\(S &gt; 0.9\)). 경계값은 사전 실험으로 정했다고만 적혀 있습니다. 요청 하나(\(N\)개 아이템)의 신규성 정도는 각 등급이 차지하는 비율 벡터로 나타냅니다.</p>
+\[ D = \{d_0, d_1, d_2, d_3\}, \qquad \sum_i d_i = 1 \]
+<p>예를 들어 \(D=\{0.25,0.25,0.25,0.25\}\)는 네 등급이 똑같이 섞인 목록입니다.</p>
+<p><b>Uplift로 바꾸기.</b> 서로 다른 \(D\)를 서로 다른 <b>처치(treatment)</b>로 보고, Rubin의 potential outcome 틀을 가져옵니다. \(Y_u(t)\)를 처치 \(t\)에서 사용자 \(u\)의 클릭 수라고 하면, 기본 설정(\(t=0\), 세렌디피티 없음)과 신규성 \(D\)를 적용한 처치(\(t=D\))의 차이가 개인 단위 인과 효과입니다.</p>
+\[ \tau_u = \mathbb{E}\big[\,Y_u(D) - Y_u(0)\,\big] \]
+<p>다중 처치일 때는 \(\tau_u\)를 최대화하는 \(D\)를 고르는 것이 목표입니다. 즉 "새로운 걸 보여 줬을 때 클릭이 <i>더</i> 나오는 순간과 비율"을 찾는 문제가 됩니다.</p>
+<p><b>회귀 대신 분류.</b> 일반적인 uplift 모델은 \(\tau_u\) 값을 직접 회귀하지만, 저자들은 데이터 희소성 때문에 "어느 그룹(대조군 또는 특정 처치)에서 클릭 증가가 최대인가"를 맞히는 분류가 더 잘 맞았다고 합니다. 모델은 2층 MLP와 softmax로 단순합니다. 이진 처치라면 \(\tau_u &gt; \delta\)인 표본을 양성, 나머지를 음성으로 두고 cross-entropy로 학습합니다. \(\delta\)의 값은 공개하지 않았습니다. 개인 단위의 \(Y_u(D)\)와 \(Y_u(0)\)는 동시에 관측될 수 없으므로 학습 라벨 \(\tau_u\)를 실제로 어떻게 만들었는지가 궁금한데, 논문에는 이 부분이 설명되어 있지 않습니다.</p>
+
+<h3>2.3 세렌디피티 목록 만들기 — KL 기반 재정렬</h3>
+<p>Detector가 원하는 신규성 분포 \(D\)를 정하면, 기존 ranking 결과를 재정렬해서 목록의 등급 분포가 \(D\)에 가까워지게 합니다.</p>
+\[ KL(p\,\|\,q) = \sum_x p(x)\log\frac{p(x)}{q(x)} \]
+<p>\(p\)는 목표 분포 \(D\), \(q\)는 재정렬 후 목록의 카테고리(등급) 분포입니다. KL이 작을수록 목록이 원하는 신규성 구성과 비슷합니다. 구체적인 재정렬 알고리즘(탐욕적 교체인지, 점수 보정인지)이나 원래 랭킹 점수와의 절충 방식은 나와 있지 않습니다.</p>
+
+<h3>3. 배포</h3>
+<p>그림 1은 JD 추천 시스템의 Recall → Ranking 흐름 옆에 제안 모듈이 붙은 구조입니다. 서빙 지연을 줄이려고 두 모듈은 기존 recall·ranking과 <b>병렬</b>로 돌고, 그 결과가 재정렬 단계에서 합쳐집니다. 새로움에 대한 선호는 시간에 따라 변하므로 모델은 온라인에서 정기적으로 갱신합니다.</p>
+
+<h3>4. 실험</h3>
+<p><b>데이터.</b> JD.com의 "Recommended to You" 피드에서 모은 산업 데이터로 학습 약 300만, 검증 약 87만 건입니다. (원문에는 "공개 데이터가 있으므로"라고 적혀 있지만 문맥상 "없으므로"의 오기로 보입니다.) 특징은 사용자 프로필(클릭 선호, 구매 등급), 최근 7일 행동, 그리고 맥락(현재 세션의 노출·클릭 아이템, 현재 요청 페이지 번호, 요청 시각)입니다. 페이지 번호와 세션 내 노출 이력이 들어간다는 점이 "세션 안에서 바뀌는 선호"를 잡는 핵심 장치입니다.</p>
+<p><b>오프라인 실험.</b> 온라인 성과가 Detector의 정확도에 크게 달려 있으므로 Detector만 따로 평가합니다. 기본 설정과 \(D=\{0.30, 0.30, 0.20, 0.20\}\) 처치 하나를 비교하는 이진 분류입니다. 비교 대상은 메타러너 계열 uplift 모델(Künzel et al.)인 S-Learner, T-Learner, X-Learner이고, 이들이 예측한 클릭 변화량을 라벨로 바꿔 비교했습니다. 지표는 분류 AUC와, 처치를 줄 대상을 골랐을 때의 누적 이득을 보는 AUUC입니다.</p>
+<table>
+<tr><th>모델</th><th>AUC</th><th>AUUC</th></tr>
+<tr><td>Single-Learner</td><td>0.544</td><td>0.121</td></tr>
+<tr><td>Two-Learner</td><td>0.571</td><td>0.124</td></tr>
+<tr><td>Cross-Learner</td><td>0.541</td><td>0.131</td></tr>
+<tr><td><b>제안 모델</b></td><td><b>0.663</b></td><td><b>0.226</b></td></tr>
+</table>
+<p>AUC가 0.66 수준이라는 점에서 개인의 새로움 수용 의향을 예측하기가 본질적으로 어렵다는 것을 알 수 있지만, 메타러너들은 0.54~0.57로 거의 무작위에 가깝습니다. AUUC는 약 1.7배 높습니다.</p>
+<p><b>온라인 A/B.</b> 2023-01-06부터 2023-02-06까지 한 달간 진행했습니다. 대조군은 기존 프로덕션 설정, 즉 <b>PURS 구현체</b>입니다. 모듈별 효과를 보려고 두 실험군을 뒀습니다. "+Category Novelty Scorer"는 모든 트래픽에 같은 신규성 정도를 적용하는 비개인화 설정이고, "Ours"는 Scorer와 Detector를 모두 쓰는 개인화 설정입니다. 지표는 세션당 평균 노출 수(Impression Depth), 노출 사용자당 평균 클릭 수(UCTR), 그리고 신규 카테고리 아이템의 평균 노출 수와 클릭 수입니다.</p>
+<table>
+<tr><th>설정</th><th>Impr. Depth</th><th>UCTR</th><th>신규 노출</th><th>신규 클릭</th></tr>
+<tr><td>PURS (대조군)</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>+Scorer (비개인화)</td><td>+1.16%</td><td>−0.80%</td><td>+10.57%</td><td>+3.98%</td></tr>
+<tr><td><b>Ours</b></td><td>+0.54%</td><td><b>+0.80%</b></td><td>+3.23%</td><td>+1.38%</td></tr>
+</table>
+<p>저자들의 해석은 이렇습니다. 비개인화 설정은 새로운 아이템을 많이 밀어 넣어 노출 깊이와 신규성 지표는 크게 올리지만, 원치 않는 사람에게도 새로움을 강요해 만족도(UCTR)가 떨어집니다. 개인화 설정은 신규성 지표 상승폭을 일부 양보하는 대신 UCTR까지 함께 올려, 정확도와 새로움을 모두 개선합니다. 모든 차이는 p&lt;0.01로 유의합니다.</p>
+
+<h3>5. 결론과 향후 과제</h3>
+<p>카테고리 신규성 점수와 신규성 의도 탐지라는 두 모듈로 "누구에게, 언제, 얼마나 새로운 걸 보여 줄지"를 정하는 실용적 프레임워크를 제시했습니다. 앞으로는 클릭 외에 전환율 같은 목표를 함께 uplift 모델에 넣을 계획이라고 합니다.</p>
+
+<div class="callout">엔지니어 관점 한 줄 평: 세렌디피티를 "랭킹 점수에 다양성 항 더하기"가 아니라 <b>요청 단위 처치 선택(uplift) 문제</b>로 바꾼 것이 핵심입니다. 표 2의 비개인화 행은 "새로움을 일괄로 넣으면 CTR이 빠진다"는 실무 직관을 숫자로 보여 줍니다. 다만 재현에 필요한 세부(처치 데이터 수집, \(\delta\), \(N\), 재정렬 알고리즘)는 직접 설계해야 합니다.</div>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>Serendipity(세렌디피티)</b>: 사용자가 예상하지 못했지만 만족스러운 추천입니다. 단순한 새로움(novelty)이나 다양성(diversity)과 달리 "놀라움 + 유용함"을 함께 요구합니다.</li>
+<li><b>필터 버블 / 피드백 루프</b>: 추천이 사용자의 과거 반응을 강화해 노출 범위가 점점 좁아지는 현상입니다. 좁아진 노출이 다시 학습 데이터가 되어 쏠림이 굳어집니다.</li>
+<li><b>Multi-interest extraction (MIND)</b>: 사용자 행동 시퀀스를 하나가 아닌 여러 관심 벡터로 표현하는 방법입니다. Tmall의 MIND는 캡슐 네트워크의 dynamic routing으로 행동을 관심 클러스터에 배정합니다.</li>
+<li><b>Dynamic routing</b>: 캡슐 네트워크에서 하위 캡슐(여기서는 개별 행동)이 어느 상위 캡슐(관심사)에 얼마나 기여할지를 반복적으로 갱신하는 소프트 클러스터링 절차입니다.</li>
+<li><b>Potential outcome 프레임워크</b>: Rubin 인과추론의 기본 틀로, 같은 개체가 처치를 받았을 때와 받지 않았을 때의 결과 \(Y(1), Y(0)\)를 가정하고 그 차이를 인과 효과로 정의합니다. 한 개체에서는 둘 중 하나만 관측됩니다.</li>
+<li><b>Uplift modeling</b>: 처치가 개인의 행동을 얼마나 <i>추가로</i> 바꾸는지(CATE)를 예측하는 기법입니다. 마케팅에서 "쿠폰을 줘야 사는 사람"을 찾는 데 많이 쓰입니다.</li>
+<li><b>S/T/X-Learner</b>: 메타러너 계열 CATE 추정법입니다. S는 처치 여부를 특징으로 넣은 단일 모델, T는 처치군·대조군 별도 모델, X는 T의 예측으로 만든 가상 효과를 다시 학습하고 성향 점수로 섞는 방식입니다.</li>
+<li><b>AUUC</b>: uplift 곡선 아래 면적입니다. 모델이 매긴 uplift 순으로 대상을 늘려 가며 누적 증분 효과를 그리고, 그 면적으로 처치 대상을 얼마나 잘 골랐는지 평가합니다.</li>
+<li><b>KL divergence</b>: 두 분포의 차이를 재는 비대칭 척도입니다. 여기서는 목표 신규성 분포와 실제 목록 분포의 불일치를 재정렬 기준으로 씁니다.</li>
+<li><b>PURS</b>: Personalized Unexpected Recommender System(RecSys 2020). 잠재 공간에서 관심 클러스터와의 거리로 unexpectedness를 정의하고, 이를 개인화 가중치와 함께 랭킹 점수에 더하는 방법입니다. 이 논문의 온라인 대조군입니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문은 새로움을 어떤 단위로 측정합니까? (a) 아이템 (b) 카테고리 (c) 브랜드 (d) 세션
+<details><summary>정답 보기</summary>(b) 카테고리입니다. 저자들은 목표가 새로운 아이템이 아니라 새로운 상품 카테고리를 발견하게 하는 것이라고 명시합니다.</details></li>
+<li>[사실] 온라인 A/B 테스트의 대조군(기본 프로덕션 설정)은 무엇이며, 실험 기간은 언제였습니까?
+<details><summary>정답 보기</summary>PURS를 구현한 기존 프로덕션 설정입니다. 실험은 2023-01-06부터 2023-02-06까지 약 한 달간 "Recommended to You" 피드에서 진행했습니다.</details></li>
+<li>[사실] \(S_{uc} = 0.8\)인 카테고리는 몇 번 그룹에 속합니까?
+<details><summary>정답 보기</summary>Group-3(중간 정도로 새로움, \(0.7 &lt; S \le 0.9\))입니다.</details></li>
+<li>[원리] \(\mathrm{prefer}_{uc}\)를 관심 클러스터와의 유사도 <i>평균</i>이 아니라 <i>최댓값</i>으로 정의한 이유를 설명해 보세요.
+<details><summary>정답 보기</summary>사용자는 여러 관심사를 갖습니다. 평균을 쓰면 관심사 하나와는 아주 가깝지만 다른 관심사들과는 먼 카테고리가 "새롭다"고 판정됩니다. 최댓값을 쓰면 하나의 관심사에만 가까워도 익숙한 카테고리로 보므로, 진짜로 모든 관심사에서 먼 카테고리만 높은 신규성 점수를 받습니다.</details></li>
+<li>[원리] Novelty Intention Detector가 "신규 아이템 클릭 수"가 아니라 "목록 전체 클릭 수"를 결과 변수로 쓰는 이유는?
+<details><summary>정답 보기</summary>신규 아이템 클릭만 보면 새 아이템을 많이 넣을수록 그 값이 기계적으로 커지므로 새로움을 과하게 넣는 쪽이 유리해 보입니다. 전체 클릭은 익숙한 아이템 클릭이 줄어드는 비용까지 반영하므로, 새로움을 넣었을 때 사용자 만족이 실제로 늘어나는지를 측정합니다.</details></li>
+<li>[원리] 저자들이 uplift 값을 회귀로 예측하지 않고 "어느 처치에서 클릭 증가가 최대인가"를 분류로 푼 이유와, 이진 설정에서 라벨을 만드는 방식은?
+<details><summary>정답 보기</summary>데이터 희소성 때문에 연속적인 클릭 변화량을 직접 맞히기보다 분류 라벨을 예측하는 편이 실험적으로 더 잘 맞았습니다. 이진 설정에서는 \(\tau_u &gt; \delta\)인 표본을 양성, 나머지를 음성으로 두고 cross-entropy로 학습합니다.</details></li>
+<li>[해석] 표 2에서 "+Category Novelty Scorer"는 신규 노출 +10.57%로 "Ours"(+3.23%)보다 훨씬 높습니다. 그런데도 저자들이 "Ours"를 더 낫다고 보는 근거는?
+<details><summary>정답 보기</summary>비개인화 설정은 UCTR이 −0.80%로 유의하게 떨어져 사용자 만족을 해쳤습니다. "Ours"는 신규성 지표 상승폭이 작지만 UCTR(+0.80%)과 노출 깊이(+0.54%)까지 모두 유의하게 올라, 정확도와 새로움을 동시에 개선했습니다. 비즈니스 관점에서는 클릭 감소 없는 새로움이 목표입니다.</details></li>
+<li>[해석] 오프라인 표 1에서 메타러너들의 AUC가 0.54~0.57에 머문 반면 제안 모델은 0.663입니다. 이 수치를 어떻게 해석해야 할까요?
+<details><summary>정답 보기</summary>메타러너는 클릭 변화량을 회귀로 예측한 뒤 라벨로 바꾸므로, 희소하고 노이즈가 큰 클릭 차이를 맞히는 과정에서 오차가 쌓여 거의 무작위 수준이 됩니다. 제안 모델은 처음부터 분류 목적으로 학습해 이 문제를 줄였습니다. 다만 AUC 0.66 자체도 높지 않아 개인의 새로움 수용 의향 예측이 어려운 과제임을 보여 주고, 처치가 하나뿐인 이진 설정에서만 비교했다는 한계도 있습니다.</details></li>
+<li>[비판] 개인 단위 \(\tau_u = \mathbb{E}[Y_u(D) - Y_u(0)]\)를 학습 라벨로 쓰려면 어떤 데이터 문제가 생기며, 논문에서 이 부분이 충분히 설명되었다고 보십니까?
+<details><summary>정답 보기</summary>한 사용자·한 요청에서는 처치 결과와 대조 결과 중 하나만 관측되므로(인과추론의 근본 문제) 개인 단위 \(\tau_u\)는 직접 관측되지 않습니다. 라벨을 만들려면 무작위 처치 배정 로그, 유사 사용자 매칭, 또는 T-Learner식 가상 결과 추정이 필요합니다. 논문은 이 과정과 처치 배정 방식, \(\delta\) 값을 밝히지 않아 재현성과 인과적 타당성을 판단하기 어렵습니다.</details></li>
+<li>[적용] 여러분의 피드 서비스에 이 프레임워크를 도입한다면, 처치 후보 \(D\)와 학습 데이터를 어떻게 설계하겠습니까?
+<details><summary>정답 보기</summary>예시 답: \(D\)는 {익숙함 100%}, {80/10/5/5}, {60/20/10/10}, {40/30/20/10}처럼 3~5개로 제한합니다. 작은 비율의 트래픽에서 요청 단위로 \(D\)를 무작위 배정해 편향 없는 처치 로그를 쌓습니다. 특징으로는 세션 내 노출·클릭 이력, 요청 페이지 번호, 최근 카테고리 엔트로피를 넣습니다. 결과 변수는 요청 이후 일정 구간의 전체 클릭이며, 장기적으로는 재방문이나 전환까지 포함합니다. 재정렬 시 KL 목표와 원래 랭킹 점수를 함께 고려하는 탐욕적 슬롯 채우기를 쓰고, AUUC와 온라인 UCTR·신규 카테고리 클릭으로 평가합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#43</b> <a href="043-cdum-coarse-to-fine-dynamic-uplift.html">Enhancing Online Video Recommendation via a Coarse-to-fine Dynamic Uplift Modeling Framework</a> — Kuaishou의 uplift 기반 추천 전략으로, "추천 정책을 처치로 보는" 같은 발상을 동영상 도메인에서 더 정교하게 다룹니다.</li>
+<li><b>#49</b> <a href="049-epistemic-recommendation-latent-interest.html">There’s Something About You: Epistemic Recommendation for Latent Interest Discovery</a> — 사용자의 숨은 관심을 탐색으로 찾아내는 접근으로, 세렌디피티와 목표가 겹칩니다.</li>
+<li><b>#2</b> <a href="002-adaptive-personalized-diversity.html">Adaptive, Personalized Diversity for Visual Discovery</a> — Amazon의 개인화 다양성 연구로, "얼마나 다양하게 보여 줄지를 사용자별로 정한다"는 같은 문제의식을 다룹니다.</li>
+<li><b>#16</b> <a href="016-youtube-misinformation-filter-bubble-audit.html">An Audit of Misinformation Filter Bubbles on YouTube</a> — 이 논문이 출발점으로 삼는 필터 버블 현상을 실증적으로 감사한 연구입니다.</li>
+<li><b>#56</b> Navigating the Feedback Loop in Recommender Systems: Insights and Strategies from Industry Practice — 피드백 루프 문제를 산업 관점에서 다루는, 같은 토픽의 다음 순서 논문입니다.</li>
+</ul>
+
+</main>
+</body>
+</html>
