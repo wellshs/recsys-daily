@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contextual Multi-Armed Bandit for Email Layout Recommendation</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-23</span></div>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM DL 본문이 403으로 차단되었고 arXiv·저자 공개 사본도 찾지 못했습니다. 초록(Semantic Scholar)에 적힌 내용을 뼈대로 삼고, 이해를 돕는 일반 설명은 [배경]으로 구분했습니다. 원문의 수식·수치·세부 설정은 "논문 참조"로 남겼습니다.</div>
+<h1>Contextual Multi-Armed Bandit for Email Layout Recommendation</h1>
+<p class="meta">Yan Chen, Emilian Vankov, Linas Baltrunas, Preston Donovan, Akash Mehta, Benjamin Schroeder (Wayfair; Baltrunas는 Netflix 소속으로 표기) · RecSys 2023 Industry 트랙</p>
+<div class="chips"><span>2023</span><span>Wayfair</span><span>Netflix</span><span>Email Marketing</span><span>Contextual Bandit</span><span>Epsilon-greedy</span><span>Off-Policy Evaluation</span><span>A/B Test</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3608878">10.1145/3604915.3608878</a> · arXiv: 없음 · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3604915.3608878">ACM DL</a> · 수상: 없음 · 읽기 예상 10분</p>
+
+<h2>3분 요약</h2>
+<p><b>핵심 주장.</b> 마케팅 이메일의 "레이아웃"을 고객마다 고르는 문제는 contextual multi-armed bandit으로 정식화할 수 있습니다. 단순한 epsilon-greedy 근사만으로도 참여율과 전환율 같은 핵심 비즈니스 지표를 유의미하게 끌어올릴 수 있다는 것이 저자들의 주장입니다.</p>
+<p><b>풀려는 문제.</b> Wayfair에게 이메일은 적은 비용으로 상당한 매출을 만드는 핵심 채널입니다. 같은 상품 콘텐츠라도 어떤 레이아웃(블록 배치·구성)으로 보내느냐에 따라 반응이 달라집니다. 그런데 고객마다 잘 맞는 레이아웃이 다르니, 전원에게 하나의 "승자" 레이아웃을 보내는 방식으로는 그 차이를 살릴 수 없습니다.</p>
+<p><b>핵심 아이디어.</b> 레이아웃 후보 하나하나를 팔(arm)로, 고객 특성을 맥락(context)으로, 이메일 이후의 참여·전환을 보상으로 둡니다. 맥락별 보상 예측 모델로 가장 좋아 보이는 레이아웃을 고르되, 작은 확률 \(\epsilon\)으로는 무작위 레이아웃을 보내 탐색을 이어 갑니다. 이 무작위 트래픽은 나중에 오프라인 정책 평가(OPE)에 쓸 수 있는 깨끗한 로그가 되기도 합니다.</p>
+<p><b>주요 결과.</b> 초록에 따르면 평가를 세 겹으로 했습니다. 오프라인 실험, off-policy evaluation, 온라인 A/B 테스트입니다. 개인화 레이아웃 선택이 참여율·전환율 같은 상위 지표에서 유의미한 개선을 냈다고 보고합니다. 구체적인 상승 폭, 베이스라인, 실험 규모는 원문을 확보하지 못해 확인할 수 없었습니다(논문 참조).</p>
+<p><b>한계와 남는 질문.</b> epsilon-greedy는 불확실성을 고려하지 않고 균등하게 탐색합니다. 그래서 Thompson Sampling이나 UCB 계열보다 탐색 효율이 떨어질 수 있습니다. 이메일은 피드백이 늦게 도착하고(열람·구매까지 며칠), 발송 빈도와 피로도도 얽혀 있습니다. 이 요소들을 어떻게 다뤘는지, 레이아웃 외 콘텐츠와의 상호작용은 어떤지는 열린 질문입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<div class="callout">원문 섹션 구조를 직접 볼 수 없어서, 초록이 제시하는 흐름(문제 → 정식화 → 근사 해법 → 평가 → 결과)대로 재구성했습니다. 초록에서 확인한 내용에는 [초록], 논문 내용이 아니라 이해를 돕기 위한 일반 설명에는 [배경]을 붙였습니다.</div>
+
+<h3>1. 서론 — 왜 이메일 레이아웃인가</h3>
+<p>[초록] 이메일은 Wayfair 고객에게 닿는 핵심 아웃리치 수단입니다. 비용 대비 매출 기여가 크다는 점이 강조됩니다. 그러니 이메일 하나하나의 효율을 조금만 높여도 전체 매출에 미치는 효과가 큽니다.</p>
+<p>[배경] 마케팅 이메일은 보통 여러 모듈로 구성됩니다. 상단 배너, 추천 상품 그리드, 카테고리 바로가기, 프로모션 블록 같은 것들이죠. "레이아웃"은 이 모듈들을 어떤 순서와 형태로 배치하느냐를 뜻합니다. 상품 추천이 "무엇을 보여 줄까"라면, 레이아웃 추천은 "어떤 틀에 담아 보여 줄까"에 가깝습니다. 가구처럼 시각적 탐색이 중요한 카테고리에서는 큰 이미지 하나가 나은 고객도, 촘촘한 그리드가 나은 고객도 있을 수 있습니다.</p>
+<p>기존 관행은 A/B 테스트로 전체 평균이 가장 좋은 레이아웃 하나를 골라 모두에게 보내는 것입니다. 이 방식은 고객 이질성을 무시하고, 테스트가 끝나면 학습도 멈춥니다. 저자들이 bandit을 택한 이유가 여기에 있습니다. 개인화하면서 계속 배우고 싶은 것입니다.</p>
+
+<h3>2. 문제 정식화 — contextual bandit</h3>
+<p>[초록] 저자들은 "고객별 최적 이메일 레이아웃 선택"을 contextual multi-armed bandit 문제로 정식화했다고 밝힙니다.</p>
+<p>[배경] 표준 형태로 쓰면, 발송 시점 \(t\)마다 고객 \(u_t\)의 맥락 벡터 \(x_t\)를 관측하고, 레이아웃 집합 \(\mathcal{A}=\{1,\dots,K\}\)에서 하나 \(a_t\)를 골라 보낸 뒤 보상 \(r_t\)를 받습니다. 목표는 정책 \(\pi: x \mapsto a\)의 기대 보상</p>
+<p>\[ V(\pi)=\mathbb{E}_{x\sim D}\big[\,\mathbb{E}[\,r \mid x, a=\pi(x)\,]\,\big] \]</p>
+<p>을 최대화하는 것입니다. \(D\)는 고객 맥락의 분포, \(\mathbb{E}[r\mid x,a]\)는 맥락 \(x\)인 고객에게 레이아웃 \(a\)를 보냈을 때의 기대 보상입니다. 최적 정책은 맥락마다 이 값이 가장 큰 팔을 고르는 \(\pi^*(x)=\arg\max_a \mathbb{E}[r\mid x,a]\)입니다.</p>
+<p>여기서 맥락에는 고객의 과거 이메일 반응, 구매·탐색 이력, 세그먼트 정보 같은 것이 들어갈 수 있습니다. 보상은 클릭·열람 같은 참여나 구매 전환입니다. 이 논문에서 실제로 쓴 특성과 보상 정의는 원문을 확인하지 못했습니다(논문 참조). 초록은 결과 지표로 "engagement and conversion rates"를 언급합니다.</p>
+<p>[배경] 왜 그냥 지도학습 분류기로 풀지 않을까요? 로그에는 실제로 보낸 레이아웃의 결과만 남습니다. 보내지 않은 레이아웃에서 무슨 일이 일어났을지는 관측되지 않는 부분 피드백(partial feedback) 구조입니다. 게다가 현재 정책이 다음 데이터를 결정하니, 한 번 덜 보낸 레이아웃은 계속 데이터가 부족해집니다. bandit 정식화는 이 두 문제, 즉 반사실 추정과 탐색을 명시적으로 다룹니다.</p>
+
+<h3>3. 해법 — epsilon-greedy 근사</h3>
+<p>[초록] 저자들은 해를 epsilon-greedy 전략으로 "근사"했다고 표현합니다.</p>
+<p>[배경] epsilon-greedy contextual bandit은 다음과 같이 동작합니다. 먼저 맥락과 레이아웃을 받아 보상을 예측하는 모델 \(\hat f(x,a)\approx \mathbb{E}[r\mid x,a]\)을 학습합니다. 발송 시에는</p>
+<p>\[ \pi_\epsilon(a\mid x)=\begin{cases}1-\epsilon+\dfrac{\epsilon}{K} & a=\arg\max_{a'}\hat f(x,a')\\[4pt] \dfrac{\epsilon}{K} & \text{그 외}\end{cases} \]</p>
+<p>라는 확률로 레이아웃을 고릅니다. \(K\)는 레이아웃 수, \(\epsilon\in[0,1]\)은 탐색 비율입니다. 확률 \(1-\epsilon\)으로는 모델이 가장 좋다고 보는 레이아웃을 보내고(활용), 확률 \(\epsilon\)으로는 \(K\)개 중 하나를 균등하게 뽑아 보냅니다(탐색). \(\epsilon=0\)이면 순수 탐욕, \(\epsilon=1\)이면 완전 무작위입니다.</p>
+<p>왜 "근사"일까요? 진짜 최적 bandit 정책은 탐색과 활용을 불확실성에 따라 정교하게 조절해야 합니다. epsilon-greedy는 이것을 "고정 비율의 무작위"라는 단순한 규칙으로 대신합니다. 대신 장점이 분명합니다. (1) 보상 모델은 기존 지도학습 파이프라인(예: 트리 모델, 신경망)을 그대로 쓸 수 있고, (2) 배치 단위 대량 발송에 맞게 주기적으로 재학습하면 되며, (3) 탐색 트래픽의 성향 점수(propensity)가 정확히 \(\epsilon/K\) 또는 \(1-\epsilon+\epsilon/K\)로 알려져 있어 오프라인 평가가 쉽습니다. 이메일처럼 한 번에 수백만 통을 보내는 배치형 채널에서는 이 단순함이 큰 미덕입니다.</p>
+<p>보상 모델의 구조, \(\epsilon\) 값, 재학습 주기, 레이아웃 후보 수 \(K\)는 원문을 확인하지 못했습니다(논문 참조).</p>
+
+<h3>4. 평가 — 오프라인 · OPE · 온라인의 세 겹</h3>
+<p>[초록] 저자들은 "철저한 평가"를 강조하며 세 단계를 거쳤다고 말합니다. 산업 논문에서 bandit을 실서비스에 넣기 전 신뢰를 쌓는 전형적인 순서입니다.</p>
+<p><b>4.1 오프라인 실험.</b> [배경] 과거 로그로 보상 모델의 예측 성능(예: AUC, 로그 손실)을 확인하는 단계입니다. 모델이 레이아웃별 반응 차이를 맥락에 따라 구분해 내는지 보는 것이죠. 다만 예측을 잘한다고 해서 그 모델로 고른 정책이 실제로 더 좋은 결과를 낸다는 보장은 없습니다.</p>
+<p><b>4.2 Off-policy evaluation.</b> [배경] 그 간극을 메우는 것이 OPE입니다. 로깅 정책 \(\mu\)(예: 무작위 또는 epsilon-greedy)로 모은 데이터 \(\{(x_i,a_i,r_i)\}_{i=1}^n\)로 새 정책 \(\pi\)의 가치를 추정합니다. 가장 기본인 IPS(inverse propensity scoring) 추정량은</p>
+<p>\[ \hat V_{\text{IPS}}(\pi)=\frac{1}{n}\sum_{i=1}^{n}\frac{\pi(a_i\mid x_i)}{\mu(a_i\mid x_i)}\,r_i \]</p>
+<p>입니다. 분모 \(\mu(a_i\mid x_i)\)는 로그에서 그 레이아웃이 선택될 확률(성향 점수), 분자 \(\pi(a_i\mid x_i)\)는 새 정책이 같은 선택을 할 확률입니다. 새 정책이 더 자주 고를 행동의 보상에 가중치를 더 주어, "만약 새 정책으로 보냈다면"의 평균 보상을 편향 없이 추정합니다. 로깅 정책이 모든 레이아웃에 0보다 큰 확률을 줄 때만 성립하는데, epsilon-greedy의 탐색 몫이 바로 이 조건을 보장합니다. 실무에서는 분산을 줄이려고 SNIPS나 doubly robust 추정량을 함께 쓰기도 합니다. 이 논문이 어떤 추정량을 썼는지는 확인하지 못했습니다(논문 참조).</p>
+<p><b>4.3 온라인 A/B 테스트.</b> [초록] 최종 검증은 실제 고객 대상 A/B 테스트입니다. 결과는 "참여율과 전환율을 포함한 상위 비즈니스 지표에서 유의미한 이득"으로 요약되어 있습니다. 대조군이 무엇이었는지(고정 레이아웃 혹은 기존 규칙), 실험 기간, 상승 폭과 신뢰 구간은 원문에서 확인해야 합니다(논문 참조).</p>
+<p>[배경] 세 단계를 나누는 이유는 비용과 위험이 다르기 때문입니다. 오프라인은 싸지만 정책 가치를 직접 말해 주지 않고, OPE는 정책 가치를 추정하지만 분포 이동·지연 보상 앞에서 흔들릴 수 있으며, A/B는 가장 확실하지만 비싸고 느립니다. 앞 단계에서 걸러 낸 후보만 A/B에 올리는 구성이 합리적입니다.</p>
+
+<h3>5. 결과와 저자의 해석</h3>
+<p>[초록] 저자들은 제안 방식이 고객별로 개인화된 레이아웃을 골라 상위 지표를 개선한다는 것을 결과로 보였다고 말합니다. 메시지의 핵심은 "정교한 알고리즘이 아니어도, bandit 정식화와 탄탄한 평가 체계를 갖추면 이메일 채널에서 실질적 이득을 얻는다"는 것입니다. 오프라인·OPE·온라인 결과가 서로 어떤 방향으로 일치했는지, 지표별 상승 폭은 논문 참조입니다.</p>
+
+<h3>6. 결론과 시사점</h3>
+<p>이 논문은 bandit을 상품이 아니라 "표현 형식" 선택에 적용한 사례라는 점에서 쓸모가 있습니다. 국내 서비스로 옮겨 보면 앱 푸시 문구 템플릿, 홈 배너 형식, 카카오 알림톡·이메일 템플릿 선택처럼 후보 수가 작고 배치로 발송되는 문제에 그대로 적용할 수 있습니다.</p>
+<p>실무 교훈을 정리하면 셋입니다. (1) 후보가 적고 배치 발송이라면 epsilon-greedy처럼 단순한 정책이 운영·평가 면에서 유리할 수 있습니다. (2) 탐색 트래픽은 비용이 아니라 OPE를 가능하게 하는 데이터 자산입니다. (3) 지연 보상(구매까지 걸리는 시간)과 발송 피로도를 보상 설계에 어떻게 넣을지가 성패를 가릅니다. 이 셋째 지점은 원문에서 어떻게 다뤘는지 확인할 가치가 큽니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Contextual multi-armed bandit.</b> 매번 맥락을 관측한 뒤 여러 선택지 중 하나를 고르고, 고른 것의 보상만 관측하는 순차 의사결정 문제입니다. 맥락별로 다른 최적 선택을 학습한다는 점에서 일반 bandit과 다릅니다.</p>
+<p><b>Epsilon-greedy.</b> 확률 \(1-\epsilon\)으로 현재 최선을, 확률 \(\epsilon\)으로 무작위를 고르는 가장 단순한 탐색 전략입니다. 구현이 쉽고 성향 점수가 명확하지만, 이미 나쁘다고 확실한 선택지에도 똑같이 탐색 몫을 씁니다.</p>
+<p><b>Explore–exploit 트레이드오프.</b> 아는 최선을 계속 쓰면 단기 보상이 크지만, 더 좋은 선택지를 발견할 기회를 잃습니다. 탐색은 단기 손해를 감수하고 정보를 사는 행위입니다.</p>
+<p><b>Off-policy evaluation (OPE).</b> 다른 정책으로 모은 로그로 새 정책의 성과를 추정하는 기법입니다. A/B 테스트 없이 후보 정책을 비교할 수 있어 실험 비용을 줄여 줍니다.</p>
+<p><b>성향 점수 (propensity).</b> 로깅 정책이 특정 맥락에서 특정 행동을 고를 확률입니다. IPS 계열 OPE의 핵심 입력이며, 0에 가까우면 추정 분산이 폭발합니다.</p>
+<p><b>IPS / Doubly Robust.</b> IPS는 성향 점수의 역수로 보상을 재가중해 편향 없이 추정합니다. Doubly Robust는 보상 모델 예측과 IPS 보정을 결합해, 둘 중 하나만 정확해도 일관된 추정을 얻도록 합니다.</p>
+<p><b>Partial (bandit) feedback.</b> 선택한 행동의 결과만 관측되고 다른 행동의 결과는 관측되지 않는 구조입니다. 일반 지도학습과 bandit 학습을 가르는 핵심 차이입니다.</p>
+<p><b>지연 보상 (delayed feedback).</b> 이메일 발송 후 열람·클릭·구매가 시간차를 두고 발생하는 현상입니다. 관측 창을 너무 짧게 잡으면 전환을 과소 집계하고, 길게 잡으면 학습이 느려집니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문이 bandit으로 고르는 대상은? (a) 이메일 발송 시각 (b) 이메일 레이아웃 (c) 이메일 제목 문구 (d) 추천 상품 목록
+<details><summary>정답 보기</summary>(b). 고객별로 최적의 마케팅 이메일 레이아웃을 고르는 문제를 다룹니다.</details></li>
+<li>[사실] 저자들이 해를 근사하는 데 쓴 탐색 전략은 무엇인가요?
+<details><summary>정답 보기</summary>Epsilon-greedy 전략입니다.</details></li>
+<li>[사실] 초록이 밝힌 세 가지 평가 방식을 쓰세요.
+<details><summary>정답 보기</summary>오프라인 실험, off-policy evaluation, 온라인 A/B 테스트입니다.</details></li>
+<li>[원리] 레이아웃 수가 \(K=4\), \(\epsilon=0.2\)일 때, 모델이 최선이라 본 레이아웃과 나머지 레이아웃 각각이 선택될 확률은?
+<details><summary>정답 보기</summary>최선 레이아웃: \(1-0.2+0.2/4=0.85\). 나머지 각각: \(0.2/4=0.05\). 합은 \(0.85+3\times0.05=1\)입니다. (설명용 예시이며 논문의 실제 값이 아닙니다.)</details></li>
+<li>[원리] 레이아웃 선택을 일반 지도학습 분류 문제로만 풀면 왜 부족한가요?
+<details><summary>정답 보기</summary>로그에는 실제로 보낸 레이아웃의 결과만 남는 부분 피드백 구조라 반사실 결과를 알 수 없고, 현재 정책이 다음 데이터를 결정하므로 덜 보낸 레이아웃은 계속 데이터가 부족해집니다. 탐색이 없으면 이 편향이 굳어집니다.</details></li>
+<li>[원리] epsilon-greedy 로깅이 IPS 기반 OPE에 유리한 이유는?
+<details><summary>정답 보기</summary>모든 레이아웃이 최소 \(\epsilon/K>0\)의 확률로 선택되므로 IPS의 지지 조건(support)이 보장되고, 성향 점수를 정확히 알 수 있어 따로 추정할 필요가 없습니다. 또 최소 확률이 \(\epsilon/K\)로 하한이 있어 가중치 폭발도 제한됩니다.</details></li>
+<li>[해석] 오프라인 예측 성능(AUC 등)이 좋아졌는데 A/B에서 개선이 없을 수 있는 이유를 두 가지 드세요.
+<details><summary>정답 보기</summary>예: (1) 예측 정확도와 레이아웃 간 순위 결정의 질은 다를 수 있음(전체 반응률은 잘 맞혀도 레이아웃 간 차이를 못 잡을 수 있음). (2) 로그 분포와 새 정책이 만드는 분포가 달라지는 분포 이동. (3) 지연 보상·피로도처럼 오프라인 지표에 반영되지 않은 효과.</details></li>
+<li>[해석] "참여율·전환율에서 유의미한 개선"이라는 결과를 읽을 때 원문에서 꼭 확인해야 할 것은?
+<details><summary>정답 보기</summary>예: 대조군(고정 레이아웃인지, 기존 규칙인지), 상승 폭과 신뢰 구간, 실험 기간과 novelty 효과, 탐색 트래픽(\(\epsilon\) 몫)의 비용이 결과에 포함되었는지, 구독 해지율 같은 가드레일 지표.</details></li>
+<li>[비판] epsilon-greedy 대신 Thompson Sampling을 쓴다면 얻을 수 있는 이점과 잃을 수 있는 것은?
+<details><summary>정답 보기</summary>이점: 불확실성이 큰 레이아웃에 탐색을 집중해 명백히 나쁜 레이아웃에 낭비되는 트래픽을 줄입니다. 잃는 것: 성향 점수가 사후분포 샘플링에서 나와 명시적으로 계산하기 어려워 OPE가 번거로워지고, 사후분포를 유지할 수 있는 모델 구조가 필요해 구현·운영 복잡도가 올라갑니다.</details></li>
+<li>[적용] 우리 서비스의 앱 푸시 템플릿 선택에 이 접근을 적용한다면, 보상 설계에서 가장 먼저 고민할 것은?
+<details><summary>정답 보기</summary>예: 클릭만 보상으로 두면 자극적인 템플릿이 이기고 알림 해제가 늘 수 있으니 전환·리텐션·해제율을 함께 반영할 것, 그리고 구매까지의 지연을 고려한 관측 창 설정. 같은 고객에게 반복 발송할 때 생기는 피로 효과도 고려해야 합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#53 AdaptEx: a self-service contextual bandit platform</b> — Expedia의 contextual bandit 플랫폼. 같은 해 같은 트랙의 산업 bandit 운영 사례로, 이 논문이 다루지 않은 플랫폼·인프라 측면을 보완합니다.</li>
+<li><b>#52 Two-Layer Bandit Optimization for Recommendations</b> — Apple App Store의 2층 bandit. 보상 설계가 성패를 가른다는 교훈이 이메일 보상 설계와 맞닿아 있습니다.</li>
+<li><b>#35 Evaluating Off-Policy Evaluation: Sensitivity and Robustness</b> — 이 논문의 2단계 평가인 OPE를 얼마나 믿을 수 있는지 다룹니다.</li>
+<li><b>#50 TSMOO: Solving Multi-Objective Experimentation with Constrained Thompson Sampling</b> — 참여·전환처럼 여러 목표를 동시에 다루는 Thompson Sampling 접근으로, epsilon-greedy의 대안을 보여 줍니다.</li>
+<li><b>#319 From Placements to Pages: Modeling Recommendation Module Interactions with Sequential Transformer Neural Bandits</b> — 모듈 배치(레이아웃) 단위 bandit을 더 정교한 모델로 확장한 방향입니다.</li>
+</ul>
+
+</main>
+</body>
+</html>
