@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navigating the Feedback Loop in Recommender Systems</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-24</span></div>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM DL 본문이 403으로 막혔고 arXiv·저자 공개 사본도 찾지 못했습니다. 초록(Semantic Scholar)을 뼈대로 하고, 같은 저자 5명이 발명자로 등재된 Netflix 특허 출원 WO2024249880A1(가출원 제목 "Navigating Feedback Loops in Recommender Systems", 2023-05-31)의 공개 내용을 보조 자료로 썼습니다. 특허에서 온 내용은 [특허], 초록은 [초록], 일반 설명은 [배경]으로 표시했습니다. 논문의 실제 수치·그림은 확인하지 못해 "논문 참조"로 남깁니다.</div>
+
+<h1>Navigating the Feedback Loop in Recommender Systems: Insights and Strategies from Industry Practice</h1>
+<p class="meta">Ding Tong, Qifeng Qiao, Ting-Po Lee, James McInerney, Justin Basilico (Netflix) · RecSys 2023 Industry 트랙</p>
+<div class="chips"><span>2023</span><span>Netflix</span><span>Feedback Loop</span><span>Offline Evaluation</span><span>A/B Test Bias</span><span>Simulation</span><span>Popularity Bias</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3604915.3610246">10.1145/3604915.3610246</a> · arXiv: 없음 · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3604915.3610246">ACM DL</a> · 관련 특허: <a href="https://patents.google.com/patent/WO2024249880A1">WO2024249880A1</a> · 수상: 없음 · 읽기 예상 11분</p>
+
+<h2>3분 요약</h2>
+<p><b>핵심 주장.</b> 산업 추천 시스템의 피드백 루프 피해는 보통 과소평가되며, 그 이유는 일반적인 온라인 A/B 테스트가 그 피해를 구조적으로 다 잡아내지 못하기 때문입니다. 저자들은 오프라인 평가 지표를 장기 피드백 루프 편향의 대리(surrogate) 지표로 쓰자고 제안합니다. [초록]</p>
+<p><b>풀려는 문제.</b> 추천 결과가 사용자 행동을 바꾸고, 그 행동 로그로 다음 모델을 학습하니 모델은 자기가 만든 데이터를 먹고 자랍니다. 이 순환이 인기 편향이나 다양성 저하를 키워도 효과가 느리고 누적되는 탓에 짧은 실험으로는 잘 보이지 않습니다. [초록·배경]</p>
+<p><b>핵심 아이디어.</b> 피드백 루프를 열린(open) 루프와 닫힌(closed) 루프로 나누어 정의합니다. 그리고 실제 데이터에서 "학습 → 추천 → 로그 → 재학습"을 여러 번 돌려 보는 시뮬레이션으로 장기 열화를 재현하고, 그 열화와 잘 연동되는 오프라인 지표를 골라 냅니다. 이렇게 하면 몇 주, 몇 달 걸리는 측정을 몇 시간으로 줄일 수 있다는 직관입니다. [초록·특허]</p>
+<p><b>주요 결과.</b> 특허 서술에 따르면 노출(impression)의 novelty와 entropy가 장기 피해의 유효한 대리 지표로 꼽혔습니다. 피드백 루프 데이터에 importance weight를 준 모델은 균일 랜덤 탐색 데이터로 학습한 모델과 거의 비슷한 성능을 냈다고 합니다. 구체적인 수치는 공개 자료에 없어 논문 참조입니다. [특허]</p>
+<p><b>한계와 남는 질문.</b> 2쪽 안팎의 산업 트랙 발표로 보이며, 시뮬레이터가 실제 사용자 반응을 얼마나 충실히 흉내 내는지 검증하는 부분이 제한적일 수 있습니다. 대리 지표와 장기 지표의 상관이 다른 도메인에서도 유지되는지도 열린 질문입니다. [배경]</p>
+
+<h2>섹션별 상세 해설</h2>
+<div class="callout">원문 섹션 구조를 볼 수 없어 초록이 밝힌 흐름(정의 → 산업적 원인 → 측정의 어려움 → 오프라인 대리 지표 → 시뮬레이션)대로 재구성했습니다.</div>
+
+<h3>1. 서론: 왜 피드백 루프는 과소평가되는가</h3>
+<p>추천 시스템은 정적인 예측기가 아니라 환경에 개입하는 에이전트입니다. 홈 화면에 무엇을 보여 주느냐가 사용자가 무엇을 볼지를 결정하고, 그 시청 기록이 다음 학습 데이터가 됩니다. 이 순환 구조 때문에 처음에는 아주 작던 편향, 예를 들어 이미 인기 있는 타이틀을 약간 더 자주 보여 주는 경향도 재학습이 반복될수록 증폭될 수 있습니다. [배경·특허]</p>
+<p>초록은 업계에서 이 열화가 "underestimation", 즉 과소평가된다는 점을 문제 삼습니다. 이유는 두 가지입니다. 효과가 천천히 누적되고, 표준 측정 도구인 A/B 테스트가 실험군과 대조군이 데이터를 공유하는 상황에서 이 효과를 가려 버리기 때문입니다. [초록]</p>
+
+<h3>2. 정의: 열린 루프 vs 닫힌 루프</h3>
+<p>특허 서술 기준으로 두 개념은 이렇게 나뉩니다. <b>닫힌 루프</b>에서는 에이전트(추천 모델)의 행동이 다음 상태에 영향을 주고, 에이전트는 <i>자기 행동의 결과에 대한</i> 피드백만 받습니다. <b>열린 루프</b>에서는 다른 에이전트의 행동이나 통제 밖 요인에 대한 피드백도 함께 받습니다. 피드백이 다른 에이전트에 덜 의존할수록 닫힌 루프에 가까워지고, 루프의 영향도 강해집니다. [특허]</p>
+<p>직관적으로 쓰면 이렇습니다. 시점 \(t\)의 모델 \(\pi_t\)가 학습 데이터 \(D_t\)로부터 만들어진다고 할 때, 다음 데이터는 여러 정책이 섞인 로그입니다. [배경]</p>
+\[ D_{t+1} = \alpha \cdot \mathrm{Log}(\pi_t) + (1-\alpha)\cdot \mathrm{Log}(\pi_{\text{other}}) \]
+<p>여기서 \(\mathrm{Log}(\pi)\)는 정책 \(\pi\)가 노출을 결정한 구간에서 쌓인 상호작용 로그, \(\pi_{\text{other}}\)는 다른 모델·편집 규칙·검색·랜덤 탐색처럼 이 모델이 아닌 노출 원천, \(\alpha\in[0,1]\)는 자기 정책에서 나온 데이터의 비율입니다. \(\alpha=1\)이면 완전히 닫힌 루프, \(\alpha\)가 작을수록 열린 루프입니다. 이 식은 논문 표기가 아니라 개념을 정리하기 위한 것입니다. 특허는 "닫힌 루프 데이터의 비율"을 바꿔 가며 시뮬레이션한다고 적고 있어, 이 \(\alpha\) 같은 손잡이가 실제 실험 변수였던 것으로 보입니다. [특허·배경]</p>
+
+<h3>3. 산업에서 피드백 루프가 생기는 고유한 이유</h3>
+<p>초록은 기존 연구가 별로 다루지 않은 실제 사례에서 원인을 끌어낸다고 밝힙니다. 공개 자료로 확인되는 내용은 이렇습니다. [초록·특허]</p>
+<ul>
+<li><b>이전 추천에 대한 상호작용으로 학습.</b> 가장 기본적인 원인입니다. 노출되지 않은 아이템은 긍정 신호를 얻을 기회가 없습니다.</li>
+<li><b>중첩 모델(nested models).</b> 한 화면에 여러 모델이 관여합니다. 예를 들어 후보 생성, 행(row) 선택, 행 안의 순위, 아트워크 선택이 각각 별도 모델입니다. 이러면 어떤 모델은 자기 출력에서 닫힌 루프로, 다른 모델은 남의 출력에서 열린 루프로 재학습되는 패턴이 섞여 생깁니다.</li>
+<li><b>자기 강화.</b> 닫힌 루프는 스스로 먹이를 공급하므로 작은 편향도 빠르게 커질 수 있습니다.</li>
+</ul>
+<p>Netflix의 구체 사례가 어떤 서비스 표면이었는지는 공개 자료에 나오지 않아 논문 참조입니다.</p>
+
+<h3>4. 측정의 어려움: A/B 테스트가 놓치는 것</h3>
+<p>이 논문의 실무적 핵심입니다. 일반 A/B 테스트에서는 실험군 모델 B와 대조군 모델 A가 사용자만 나눌 뿐, 다음 재학습 때는 <i>전체 로그</i>를 공유하는 경우가 많습니다. 그러면 두 모델 모두 A가 대부분을 만든 데이터를 먹게 되어 B는 열린 루프 상태에 놓입니다. 특허 서술대로, 두 에이전트가 완전히 분리되지 않으면 한쪽 행동이 다른 쪽에 의존하므로 측정 차이는 실제 성능 차이의 편향된 추정치가 됩니다. [특허]</p>
+<p>잠재적 결과 표기로 정리하면, 우리가 알고 싶은 장기 효과는 [배경]</p>
+\[ \Delta^{\text{true}} = \mathbb{E}\big[Y \mid \text{B만의 닫힌 루프}\big] - \mathbb{E}\big[Y \mid \text{A만의 닫힌 루프}\big] \]
+<p>이고, 데이터를 공유하는 A/B 테스트가 재는 것은 \(\Delta^{\text{AB}}\)입니다. \(Y\)는 리텐션·시청 같은 목표 지표입니다. 피드백 루프 효과가 크면 \(\Delta^{\text{AB}}\neq\Delta^{\text{true}}\)가 되고, 루프로 인한 열화가 특히 작게 측정됩니다.</p>
+<p>특허가 제시하는 처방은 두 가지입니다. 첫째, 사용자를 무작위로 나누고 <b>각 그룹의 데이터로만 각 모델을 재학습</b>해서 각자 닫힌 루프를 돌게 합니다(data-diverted 실험에 해당). 둘째, 새 모델은 처음에 열린 루프 단계에서 시작하므로 초반에는 지표가 떨어졌다가 닫힌 루프가 되면서 반전될 수 있습니다. 따라서 결론을 내리기 전에 의도적으로 기다리며 계속 측정하라고 권합니다. 반대로 초반 상승이 나중에 루프 열화로 사라질 수도 있다는 점이 "과소평가"의 실체입니다. [특허]</p>
+
+<h3>5. 제안: 오프라인 평가를 장기 편향의 대리 지표로</h3>
+<p>닫힌 루프 A/B는 정확하지만 비싸고 느립니다. 그래서 저자들은 빠른 오프라인 지표 가운데 장기 피드백 루프 피해를 미리 알려 주는 것을 고르자고 제안합니다. 특허는 편향 종류별 후보 지표를 이렇게 대응시킵니다. [초록·특허]</p>
+<ul>
+<li>인기 편향 → novelty, entropy</li>
+<li>불공정 편향 → calibration, equality of odds 같은 공정성 지표</li>
+<li>신규 아이템 편향 → cold-start 지표</li>
+<li>노출 편향 → 다양성, 탐색된 행동의 수</li>
+<li>선택 편향(위치 편향 포함) → IPS 계열 importance sampling</li>
+</ul>
+<p>또 precision, recall, NDCG, replay, take-rate 같은 표준 지표는 IPS로 보정해도 <i>재학습의 동적 효과</i>를 무시한다고 지적합니다. 한 번의 정책 평가는 보정할 수 있어도, 그 정책이 만들 미래 데이터와 그 데이터로 학습한 미래 모델까지는 반영하지 못한다는 뜻입니다. [특허]</p>
+<p>참고로 노출 분포의 entropy는 보통 다음과 같이 정의합니다. [배경]</p>
+\[ H = -\sum_{i\in\mathcal{I}} p_i \log p_i,\qquad p_i = \frac{n_i}{\sum_j n_j} \]
+<p>\(n_i\)는 아이템 \(i\)의 노출 횟수, \(p_i\)는 전체 노출 중 그 비율, \(\mathcal{I}\)는 아이템 집합입니다. 노출이 소수 아이템에 몰릴수록 \(H\)가 낮아집니다. Novelty는 흔히 \(-\log\) 인기도의 평균처럼 덜 알려진 아이템을 얼마나 보여 주는지로 정의합니다. 논문의 정확한 정의는 논문 참조입니다.</p>
+
+<h3>6. 실제 데이터 기반 시뮬레이션 시스템</h3>
+<p>대리 지표를 고르려면 정답, 즉 장기 열화가 필요합니다. 저자들은 실제 운영 데이터와 모델에서 출발하는 시뮬레이터로 이를 만듭니다. 절차는 특허 기준으로 다음과 같습니다. [특허]</p>
+<ol>
+<li>시점 \(t_0\)의 모델 출력으로 \(t_1\) 시점의 학습 데이터를 시뮬레이션합니다.</li>
+<li>그 데이터로 모델을 재학습하고 \(t_2\)로 넘어가는 과정을 반복합니다.</li>
+<li>각 단계에서 성능과 편향 증폭 정도를 기록합니다. 피드백 루프를 다루지 않는 모델은 시간이 지날수록 성능이 떨어지고 편향이 커지는 모습을 보였다고 합니다(그림 수치는 논문 참조).</li>
+<li>닫힌 루프 데이터 비율을 바꿔 가며 반복해 데이터 포인트를 모으고, 그 위에 예측 모델을 세워 어떤 오프라인 지표가 장기 열화를 잘 예측하는지 고릅니다.</li>
+</ol>
+<p>특허에 서술된 비교 실험은 세 모델입니다. 피드백 루프가 강한 데이터로 그냥 학습한 모델(default-model-FL), 같은 데이터에 importance weight를 준 모델(weighted-model-FL), 균일 랜덤 탐색 데이터로 학습한 모델(default-model-random). 가중 모델이 랜덤 데이터 모델과 거의 같은 성능을 냈고, novelty가 높거나 entropy가 낮은 것이 편향된 학습 데이터에 대한 강건성과 상관이 있었다고 적혀 있습니다. entropy 방향은 직관과 다르게 읽힐 수 있어, 정확한 해석은 논문 참조가 필요합니다. 구체적 수치는 공개 텍스트에 없습니다. [특허]</p>
+
+<h3>7. 결론과 실무 시사점</h3>
+<p>메시지는 간결합니다. (1) 우리 시스템이 열린 루프인지 닫힌 루프인지, 데이터 공유 구조를 먼저 그려 보라. (2) 데이터를 공유하는 A/B 결과는 루프 효과를 과소평가할 수 있으니 data-diverted 설계나 충분한 기간을 고려하라. (3) 매번 장기 실험을 할 수 없으니 시뮬레이션으로 검증한 오프라인 대리 지표(novelty, entropy 등)를 모델 선택 게이트로 쓰라. (4) importance weighting과 탐색 데이터는 루프 열화를 줄이는 실질적 수단이다. [초록·특허·배경]</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>피드백 루프(feedback loop)</b>: 모델 출력이 사용자 행동을 바꾸고, 그 행동이 다시 모델 학습 데이터가 되는 순환. 편향이 스스로 강화될 수 있습니다.</li>
+<li><b>열린/닫힌 루프</b>: 모델이 자기 행동의 결과만 피드백으로 받으면 닫힌 루프, 다른 정책이 만든 데이터도 섞여 들어오면 열린 루프입니다.</li>
+<li><b>Data-diverted 실험</b>: A/B 그룹이 사용자뿐 아니라 학습 데이터까지 분리해, 각 모델이 자기 그룹 로그로만 재학습하게 하는 설계입니다. 루프 효과를 정확히 재지만 데이터가 쪼개져 비용이 큽니다.</li>
+<li><b>Surrogate(대리) 지표</b>: 측정하기 어려운 장기 결과 대신, 빨리 잴 수 있으면서 장기 결과와 연동되는 지표입니다.</li>
+<li><b>노출 편향(exposure bias)</b>: 보여 준 것에만 반응이 기록되므로, 안 보여 준 아이템은 선호 여부를 알 수 없는 문제입니다.</li>
+<li><b>IPS(inverse propensity scoring)</b>: 로그 정책이 행동을 고른 확률의 역수로 가중해 다른 정책의 성능을 편향 없이 추정하는 방법입니다. 단일 정책 평가는 보정하지만 재학습의 동학까지는 반영하지 못합니다.</li>
+<li><b>인기 편향</b>: 인기 아이템이 더 노출되고 그래서 더 인기를 얻는 부익부 현상. 피드백 루프의 대표적 증상입니다.</li>
+<li><b>Novelty / Entropy</b>: 덜 알려진 아이템 노출 정도, 노출 분포의 고른 정도를 재는 지표. 이 연구에서 장기 피해의 대리 지표 후보로 쓰였습니다.</li>
+<li><b>균일 랜덤 탐색 데이터</b>: 정책과 무관하게 무작위로 노출해 모은 데이터. 편향이 적어 기준선(oracle)에 가깝지만 수집 비용이 큽니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실) 이 논문이 지적하는, 산업 추천에서 피드백 루프 피해가 과소평가되는 주된 원인은? (a) GPU 부족 (b) 기존 온라인 A/B 테스트가 루프의 전체 영향을 잡지 못함 (c) 사용자 수 부족 (d) 콘텐츠 라이선스
+<details><summary>정답 보기</summary>(b). 초록은 전통적 온라인 A/B 테스트로 피드백 루프의 전체 영향을 포착하기 어렵다는 측정상의 문제를 강조합니다.</details></li>
+<li>(사실) 저자들이 장기 피드백 루프 편향의 대리로 쓰자고 제안한 것은 무엇이며, 이를 뒷받침하는 도구는?
+<details><summary>정답 보기</summary>오프라인 평가 프레임워크(오프라인 지표)를 대리로 쓰자고 하고, 실제 데이터를 쓰는 실용적 시뮬레이션 시스템으로 뒷받침합니다.</details></li>
+<li>(사실) 특허 서술 기준으로 장기 피해의 유효한 대리 지표로 꼽힌 두 지표는?
+<details><summary>정답 보기</summary>노출(impression)의 novelty와 entropy입니다.</details></li>
+<li>(원리) 닫힌 루프와 열린 루프를 구분하는 기준을 설명하고, 어느 쪽이 루프 영향이 더 강한지 답하세요.
+<details><summary>정답 보기</summary>모델이 자기 행동의 결과에 대한 피드백만 받으면 닫힌 루프, 다른 에이전트나 외부 요인이 만든 데이터도 받으면 열린 루프입니다. 다른 에이전트 의존이 적을수록(닫힌 루프에 가까울수록) 자기 강화가 심해져 영향이 강합니다.</details></li>
+<li>(원리) 학습 데이터를 공유하는 A/B 테스트에서 새 모델 B의 효과 추정이 편향되는 이유는?
+<details><summary>정답 보기</summary>B가 재학습에 쓰는 데이터 대부분을 대조군 A(또는 기존 운영 정책)가 만들었기 때문에 B는 열린 루프 상태로 평가됩니다. B가 단독 배포되어 자기 데이터로만 돌 때의 장기 동학(편향 증폭 또는 개선)이 실험 기간 중 나타나지 않아, 측정 차이가 실제 차이를 왜곡합니다.</details></li>
+<li>(원리) IPS로 보정한 NDCG도 피드백 루프 평가로 충분하지 않은 이유는?
+<details><summary>정답 보기</summary>IPS는 고정된 로그로 한 정책의 성능을 편향 없이 추정하는 도구일 뿐, 그 정책을 배포했을 때 생길 미래 데이터와 그 데이터로 재학습된 미래 모델의 변화(재학습 동학)를 반영하지 않습니다.</details></li>
+<li>(해석) 새 모델 배포 첫 2주 동안 지표가 소폭 하락했습니다. 이 논문의 관점에서 바로 롤백하지 않아야 할 수 있는 이유는?
+<details><summary>정답 보기</summary>새 모델은 초기에 기존 정책이 만든 데이터를 먹는 열린 루프 단계에 있고, 자기 데이터가 쌓여 닫힌 루프가 되면 결과가 반전될 수 있습니다. 그래서 의도적으로 기간을 두고 계속 측정한 뒤 결론을 내리라는 것이 저자 측 권고입니다.</details></li>
+<li>(해석) 피드백 루프 데이터에 importance weight를 준 모델이 균일 랜덤 탐색 데이터로 학습한 모델과 거의 같은 성능을 냈다는 결과는 무엇을 시사하나요?
+<details><summary>정답 보기</summary>비싼 랜덤 탐색 데이터를 대량으로 모으지 않아도, 기존 로그의 선택 편향을 성향 가중으로 보정하면 루프 편향의 상당 부분을 완화할 수 있다는 것입니다. 단, 가중치를 계산할 노출 확률(성향)을 알거나 잘 추정할 수 있어야 합니다.</details></li>
+<li>(비판) 실제 데이터 기반 시뮬레이터로 대리 지표를 고르는 접근의 가장 큰 위험은?
+<details><summary>정답 보기</summary>시뮬레이터의 사용자 반응 모델이 틀리면(예: 안 본 아이템에 대한 반응을 잘못 가정) 시뮬레이션상의 장기 열화가 실제와 달라지고, 그 위에서 고른 대리 지표도 엉뚱한 것을 최적화하게 됩니다. 몇 차례의 실제 data-diverted 장기 실험으로 시뮬레이터와 대리 지표를 보정해야 합니다.</details></li>
+<li>(적용) 여러분 회사의 홈 피드가 후보 생성·랭킹·리랭킹 3개 모델로 구성되어 있고 모두 같은 로그로 매일 재학습합니다. 이 논문을 바탕으로 도입할 장치 두 가지를 제안하세요.
+<details><summary>정답 보기</summary>예: (1) 소량의 랜덤 탐색 트래픽을 고정해 성향을 기록하고 IPS 가중 학습에 활용. (2) 모델 출시 게이트에 정확도 지표 외에 노출 novelty·entropy 같은 대리 지표를 추가. (3) 중요한 모델 변경은 데이터까지 분리한 data-diverted A/B로 충분한 기간 측정. (4) 어느 모델이 누구의 출력으로 학습하는지(열린/닫힌 구조)를 문서화.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#34 Accordion: A Trainable Simulator for Long-Term Interactive Systems</b> — 같은 Netflix 계열(McInerney 공저)의 장기 상호작용 시뮬레이터. 이 논문의 시뮬레이션 접근을 학습 가능한 모델로 정교화한 방향입니다.</li>
+<li><b>#39 Correcting for Interference in Experiments: A Case Study at Douyin</b> — A/B 그룹 간 간섭이 추정을 왜곡하는 문제를 다룹니다. 데이터 공유로 생기는 편향과 같은 계열의 고민입니다.</li>
+<li><b>#35 Evaluating Off-Policy Evaluation: Sensitivity and Robustness</b> — IPS 계열 오프라인 평가를 얼마나 믿을 수 있는지 다룹니다.</li>
+<li><b>#45 Off-Policy Evaluation of Candidate Generators in Two-Stage Recommender Systems</b> — 중첩된 다단계 모델에서 선택 편향을 다루는 문제로, 이 논문의 nested model 이야기와 맞닿습니다.</li>
+<li><b>#15 Pessimistic Reward Models for Off-Policy Learning in Recommendation</b> — 편향된 로그로 학습할 때 과대추정을 막는 방법으로, 루프 데이터 학습의 대안적 처방입니다.</li>
+</ul>
+
+</main>
+</body>
+</html>
