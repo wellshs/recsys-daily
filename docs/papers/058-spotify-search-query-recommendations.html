@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encouraging Exploration in Spotify Search through Query Recommendations</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-26</span></div>
+<div class="callout warn">원문 미확보: 초록 기반 작성 — ACM DL 본문(RecSys'24 3쪽 extended abstract, pp. 775–777)이 403으로 막혔고 arXiv 사본도 없습니다. Semantic Scholar 초록을 뼈대로 삼았습니다. 시스템 구조 설명은 같은 저자들의 후속 논문 AudioBoost(arXiv <a href="https://arxiv.org/abs/2509.06452">2509.06452</a>)가 이 논문을 인용하며 적은 QAC 구조를 바탕으로 했고, 그 출처를 본문에 따로 표시했습니다. 원문에서 확인하지 못한 세부 수치는 "논문 참조"로 남겼습니다.</div>
+
+<h1>Encouraging Exploration in Spotify Search through Query Recommendations</h1>
+<p class="meta">Henrik Lindstrom, Humberto Jesús Corona Pampín, Enrico Palumbo, Alva Liu (Spotify) · RecSys 2024 Industry 트랙(extended abstract) · pp. 775–777</p>
+<div class="chips"><span>2024</span><span>Spotify</span><span>Search</span><span>Query Recommendation</span><span>Query AutoComplete</span><span>Exploratory Search</span><span>Audiobooks</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3640457.3688035">10.1145/3640457.3688035</a> · arXiv: 없음 · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3640457.3688035">ACM DL</a> · 수상: 없음 · 읽기 예상 10분</p>
+
+<h2>3분 요약</h2>
+<p><b>핵심 주장.</b> 검색창을 "찾던 것을 꺼내 주는 도구"로만 두지 말고, "무엇을 검색할지 함께 정해 주는 추천 면"으로 바꾸면 탐색형 검색이 늘어납니다. Spotify는 키 입력마다 결과를 보여 주는 instant search 위에 질의 추천(Query Recommendation, QR)을 얹은 하이브리드 경험을 만들었습니다.</p>
+<p><b>풀려는 문제.</b> instant search는 사용자가 노래 제목이나 아티스트처럼 정확한 대상을 알 때(known-item search) 잘 작동합니다. 그러나 카탈로그가 커지고 오디오북 같은 새 콘텐츠 유형이 들어오면서, 사용자는 "잠들기 좋은 재즈"나 "프랑스어 오디오북" 같은 넓은 의도를 질의로 표현하기 어려워졌습니다. 회사 입장에서는 새 콘텐츠 유형과 새 창작자를 발견시키는 일도 중요해졌습니다.</p>
+<p><b>핵심 아이디어.</b> 사용자가 입력하는 동안 결과 아이템만이 아니라 "다음에 쳐 볼 만한 질의"를 함께 보여 줍니다. 그러면 짧은 접두어에서 출발해 더 복잡한 탐색 의도로 넘어갈 수 있습니다. 동시에 known-item 조회는 기존처럼 즉시 결과로 처리해, 탐색을 넣는 비용이 기존 경험의 손해로 이어지지 않게 했다는 점이 "하이브리드"의 뜻입니다.</p>
+<p><b>주요 결과.</b> 이 경험은 전 세계 모든 모바일 사용자에게 배포되었고, A/B 테스트에서 탐색 의도(exploratory intent) 질의가 9% 늘었습니다. 다른 지표의 세부 수치와 실험 기간·규모는 초록에 없어 논문 참조입니다.</p>
+<p><b>한계와 남는 질문.</b> 3쪽짜리 산업 발표라 모델 구조, 오프라인 평가, 실패 사례는 거의 다루지 않습니다. "탐색 의도 질의"를 어떻게 분류하는지가 지표 해석의 핵심인데, 이 정의가 시스템 쪽에서 정해진다는 점도 따져 볼 만합니다. 탐색 질의가 늘어난 것이 장기 만족이나 청취 다양성으로 이어졌는지도 남는 질문입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<div class="callout">원문 섹션을 볼 수 없어 초록의 흐름(기존 검색의 한계 → 카탈로그 확장 → 하이브리드 QR → 배포와 A/B 결과)을 따라 재구성했습니다. "AudioBoost 기준"이라고 표시한 부분은 후속 논문이 이 시스템을 설명한 내용입니다.</div>
+
+<h3>1. 서론: known-item search에 맞춰진 검색</h3>
+<p>Spotify 검색은 오래 "콘텐츠를 꺼내는 도구"였습니다. 사용자가 머릿속에 정확한 대상을 두고 들어온다고 가정했고, 키를 누를 때마다 결과 목록을 새로 그리는 instant search로 그 경험을 최적화했습니다. 질의가 단순하고 카탈로그가 작을 때는 이 방식이 빠르고 정확합니다. "taylor"까지만 쳐도 원하는 아티스트가 맨 위에 뜨기 때문입니다.</p>
+<p>정보 검색 연구에서는 이를 focused와 non-focused 검색의 구분으로 봅니다. Spotify의 선행 연구(Li et al., WWW'19, "Search Mindsets")는 음악 검색에도 특정 대상을 찾는 마음가짐과 막연히 둘러보는 마음가짐이 함께 있다고 보고했습니다. instant search는 앞쪽에 강하고 뒤쪽에 약합니다. 넓은 의도는 짧은 접두어로 잘 표현되지 않고, 결과 목록 하나로는 그 의도의 여러 갈래를 보여 주기 어렵기 때문입니다.</p>
+
+<h3>2. 문제 정의: 카탈로그가 커질 때 생기는 두 가지 압력</h3>
+<p>저자들은 두 가지 압력을 듭니다. 첫째, 카탈로그의 크기와 다양성이 커질수록 사용자가 자기 의도를 정확한 질의로 바꾸기 어려워집니다. 수천만 곡과 팟캐스트, 오디오북이 섞인 공간에서 "무엇을 듣고 싶은지"는 알아도 "무엇을 쳐야 하는지"는 모르는 경우가 늘어납니다.</p>
+<p>둘째, 회사가 제공 범위를 넓히고 있습니다. 오디오북처럼 새 콘텐츠 유형이 들어오면 사용자는 그 유형이 있다는 것 자체를 모르거나 어떻게 찾는지 모릅니다. 기존 유형 안에서도 새 콘텐츠와 새 창작자를 발견시켜야 합니다. 둘 다 사용 기록이 적은 콜드 스타트 문제입니다. 과거 클릭으로 학습한 검색 랭킹만으로는 이런 콘텐츠가 노출되기 어렵습니다.</p>
+<p>그래서 목표는 검색 결과를 더 잘 정렬하는 것이 아니라 질의 자체의 분포를 바꾸는 것입니다. 사용자가 더 넓고 탐색적인 질의를 입력하게 돕는 것이 핵심입니다.</p>
+
+<h3>3. 방법: 하이브리드 Query Recommendation</h3>
+<p>QR은 사용자가 입력하는 도중에 "이 방향으로 검색해 보세요" 형태의 질의 후보를 보여 줍니다. 이 후보는 아이템 결과와 함께 노출됩니다. known-item 의도가 분명하면 사용자는 결과를 바로 누르고, 의도가 넓으면 추천 질의를 눌러 더 구체적인 탐색 공간으로 들어갑니다. 결과를 대체하지 않고 결과 옆에 제안을 더한다는 점이 하이브리드 설계의 요점입니다.</p>
+<p><b>후보 생성 (AudioBoost 기준).</b> 후속 논문은 이 Query AutoComplete(QAC) 시스템에 질의 후보 소스가 여러 개 있다고 설명합니다. 아이템 제목, 검색 로그의 완성된 질의, (나중에 추가된) LLM이 만든 합성 질의 등입니다. 접두어 \(p\)가 들어오면 각 소스 \(j\)가 후보 \(q_{jk}\) (\(k=1,\dots,K\))를 \(K\)개씩 내놓습니다. 소스 안의 후보는 두 점수로 고릅니다.</p>
+\[ v = v(p, q_{jk}), \qquad s = s(q_{jk}) \]
+<p>\(v\)는 접두어와 후보가 얼마나 잘 맞는지 보는 접두어 매칭 점수입니다. \(s\)는 접두어와 무관하게 그 질의가 얼마나 자주 쓰일 법한지 나타내는 전역 점수입니다. 로그 질의라면 과거 빈도가 자연스러운 \(s\)가 됩니다.</p>
+<p><b>재순위화 (AudioBoost 기준).</b> 모든 소스의 후보를 합친 뒤, 학습된 re-ranker가 사용자의 접두어에 가장 알맞은 상위 \(N\)개를 고릅니다. AudioBoost는 이 re-ranker의 특징으로 접두어 매칭, 인기도, 사용자 선호를 들며 그 근거로 본 논문을 인용합니다. 설명을 위해 일반적인 학습-랭킹 형태로 쓰면 다음과 같습니다(구체적 모델 형태와 학습 목표는 논문 참조).</p>
+\[ \text{score}(u, p, q) = f_\theta\big(v(p,q),\ s(q),\ \mathbf{x}_u,\ \mathbf{x}_q\big), \qquad \text{TopN}_q\ \text{score}(u,p,q) \]
+<p>\(u\)는 사용자, \(\mathbf{x}_u\)는 청취 이력 같은 사용자 선호 특징, \(\mathbf{x}_q\)는 질의 특징, \(f_\theta\)는 학습된 랭킹 함수입니다. 사용자 특징이 들어가므로 같은 접두어라도 사람마다 다른 추천 질의를 보게 됩니다. 검색 자동완성이 사실상 개인화 추천 문제가 되는 지점입니다.</p>
+<p><b>왜 탐색이 늘어나는가.</b> 사람은 넓은 의도를 처음부터 완성된 질의로 쓰기보다 보이는 선택지를 고르는 편이 쉽습니다. 짧은 접두어 단계에서 "장르 + 분위기"나 "유형 + 주제" 같은 넓은 질의를 보여 주면 질의 작성 비용이 줄고, 그런 질의를 쓰는 빈도가 늘어납니다. 검색 결과 쪽에서 탐색을 강제하지 않고 질의 단계에서 선택지를 넓힌다는 점에서, 추천 분야의 탐색(exploration)을 검색에 옮긴 형태로 볼 수 있습니다.</p>
+<p><b>탐색 질의를 위한 점수 (AudioBoost 기준, 참고).</b> 후속 연구는 로그 빈도가 없는 합성 질의에 \(s\)를 주려고 다음 점수를 씁니다.</p>
+\[ s(q) = \text{median\_popularity}(q) \times \log\big(|A_q| + 1\big) \]
+<p>\(A_q\)는 질의 \(q\)를 만든 원천 아이템(오디오북) 집합이고, \(\text{median\_popularity}\)는 그 아이템 인기도의 중앙값입니다. \(\log(|A_q|+1)\)은 broadness, 곧 질의가 얼마나 많은 서로 다른 아이템과 연결되는지를 나타냅니다. "고대사 오디오북"처럼 넓은 질의가 "특정 작가의 첫 작품"처럼 좁은 질의보다 높은 점수를 받습니다. 이 식은 본 논문의 식이 아니며, "탐색 질의 = 넓은 질의"라는 설계 철학이 시스템에서 어떻게 숫자로 바뀌는지 보여 주는 예로만 소개합니다.</p>
+
+<h3>4. 실험과 배포</h3>
+<p><b>설정.</b> 온라인 A/B 테스트로 평가했고, 그 뒤 전 세계 모든 모바일 사용자에게 배포했습니다. 실험 기간, 트래픽 비율, 대조군의 구체적 UI는 논문 참조입니다.</p>
+<p><b>지표.</b> 핵심 지표는 탐색 의도 질의의 수입니다. 초록은 이 비율이 9% 늘었다고 보고합니다. 이 논문의 정확한 분류 기준은 확인하지 못했습니다. 같은 팀의 AudioBoost는 탐색 질의 분류가 질의의 넓이(연결된 서로 다른 아이템 수) 등에 기반한다고 적고 있어, 비슷한 정의를 쓴 것으로 보입니다.</p>
+<p><b>해석.</b> 9%는 결과 랭킹 개선이 아니라 질의 분포가 이동한 정도를 잰 값입니다. 사용자의 행동이 바뀌었다는 뜻이므로, 이후 탐색 질의에 맞는 검색 결과(retrieval)를 개선할 여지가 생겼다는 의미도 됩니다. 후속 연구들이 질의 제안과 문서 확장(document augmentation)을 함께 해야 효과가 크다고 강조하는 것도 이 때문입니다. 탐색 질의가 늘었는데 그 결과가 빈약하면 사용자는 다시 known-item 검색으로 돌아갈 것입니다.</p>
+<p>known-item 성공률, 검색 이탈, 지연 시간 같은 가드레일 지표의 수치는 초록에 없습니다. 그러나 "known-item 조회는 여전히 효율적으로 처리한다"는 것이 설계 목표였고 전면 배포까지 했으므로, 가드레일에서 큰 손실은 없었다고 볼 수 있습니다(수치는 논문 참조).</p>
+
+<h3>5. 결론과 시사점</h3>
+<p>이 발표의 메시지는 검색과 추천의 경계를 허무는 것입니다. 검색창은 사용자가 의도를 표현하는 입구인 동시에, 시스템이 새 콘텐츠 유형과 창작자를 소개할 수 있는 가장 의도가 강한 추천 면입니다. 질의 추천은 그 면에서 탐색을 유도하는 가벼운 장치이고, 결과 랭킹을 건드리지 않아 기존 known-item 경험을 해칠 위험이 적습니다.</p>
+<p>실무자에게 주는 교훈은 세 가지입니다. ① 탐색을 결과 단계가 아니라 질의 작성 단계에 넣을 수 있습니다. ② 질의 후보는 여러 소스(제목, 로그, 생성 질의)를 합치고 개인화 re-ranker로 고르는 다단계 추천 구조로 만들 수 있습니다. ③ 성공 지표를 "질의 분포의 이동"으로 정의하면 검색 경험 변화의 효과를 직접 잴 수 있습니다. 다만 그 분류 기준을 시스템이 정한다는 점은 해석할 때 주의해야 합니다.</p>
+
+<h2>용어·배경 정리</h2>
+<ul>
+<li><b>Known-item search.</b> 사용자가 찾는 대상(곡명, 아티스트명)을 이미 알고 있는 검색입니다. 정답이 하나에 가깝고 빠른 정확 매칭이 중요합니다.</li>
+<li><b>Exploratory search.</b> 목표가 넓거나 막연한 검색입니다("비 오는 날 듣기 좋은 곡"). 정답이 여럿이고, 사용자가 결과를 보며 의도를 다듬어 갑니다.</li>
+<li><b>Instant search.</b> 키를 누를 때마다 결과를 즉시 갱신하는 검색 UI입니다. 짧은 접두어로 known-item을 빨리 찾게 해 주지만 넓은 의도를 표현하도록 돕지는 못합니다.</li>
+<li><b>Query AutoComplete(QAC)와 질의 추천.</b> 입력 중인 접두어를 완성할 질의를 제안하는 기능입니다. 단순 완성을 넘어 사용자에게 새 검색 방향을 제안하면 질의 추천(query recommendation/suggestion)이 됩니다.</li>
+<li><b>후보 소스와 re-ranker.</b> 여러 생성기에서 후보를 모아 학습된 모델로 상위 N개를 고르는 구조입니다. 추천의 retrieval → ranking 2단계 구조를 자동완성에 적용한 것입니다.</li>
+<li><b>Retrievability.</b> 문서가 현실적인 질의 분포에서 얼마나 잘 검색되어 나오는지를 재는 개념입니다(Azzopardi & Vinay, 2008). 새 콘텐츠 유형은 관련 질의가 적어 retrievability가 낮습니다.</li>
+<li><b>검색의 콜드 스타트.</b> 새 아이템 유형은 클릭 기록이 적어 랭킹 모델이 낮게 평가하고, 그래서 다시 노출이 적어지는 악순환입니다. 질의 분포를 바꾸는 것은 이 악순환을 깨는 한 방법입니다.</li>
+<li><b>Document augmentation(doc2query).</b> 문서에 그 문서를 찾을 법한 질의를 미리 붙여 색인하는 기법입니다. 탐색 질의가 늘어도 결과가 따라오게 하는 짝 기술로 후속 연구에서 쓰입니다.</li>
+</ul>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>(사실, 객관식) 기존 Spotify 검색이 최적화되어 있던 상황은? ① 사용자가 막연히 둘러볼 때 ② 사용자가 특정 대상을 알고 있을 때 ③ 음성 검색 ④ 오디오북 탐색
+<details><summary>정답 보기</summary>② 키 입력마다 결과를 보여 주는 instant search는 known-item search, 즉 사용자가 특정 대상을 알 때 잘 작동하도록 설계되었습니다.</details></li>
+<li>(사실) 저자들이 QR이 필요해진 이유로 든 두 가지 변화는 무엇인가요?
+<details><summary>정답 보기</summary>(1) 카탈로그의 크기와 다양성이 커져 사용자가 의도를 정확한 질의로 정의하기 어려워졌습니다. (2) 오디오북 같은 새 콘텐츠 유형과 기존 유형 안의 새 콘텐츠·창작자를 발견시켜야 했습니다.</details></li>
+<li>(사실) A/B 테스트의 핵심 결과와 배포 범위는?
+<details><summary>정답 보기</summary>탐색 의도 질의가 9% 늘었고, 전 세계 모든 모바일 사용자에게 배포되었습니다.</details></li>
+<li>(원리, 서술) 이 시스템을 "하이브리드"라고 부르는 이유는 무엇인가요?
+<details><summary>정답 보기</summary>탐색형 질의 추천을 제공하면서도 known-item 조회는 기존 instant search처럼 즉시 결과로 효율적으로 처리하기 때문입니다. 결과를 대체하지 않고 결과 옆에 추천 질의를 더하는 방식입니다.</details></li>
+<li>(원리) 후보 소스 안에서 쓰는 \(v(p,q)\)와 \(s(q)\)의 차이는 무엇인가요(AudioBoost 설명 기준)?
+<details><summary>정답 보기</summary>\(v\)는 접두어 \(p\)와 후보 \(q\)의 매칭 정도로, 접두어에 의존합니다. \(s\)는 질의 자체가 쓰일 법한 정도(인기도 등)를 나타내는 전역 점수로, 접두어와 무관합니다.</details></li>
+<li>(원리, 객관식) 같은 접두어에도 사용자마다 다른 추천 질의가 나오게 하는 요소는? ① 접두어 매칭 점수 ② 전역 인기도 ③ re-ranker의 사용자 선호 특징 ④ 후보 소스 수 \(K\)
+<details><summary>정답 보기</summary>③ 접두어 매칭과 전역 인기도는 사용자와 무관합니다. 사용자 선호 특징이 re-ranker에 들어가야 개인화가 됩니다.</details></li>
+<li>(결과 해석, 서술) "탐색 의도 질의 +9%"는 검색 결과 품질이 9% 좋아졌다는 뜻인가요?
+<details><summary>정답 보기</summary>아닙니다. 사용자가 입력한 질의의 분포가 탐색형 쪽으로 이동한 정도입니다. 그 질의에 대한 결과가 만족스러웠는지는 클릭·청취 같은 별도 지표로 봐야 합니다.</details></li>
+<li>(결과 해석) 탐색 질의는 늘었지만 결과가 빈약하면 어떤 일이 생길 수 있고, 후속 연구는 이를 어떻게 다뤘나요?
+<details><summary>정답 보기</summary>사용자가 실망해 다시 known-item 검색으로 돌아가고 효과가 사라질 수 있습니다. AudioBoost는 합성 질의를 QAC에 넣는 동시에 오디오북 문서에도 붙여 색인(document augmentation)해서, 제안한 탐색 질의가 실제로 관련 결과를 찾도록 했습니다.</details></li>
+<li>(비판, 서술) "탐색 의도 질의"를 시스템이 정의한 분류기(예: 넓이 기반)로 잴 때 생길 수 있는 문제는?
+<details><summary>정답 보기</summary>QR이 바로 그 분류 기준에 맞는 넓은 질의를 제안하므로, 사용자의 실제 탐색 욕구보다 "추천 질의 클릭"이 지표를 끌어올렸을 수 있습니다. 측정 대상과 개입 대상이 겹치는 순환입니다. 장기 청취 다양성, 새 창작자 재방문, known-item 성공률 같은 독립 지표로 교차 확인해야 합니다.</details></li>
+<li>(적용, 서술) 여러분의 커머스·콘텐츠 검색에 이 아이디어를 적용한다면, 탐색 질의 후보를 어디서 얻고 무엇을 가드레일로 두겠습니까?
+<details><summary>정답 보기</summary>예시 답: 후보는 로그 질의 중 넓은 질의, 카테고리×속성 조합 템플릿, LLM으로 신규 카테고리에 생성한 질의에서 얻습니다. re-ranker에 사용자 선호와 넓이 점수를 넣습니다. 가드레일은 known-item 질의의 첫 결과 클릭률, 검색 후 이탈률, 자동완성 지연 시간, 전체 전환율로 둡니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li><b>#162 You Say Search, I Say Recs: A Scalable Agentic Approach to Query Understanding and Exploration</b> (Spotify) — 같은 회사가 검색에서 질의 이해와 탐색을 확장한 후속 작업입니다.</li>
+<li><b>#107 Bridging Search and Recommendation in Generative Retrieval</b> (Spotify), <b>#160 Semantic IDs for Joint Generative Search and Recommendation</b> (Spotify) — 검색과 추천을 하나의 모델로 묶는 흐름입니다.</li>
+<li><b>#397 Query Attribute Recommendation at Amazon Search</b> (Amazon) — 질의 단계에서 속성을 추천해 검색을 정교하게 만드는 비슷한 접근입니다.</li>
+<li><b>#389 Augmenting Netflix Search with In-Session Adapted Recommendations</b> (Netflix) — 검색 면에 추천을 섞는 다른 회사의 사례입니다.</li>
+<li><b>#36 Identifying New Podcasts with High General Appeal Using a Pure Exploration Infinitely-Armed Bandit</b> (Spotify), <b>#19 Exploring the longitudinal effect of nudging on users' genre exploration</b> — 새 콘텐츠 발견과 탐색 유도를 추천 쪽에서 본 논문입니다.</li>
+</ul>
+
+</main>
+</body>
+</html>
