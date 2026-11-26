@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Preview Recommendation via Reinforcement Learning</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--muted:#6b6b70;--line:#e5e5ea;--accent:#2f5fd0;--chip:#eef2ff;--code:#f5f5f7}
+@media (prefers-color-scheme:dark){:root{--bg:#111114;--fg:#ececf1;--muted:#9a9aa3;--line:#2a2a30;--accent:#8fb0ff;--chip:#1e2540;--code:#1b1b20}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.75 -apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.45rem;line-height:1.35;margin:.4em 0}
+h2{font-size:1.2rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6em 0 .4em}
+p{margin:.6em 0}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.92rem}
+.chips span{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;font-size:.85rem}
+.nav{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
+code,pre{background:var(--code);border-radius:6px;font-size:.9em}
+code{padding:1px 5px}
+pre{padding:12px;overflow-x:auto}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:8px 0}
+summary{cursor:pointer;color:var(--accent);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--chip);padding:10px 14px;border-radius:0 8px 8px 0;margin:1em 0}
+.warn{border-left-color:#d08a2f;background:#fff6e8;color:#5a3d0c}
+@media (prefers-color-scheme:dark){.warn{background:#3a2a10;color:#f3d7a8}}
+ol.q li{margin:.9em 0}
+</style>
+</head>
+<body>
+<main>
+<div class="nav"><a href="../index.html">← 목록</a><span class="meta">2026-11-27</span></div>
+<div class="callout warn">원문 미확보: 초록 기반 작성. ACM DL 본문(RecSys'24 Demos 트랙)은 403으로 막혀 있고, arXiv 사본이나 공개 PDF도 찾지 못했습니다(Semantic Scholar openAccessPdf: CLOSED). 그래서 Semantic Scholar 초록과 TLDR을 뼈대로 삼았습니다. 그 뒤에 붙인 수식과 구조 설명은 constrained RL 문헌의 일반적인 정식화로, 이 논문의 설명을 재구성한 것이지 원식은 아닙니다. 원문에서 확인하지 못한 수치와 세부 설정은 "논문 참조"로 남겼습니다.</div>
+
+<h1>Multi-Preview Recommendation via Reinforcement Learning</h1>
+<p class="meta">Yang Xu (North Carolina State University), Kuan-Ting Lai, Pengcheng Xiong, Zhong Wu (Microsoft) · RecSys 2024 Demos 트랙</p>
+<div class="chips"><span>2024</span><span>Microsoft</span><span>Reinforcement Learning</span><span>Constrained Q-learning</span><span>Notification</span><span>Long-term Retention</span><span>Off-Policy Evaluation</span></div>
+<p class="meta">DOI: <a href="https://doi.org/10.1145/3640457.3691698">10.1145/3640457.3691698</a> · arXiv: 없음 · PDF: <a href="https://dl.acm.org/doi/pdf/10.1145/3640457.3691698">ACM DL</a> · 수상: 없음 · 읽기 예상 10분</p>
+
+<h2>3분 요약</h2>
+<h3>한 문장 핵심</h3>
+<p>여러 종류의 미리보기(preview)를 어떤 순서로, 각각 얼마나 오래 보여 줄지를 하나의 constrained Q-learning 문제로 묶었습니다. 그렇게 해서 단기 클릭이 아니라 장기 사용자 리텐션을 직접 최적화할 수 있다고 주장합니다.</p>
+<h3>풀려는 문제</h3>
+<p>미리보기는 알림 카드, 배너, 위젯 썸네일처럼 사용자를 콘텐츠로 데려가는 지름길입니다. 미리보기의 유형이 다양하고 노출 시간도 자유롭게 정할 수 있다 보니, 노출 슬롯·시간·알림 피로 같은 자원 제약 안에서 이를 한 번에 결정하는 통합 프레임워크를 만들기가 어렵습니다.</p>
+<p>현업에서는 보통 "유형별 랭커 + 규칙 기반 duration"처럼 모듈을 나눕니다. 저자들은 이 단순화 때문에 성능이 깎인다고 봅니다.</p>
+<h3>방법의 핵심 아이디어</h3>
+<p>먼저 알림 추천 시스템에 constrained Q-learning을 넣습니다. 행동은 "어떤 미리보기를 몇 번째에, 얼마 동안"이라는 조합이고, 보상은 장기 리텐션으로 정의합니다. 자원 사용량은 제약으로 둡니다.</p>
+<p>직관은 이렇습니다. 랭킹과 duration을 따로 최적화하면 서로의 효과를 모릅니다. 하나의 Q 함수로 같이 평가하면 "짧게 여러 개"와 "길게 하나"를 같은 척도에서 비교할 수 있습니다.</p>
+<h3>주요 결과</h3>
+<p>Microsoft 데이터로 off-policy evaluation(OPE)과 온라인 A/B 테스트를 했고, 초록은 제안 방법이 "우월하다"고 밝힙니다. 다만 비교 대상(베이스라인), 지표 이름, 개선 폭 같은 구체 수치는 초록에 없어 논문 참조로 둡니다.</p>
+<h3>한계와 남는 질문</h3>
+<p>데모 트랙의 짧은 논문이라 재현에 필요한 세부(상태 특징, 제약 임계값, 조합 행동 공간의 크기와 축소 방법)가 제한적일 가능성이 큽니다. 리텐션처럼 지연이 긴 보상을 OPE로 얼마나 믿을 만하게 추정했는지도 원문으로 확인해야 할 부분입니다.</p>
+
+<h2>섹션별 상세 해설</h2>
+<p class="meta">원문 섹션 구조를 확인하지 못했습니다. 그래서 초록이 말하는 흐름(문제 → 기존 접근의 간극 → 방법 → 평가)에 따라 재구성했습니다.</p>
+
+<h3>1. 문제 설정: 왜 "multi-preview"인가</h3>
+<p>Microsoft 제품에는 알림, 피드 카드, 시작 화면 위젯처럼 사용자의 주의를 끌려고 짧게 노출되는 표면이 많습니다. 이런 표면에 내보낼 후보는 대개 형식이 서로 다릅니다. 텍스트 알림, 이미지 미리보기, 짧은 영상 클립 등이 섞여 있습니다.</p>
+<p>결정해야 할 것은 두 가지입니다. 하나는 <b>랭킹</b>, 즉 어떤 미리보기를 어떤 순서로 보낼지입니다. 다른 하나는 <b>duration orchestration</b>, 즉 각 미리보기를 얼마나 오래 노출할지입니다.</p>
+<p>둘은 서로 얽혀 있습니다. 한 미리보기를 오래 띄우면 다른 미리보기의 기회가 줄어듭니다. 노출 총량이 많아지면 피로가 쌓여 장기 이탈로 이어질 수 있습니다. 그래서 단기 CTR을 탐욕적으로 최대화하는 랭커는 장기 리텐션 관점에서 최적이 아닐 수 있습니다.</p>
+
+<h3>2. 기존 접근의 간극</h3>
+<p>저자들은 두 극단 사이의 간극을 지적합니다.</p>
+<p>한쪽 극단은 <b>조합 강화학습(combinatorial RL)</b>입니다. 슬레이트나 조합 행동을 다루는 이론은 많지만 행동 공간이 폭발적으로 커집니다. 그래서 대규모 제품에 그대로 쓰기에는 너무 이론적이라는 평가입니다.</p>
+<p>다른 쪽 극단은 <b>분절된 프로덕션 모듈</b>입니다. 랭킹 모델과 duration 규칙을 따로 운영하면 배포는 쉽습니다. 하지만 상호작용을 무시하는 과도한 단순화 때문에 성능이 손해를 봅니다.</p>
+<p>제안 방법은 이 둘을 잇는 실용적 중간 지점을 목표로 합니다.</p>
+
+<h3>3. 방법: constrained Q-learning으로 묶기</h3>
+<p>아래는 이런 문제를 정식화하는 표준적인 방법입니다. 논문의 실제 수식과 표기는 다를 수 있습니다.</p>
+<p>사용자 상태를 \(s_t\)라 하겠습니다. 최근 참여 이력, 이전 알림 반응, 시간대 등이 여기에 들어갑니다. 시점 \(t\)의 행동 \(a_t\)는 미리보기 집합의 순서와 각 노출 시간의 조합입니다. 예를 들면 \(a_t = \{(i_1, d_1), (i_2, d_2), \dots\}\)이고, \(i_k\)는 k번째 미리보기, \(d_k\)는 그 노출 시간입니다.</p>
+<p>목표는 리텐션 신호 \(r_t\)의 할인 누적합을 최대화하는 것입니다. 이때 자원 사용량 \(c_t\)의 누적이 예산 \(C\)를 넘지 않아야 합니다.</p>
+<p>\[ \max_{\pi}\ \mathbb{E}_{\pi}\Big[\sum_{t} \gamma^t r_t\Big] \quad \text{s.t.}\quad \mathbb{E}_{\pi}\Big[\sum_{t} \gamma^t c_t\Big] \le C \]</p>
+<p>각 기호의 뜻은 다음과 같습니다.</p>
+<ul>
+<li>\(\pi\): 상태에서 행동을 고르는 정책</li>
+<li>\(\gamma\in(0,1)\): 미래 보상을 얼마나 덜 쳐줄지 정하는 할인율</li>
+<li>\(r_t\): 재방문 여부 같은 리텐션 관련 보상</li>
+<li>\(c_t\): 노출 시간이나 알림 횟수 같은 자원 소모</li>
+</ul>
+<p>제약 문제는 흔히 라그랑주 완화로 풉니다. 승수 \(\lambda \ge 0\)를 두고 보상을 \(r_t - \lambda c_t\)로 바꾸면, 보통의 Q-learning 업데이트를 쓸 수 있습니다.</p>
+<p>\[ Q(s_t,a_t) \leftarrow Q(s_t,a_t) + \alpha\Big[(r_t - \lambda c_t) + \gamma \max_{a'} Q(s_{t+1},a') - Q(s_t,a_t)\Big] \]</p>
+<p>\(\alpha\)는 학습률입니다. \(\lambda\)는 제약 위반 정도에 따라 키우거나 줄이며 조정합니다. 제약을 자주 넘으면 \(\lambda\)가 커지고, 정책은 자원을 덜 쓰는 행동을 선호하게 됩니다.</p>
+<p>현실적인 난관은 \(\max_{a'}\)입니다. 조합 행동 공간에서 최댓값을 정확히 구하기가 어렵기 때문입니다. 실무에서는 Q를 미리보기 단위 점수로 분해하거나, 후보를 미리 줄인 뒤 탐색하는 근사를 씁니다. 이 논문이 어떤 근사로 랭킹과 duration을 함께 다뤘는지는 논문 참조입니다.</p>
+<p>핵심은 랭킹과 duration이 같은 Q 함수 안에서 평가된다는 점입니다. 그 덕분에 "이 미리보기를 1초 더 띄우는 대가"가 리텐션 가치와 자원 비용으로 일관되게 계산됩니다.</p>
+
+<h3>4. 평가: OPE와 온라인 A/B</h3>
+<p>새 정책을 곧장 배포하기는 위험합니다. 그래서 먼저 기존 로깅 정책이 남긴 데이터로 off-policy evaluation을 해 새 정책의 가치를 추정했습니다. 이어서 온라인 A/B 테스트로 실제 효과를 확인했습니다.</p>
+<p>초록은 두 평가 모두에서 제안 방법이 우월했다고만 밝힙니다. OPE 추정기의 종류(IPS, DR, FQE 등), 비교한 베이스라인(예: 분절형 프로덕션 파이프라인), 리텐션 지표의 정의, 상승 폭은 모두 논문 참조입니다.</p>
+<p>데모 트랙 논문이므로 시스템 시연이 중심이고, 대규모 표 실험은 제한적일 수 있습니다.</p>
+
+<h3>5. 결론과 실무적 의미</h3>
+<p>메시지는 단순합니다. 노출 표면이 여러 형식과 가변 시간을 가질 때는 랭킹과 노출 시간을 따로 최적화하지 말고, 장기 목표를 둔 하나의 제약 RL 문제로 다루라는 것입니다.</p>
+<p>알림 피로와 리텐션 사이의 trade-off를 제약으로 명시하면, 비즈니스 측의 "알림은 하루 N개 이하" 같은 요구를 학습 목표에 자연스럽게 녹일 수 있습니다.</p>
+
+<h2>용어·배경 정리</h2>
+<p><b>Preview recommendation</b>: 콘텐츠 전체가 아니라 미리보기(알림, 썸네일, 카드)를 골라 보여 주는 추천입니다. 클릭을 유도해 본 콘텐츠로 연결하는 진입점 역할을 합니다.</p>
+<p><b>Q-learning</b>: 상태-행동 가치 \(Q(s,a)\)를 벨만 방정식으로 반복 갱신하는 가치 기반 RL입니다. 행동 정책과 다른 데이터로도 학습할 수 있는 off-policy 방법입니다.</p>
+<p><b>Constrained MDP</b>: 보상 최대화와 함께 비용의 기댓값이 예산 이하가 되도록 요구하는 MDP입니다. 라그랑주 승수로 무제약 문제로 바꿔 푸는 방식이 대표적입니다.</p>
+<p><b>Combinatorial / slate action</b>: 한 번에 여러 아이템의 조합을 고르는 행동입니다. 가능한 조합 수가 폭발하므로 분해나 근사가 필수입니다.</p>
+<p><b>Long-term retention</b>: 사용자가 일정 기간 뒤에도 돌아오는지를 보는 장기 지표입니다. 보상이 늦게 오고 노이즈가 커서, 즉시 클릭보다 최적화하기 어렵습니다.</p>
+<p><b>Notification fatigue</b>: 알림을 과하게 받으면 무시하거나 알림을 끄거나 앱을 지우는 현상입니다. 단기 클릭과 장기 리텐션이 충돌하는 대표 사례입니다.</p>
+<p><b>Off-policy evaluation(OPE)</b>: 로깅 정책이 수집한 데이터만으로 새 정책의 성능을 추정하는 기법입니다. IPS, Doubly Robust, Fitted Q Evaluation 등이 있습니다.</p>
+<p><b>Online A/B test</b>: 사용자를 무작위로 나눠 실제 트래픽에서 정책을 비교하는 최종 검증 단계입니다.</p>
+
+<h2>이해도 점검 질문</h2>
+<ol class="q">
+<li>[사실] 이 논문이 동시에 다루는 두 가지 결정은 무엇인가요?
+<details><summary>정답 보기</summary>multi-preview <b>랭킹</b>(무엇을 어떤 순서로)과 <b>duration orchestration</b>(각각 얼마나 오래 노출할지)입니다.</details></li>
+<li>[사실, 객관식] 제안 방법의 최적화 목표는? (a) 즉시 CTR (b) 장기 사용자 리텐션 (c) 노출 수 (d) 광고 수익
+<details><summary>정답 보기</summary>(b) 장기 사용자 리텐션입니다. 초록이 "targeting long-term user retention"이라고 명시합니다.</details></li>
+<li>[사실] 성능 검증에 사용한 두 가지 평가 방식과 데이터 출처는?
+<details><summary>정답 보기</summary>off-policy evaluation과 온라인 A/B 테스트이며, Microsoft 데이터를 썼습니다.</details></li>
+<li>[원리] 랭킹과 duration을 별도 모듈로 최적화하면 무엇을 놓치나요?
+<details><summary>정답 보기</summary>두 결정의 상호작용을 놓칩니다. 한 미리보기를 길게 띄우면 다른 미리보기의 기회와 자원이 줄어드는데, 분리된 모듈은 이 기회비용을 모릅니다. 저자들은 이를 과도한 단순화로 인한 성능 손실이라고 부릅니다.</details></li>
+<li>[원리] 라그랑주 완화에서 승수 \(\lambda\)가 커지면 정책은 어떻게 바뀌나요?
+<details><summary>정답 보기</summary>보상이 \(r - \lambda c\)로 바뀌므로 자원 소모 \(c\)가 큰 행동의 가치가 더 많이 깎입니다. 정책은 노출 시간이 짧거나 미리보기 수가 적은 보수적 행동을 선호하게 됩니다.</details></li>
+<li>[원리] 조합 행동 공간에서 Q-learning이 어려운 이유와 일반적인 우회 방법은?
+<details><summary>정답 보기</summary>타깃 계산의 \(\max_{a'} Q\)를 구하려면 모든 조합을 평가해야 하는데, 그 수가 지수적으로 늘어납니다. 아이템 단위 Q로 분해하거나, 후보를 미리 줄인 뒤 탐색하거나, 탐욕적·빔 탐색으로 근사합니다. 이 논문의 구체적 선택은 원문에서 확인해야 합니다.</details></li>
+<li>[해석] OPE에서 좋았던 정책을 반드시 온라인 A/B로도 확인해야 하는 이유는?
+<details><summary>정답 보기</summary>OPE는 로깅 정책의 행동 분포와 모델 가정에 의존합니다. 새 정책이 로그에 드문 행동(예: 새 duration 조합)을 많이 고르면 분산이나 편향이 커집니다. 리텐션처럼 지연된 보상은 추정 오차가 더 커서 실제 트래픽 검증이 필요합니다.</details></li>
+<li>[해석, 서술] 초록이 "superiority"만 말하고 수치를 밝히지 않을 때, 결과를 받아들이기 전에 원문에서 확인해야 할 것 세 가지는?
+<details><summary>정답 보기</summary>예시: (1) 베이스라인이 무엇인지(기존 분절형 파이프라인인지, 단순 규칙인지). (2) 리텐션 지표의 정의와 측정 기간. (3) 통계적 유의성과 신뢰구간. 그 밖에 제약(자원 사용량)이 실제로 지켜졌는지, OPE 추정기의 종류도 볼 만합니다.</details></li>
+<li>[비판] 알림 시스템에서 보상을 "장기 리텐션"으로 잡을 때 생길 수 있는 문제는?
+<details><summary>정답 보기</summary>보상이 늦고 희소해 크레딧 할당이 어렵습니다. 리텐션은 알림 외의 요인(계절, 제품 변경)의 영향도 크게 받습니다. 대리 지표(surrogate)를 쓰면 대리 지표와 진짜 목표가 어긋날 위험이 있습니다.</details></li>
+<li>[적용, 서술] 여러분의 서비스(예: 홈 배너 + 푸시 + 인앱 카드)에 이 접근을 적용한다면 상태·행동·보상·제약을 어떻게 정의하겠습니까?
+<details><summary>정답 보기</summary>예시 답안입니다. 상태는 최근 7일 방문·클릭 이력, 마지막 알림 이후 경과 시간, 시간대입니다. 행동은 표면별 후보 순서와 노출 시간(또는 발송 여부)입니다. 보상은 다음 주 재방문이나 세션 수입니다. 제약은 사용자당 일일 푸시 수 상한과 배너 노출 총 시간입니다. 먼저 OPE로 안전성을 확인한 뒤 소규모 A/B로 확대합니다.</details></li>
+</ol>
+
+<h2>함께 보면 좋은 논문</h2>
+<ul>
+<li>#28 Interpretable User Retention Modeling in Recommendation: 장기 리텐션을 직접 모델링하는 관점</li>
+<li>#37 Off-Policy Actor Critic for Recommender Systems: 추천에서의 off-policy RL</li>
+<li>#35 Evaluating Off-Policy Evaluation: Sensitivity and Robustness: 이 논문이 쓴 OPE의 신뢰성 문제</li>
+<li>#50 TSMOO: Solving Multi-Objective Experimentation with Constrained Thompson Sampling: 제약 하 최적화의 다른 접근</li>
+<li>#195 Optimizing Long-term Value for Auction-Based Recommender Systems via On-Policy Reinforcement Learning: 장기 가치 RL의 산업 사례</li>
+</ul>
+</main>
+</body>
+</html>
